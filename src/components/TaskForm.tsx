@@ -1,0 +1,233 @@
+import { useState, useEffect, type FormEvent } from 'react';
+import { X } from 'lucide-react';
+import type { Task, User, TaskPriority, TaskCategory } from '../types';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments'>) => void;
+  staffUsers: User[];
+  initialData?: Task | null;
+  currentUserId: string;
+}
+
+const PRIORITIES: { value: TaskPriority; label: string }[] = [
+  { value: 'LOW', label: 'Low' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'HIGH', label: 'High' },
+  { value: 'CRITICAL', label: 'Critical' },
+];
+
+const CATEGORIES: TaskCategory[] = [
+  'Patrol',
+  'Camera Trap',
+  'Survey',
+  'Maintenance',
+  'Admin',
+  'Other',
+];
+
+export default function TaskForm({
+  isOpen,
+  onClose,
+  onSave,
+  staffUsers,
+  initialData,
+  currentUserId,
+}: Props) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
+  const [priority, setPriority] = useState<TaskPriority>('MEDIUM');
+  const [category, setCategory] = useState<TaskCategory>('Patrol');
+  const [dueDate, setDueDate] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(initialData?.title ?? '');
+      setDescription(initialData?.description ?? '');
+      setAssigneeId(initialData?.assigneeId ?? '');
+      setPriority(initialData?.priority ?? 'MEDIUM');
+      setCategory(initialData?.category ?? 'Patrol');
+      setDueDate(
+        initialData?.dueDate ? initialData.dueDate.substring(0, 10) : ''
+      );
+      setErrors({});
+    }
+  }, [isOpen, initialData]);
+
+  if (!isOpen) return null;
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!title.trim()) errs.title = 'Title is required';
+    if (!assigneeId) errs.assigneeId = 'Please select an assignee';
+    if (!dueDate) errs.dueDate = 'Due date is required';
+    return errs;
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    onSave({
+      title: title.trim(),
+      description: description.trim(),
+      assigneeId,
+      createdById: currentUserId,
+      status: initialData?.status ?? 'Unread',
+      priority,
+      category,
+      dueDate: new Date(dueDate + 'T00:00:00').toISOString(),
+      acknowledgedAt: initialData?.acknowledgedAt,
+      completedAt: initialData?.completedAt,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-6 border-b border-ptr-cream-dark">
+          <h2 className="text-lg font-semibold text-ptr-brown">
+            {initialData ? 'Edit Task' : 'Create New Task'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5 text-ptr-brown-light" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+              Task Title <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setErrors((prev) => ({ ...prev, title: '' }));
+              }}
+              placeholder="Enter task title"
+              className={`input-field ${errors.title ? 'input-error' : ''}`}
+            />
+            {errors.title && (
+              <p className="text-xs text-red-600 mt-1">{errors.title}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe the task in detail..."
+              rows={3}
+              className="input-field resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+              Assign To <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={assigneeId}
+              onChange={(e) => {
+                setAssigneeId(e.target.value);
+                setErrors((prev) => ({ ...prev, assigneeId: '' }));
+              }}
+              className={`input-field ${errors.assigneeId ? 'input-error' : ''}`}
+            >
+              <option value="">Select staff member</option>
+              {staffUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} — {u.designation}
+                </option>
+              ))}
+            </select>
+            {errors.assigneeId && (
+              <p className="text-xs text-red-600 mt-1">{errors.assigneeId}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+                Priority
+              </label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                className="input-field"
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+                Category
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as TaskCategory)}
+                className="input-field"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+              Due Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                setErrors((prev) => ({ ...prev, dueDate: '' }));
+              }}
+              className={`input-field ${errors.dueDate ? 'input-error' : ''}`}
+            />
+            {errors.dueDate && (
+              <p className="text-xs text-red-600 mt-1">{errors.dueDate}</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-ptr-cream-dark">
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              {initialData ? 'Save Changes' : 'Create Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
