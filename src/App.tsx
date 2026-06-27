@@ -31,7 +31,7 @@ function Root() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/ERP---PTR">
       <Routes>
         <Route path="/" element={<Root />} />
         <Route path="/login" element={<Login />} />
