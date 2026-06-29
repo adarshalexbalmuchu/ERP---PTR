@@ -6,19 +6,19 @@ interface Props {
 }
 
 const CONFIG: Record<TaskPriority, { label: string; className: string }> = {
-  LOW: {
+  Low: {
     label: 'Low',
     className: 'bg-gray-50 text-gray-500 border border-gray-200',
   },
-  MEDIUM: {
+  Medium: {
     label: 'Medium',
     className: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
   },
-  HIGH: {
+  High: {
     label: 'High',
     className: 'bg-orange-50 text-orange-700 border border-orange-200',
   },
-  CRITICAL: {
+  Critical: {
     label: 'Critical',
     className: 'bg-red-50 text-red-700 border border-red-200',
   },
