@@ -7,25 +7,39 @@
 create extension if not exists "uuid-ossp";
 
 -- ─────────────────────────────────────────────
--- Enums
+-- Enums (idempotent)
 -- ─────────────────────────────────────────────
-create type user_role as enum ('director', 'range_officer', 'guard');
-create type task_status as enum ('NotStarted', 'InProgress', 'Completed', 'Archived');
-create type task_priority as enum ('Critical', 'High', 'Medium', 'Low');
-create type task_category as enum ('Patrol', 'Camera Trap', 'Survey', 'Maintenance', 'Admin', 'Other');
-create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived');
+do $$ begin
+  create type user_role as enum ('director', 'range_officer', 'guard');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_status as enum ('NotStarted', 'InProgress', 'Completed', 'Archived');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_priority as enum ('Critical', 'High', 'Medium', 'Low');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_category as enum ('Patrol', 'Camera Trap', 'Survey', 'Maintenance', 'Admin', 'Other');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived');
+exception when duplicate_object then null; end $$;
 
 -- ─────────────────────────────────────────────
 -- Tables
 -- ─────────────────────────────────────────────
 
-create table ranges (
+create table if not exists ranges (
   id   uuid primary key default uuid_generate_v4(),
   name text not null unique,
   created_at timestamptz not null default now()
 );
 
-create table areas (
+create table if not exists areas (
   id       uuid primary key default uuid_generate_v4(),
   range_id uuid not null references ranges(id) on delete cascade,
   name     text not null,
@@ -34,7 +48,7 @@ create table areas (
 );
 
 -- Extends auth.users — one row per authenticated user
-create table profiles (
+create table if not exists profiles (
   id              uuid primary key references auth.users(id) on delete cascade,
   name            text not null,
   role            user_role not null default 'guard',
@@ -47,7 +61,7 @@ create table profiles (
   updated_at      timestamptz not null default now()
 );
 
-create table tasks (
+create table if not exists tasks (
   id                    uuid primary key default uuid_generate_v4(),
   title                 text not null,
   description           text not null default '',
@@ -67,7 +81,7 @@ create table tasks (
   updated_at            timestamptz not null default now()
 );
 
-create table task_updates (
+create table if not exists task_updates (
   id                  uuid primary key default uuid_generate_v4(),
   task_id             uuid not null references tasks(id) on delete cascade,
   user_id             uuid not null references profiles(id) on delete restrict,
@@ -76,7 +90,7 @@ create table task_updates (
   created_at          timestamptz not null default now()
 );
 
-create table comments (
+create table if not exists comments (
   id         uuid primary key default uuid_generate_v4(),
   task_id    uuid not null references tasks(id) on delete cascade,
   user_id    uuid not null references profiles(id) on delete restrict,
@@ -84,7 +98,7 @@ create table comments (
   created_at timestamptz not null default now()
 );
 
-create table attachments (
+create table if not exists attachments (
   id         uuid primary key default uuid_generate_v4(),
   task_id    uuid not null references tasks(id) on delete cascade,
   user_id    uuid not null references profiles(id) on delete restrict,
@@ -95,7 +109,7 @@ create table attachments (
   created_at timestamptz not null default now()
 );
 
-create table notifications (
+create table if not exists notifications (
   id         uuid primary key default uuid_generate_v4(),
   user_id    uuid not null references profiles(id) on delete cascade,
   type       notification_type not null,
@@ -106,7 +120,7 @@ create table notifications (
   created_at timestamptz not null default now()
 );
 
-create table daily_reports (
+create table if not exists daily_reports (
   id               uuid primary key default uuid_generate_v4(),
   report_date      date not null unique,
   generated_by     uuid not null references profiles(id) on delete restrict,
@@ -122,13 +136,13 @@ create table daily_reports (
 -- ─────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────
-create index tasks_assignee_id_idx    on tasks(assignee_id);
-create index tasks_range_id_idx       on tasks(range_id);
-create index tasks_status_idx         on tasks(status);
-create index notifications_user_id_idx on notifications(user_id);
-create index notifications_read_idx   on notifications(read) where not read;
-create index task_updates_task_id_idx on task_updates(task_id);
-create index comments_task_id_idx     on comments(task_id);
+create index if not exists tasks_assignee_id_idx    on tasks(assignee_id);
+create index if not exists tasks_range_id_idx       on tasks(range_id);
+create index if not exists tasks_status_idx         on tasks(status);
+create index if not exists notifications_user_id_idx on notifications(user_id);
+create index if not exists notifications_read_idx   on notifications(read) where not read;
+create index if not exists task_updates_task_id_idx on task_updates(task_id);
+create index if not exists comments_task_id_idx     on comments(task_id);
 
 -- ─────────────────────────────────────────────
 -- updated_at trigger
@@ -141,8 +155,11 @@ begin
 end;
 $$;
 
+drop trigger if exists profiles_updated_at on profiles;
 create trigger profiles_updated_at before update on profiles
   for each row execute function set_updated_at();
+
+drop trigger if exists tasks_updated_at on tasks;
 create trigger tasks_updated_at before update on tasks
   for each row execute function set_updated_at();
 
@@ -171,6 +188,13 @@ alter table comments      enable row level security;
 alter table attachments   enable row level security;
 alter table notifications enable row level security;
 alter table daily_reports enable row level security;
+
+-- Drop all policies before recreating (idempotent)
+do $$ declare r record; begin
+  for r in select policyname, tablename from pg_policies where schemaname = 'public' loop
+    execute format('drop policy if exists %I on %I', r.policyname, r.tablename);
+  end loop;
+end $$;
 
 -- ranges & areas: everyone authenticated can read
 create policy "ranges_read" on ranges for select using (auth.uid() is not null);
