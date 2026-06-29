@@ -6,6 +6,14 @@ export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
 export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived';
 
+type Relationships = {
+  foreignKeyName: string;
+  columns: string[];
+  isOneToOne?: boolean;
+  referencedRelation: string;
+  referencedColumns: string[];
+}[];
+
 export interface Database {
   public: {
     Tables: {
@@ -22,18 +30,39 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
+        Insert: {
+          id: string;
+          name: string;
+          role: UserRole;
+          email: string;
+          phone?: string | null;
+          avatar_initials: string;
+          designation: string;
+          range_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          role?: UserRole;
+          email?: string;
+          phone?: string | null;
+          avatar_initials?: string;
+          designation?: string;
+          range_id?: string | null;
+        };
+        Relationships: Relationships;
       };
       ranges: {
         Row: { id: string; name: string; created_at: string };
-        Insert: Omit<Database['public']['Tables']['ranges']['Row'], 'created_at'>;
-        Update: Partial<Database['public']['Tables']['ranges']['Insert']>;
+        Insert: { id?: string; name: string };
+        Update: { id?: string; name?: string };
+        Relationships: Relationships;
       };
       areas: {
         Row: { id: string; range_id: string; name: string; created_at: string };
-        Insert: Omit<Database['public']['Tables']['areas']['Row'], 'created_at'>;
-        Update: Partial<Database['public']['Tables']['areas']['Insert']>;
+        Insert: { id?: string; range_id: string; name: string };
+        Update: { id?: string; range_id?: string; name?: string };
+        Relationships: Relationships;
       };
       tasks: {
         Row: {
@@ -55,11 +84,41 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<
-          Database['public']['Tables']['tasks']['Row'],
-          'id' | 'created_at' | 'updated_at'
-        >;
-        Update: Partial<Database['public']['Tables']['tasks']['Insert']>;
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string;
+          assignee_id: string;
+          created_by_id: string;
+          range_id: string;
+          area_id?: string | null;
+          status?: TaskStatus;
+          priority: TaskPriority;
+          category: TaskCategory;
+          due_date: string;
+          completion_percentage?: number;
+          acknowledged_at?: string | null;
+          completed_at?: string | null;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string;
+          assignee_id?: string;
+          created_by_id?: string;
+          range_id?: string;
+          area_id?: string | null;
+          status?: TaskStatus;
+          priority?: TaskPriority;
+          category?: TaskCategory;
+          due_date?: string;
+          completion_percentage?: number;
+          acknowledged_at?: string | null;
+          completed_at?: string | null;
+          archived_at?: string | null;
+        };
+        Relationships: Relationships;
       };
       task_updates: {
         Row: {
@@ -70,8 +129,21 @@ export interface Database {
           progress_percentage: number;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['task_updates']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['task_updates']['Insert']>;
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          note: string;
+          progress_percentage: number;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          note?: string;
+          progress_percentage?: number;
+        };
+        Relationships: Relationships;
       };
       comments: {
         Row: {
@@ -81,8 +153,19 @@ export interface Database {
           content: string;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['comments']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['comments']['Insert']>;
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          content: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          content?: string;
+        };
+        Relationships: Relationships;
       };
       attachments: {
         Row: {
@@ -95,8 +178,25 @@ export interface Database {
           mime_type: string;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['attachments']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['attachments']['Insert']>;
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          name: string;
+          url: string;
+          size: number;
+          mime_type: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          name?: string;
+          url?: string;
+          size?: number;
+          mime_type?: string;
+        };
+        Relationships: Relationships;
       };
       notifications: {
         Row: {
@@ -109,8 +209,25 @@ export interface Database {
           read: boolean;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
+        Insert: {
+          id?: string;
+          user_id: string;
+          type: NotificationType;
+          title: string;
+          message: string;
+          task_id: string;
+          read?: boolean;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          type?: NotificationType;
+          title?: string;
+          message?: string;
+          task_id?: string;
+          read?: boolean;
+        };
+        Relationships: Relationships;
       };
       daily_reports: {
         Row: {
@@ -125,8 +242,29 @@ export interface Database {
           range_breakdown: Json;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['daily_reports']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['daily_reports']['Insert']>;
+        Insert: {
+          id?: string;
+          report_date: string;
+          generated_by: string;
+          total_tasks: number;
+          completed_count: number;
+          in_progress_count: number;
+          not_started_count: number;
+          overdue_count: number;
+          range_breakdown: Json;
+        };
+        Update: {
+          id?: string;
+          report_date?: string;
+          generated_by?: string;
+          total_tasks?: number;
+          completed_count?: number;
+          in_progress_count?: number;
+          not_started_count?: number;
+          overdue_count?: number;
+          range_breakdown?: Json;
+        };
+        Relationships: Relationships;
       };
     };
     Views: Record<string, never>;

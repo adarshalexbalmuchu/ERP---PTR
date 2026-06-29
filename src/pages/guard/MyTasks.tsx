@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import useStore from '../../store/useStore';
+import { useTasks } from '../../hooks/useTasks';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -62,7 +63,7 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
 export default function GuardMyTasks() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const tasks = useStore((s) => s.tasks);
+  const { tasks } = useTasks();
 
   const [tab, setTab] = useState<Tab>('active');
 

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import useStore from '../../store/useStore';
+import { useTasks } from '../../hooks/useTasks';
+import { useUsers } from '../../hooks/useUsers';
+import { useRanges } from '../../hooks/useRanges';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -13,12 +16,9 @@ import type { Task, TaskStatus, TaskPriority } from '../../types';
 export default function DirectorTaskList() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const tasks = useStore((s) => s.tasks);
-  const users = useStore((s) => s.users);
-  const ranges = useStore((s) => s.ranges);
-  const createTask = useStore((s) => s.createTask);
-  const updateTask = useStore((s) => s.updateTask);
-  const deleteTask = useStore((s) => s.deleteTask);
+  const { tasks, createTask, updateTask, deleteTask } = useTasks();
+  const { users } = useUsers();
+  const { ranges } = useRanges();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -47,7 +47,7 @@ export default function DirectorTaskList() {
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this task? This cannot be undone.')) {
-      deleteTask(id);
+      deleteTask.mutate(id);
     }
   };
 
@@ -161,9 +161,9 @@ export default function DirectorTaskList() {
           onClose={() => { setFormOpen(false); setEditingTask(null); }}
           onSave={(data) => {
             if (editingTask) {
-              updateTask(editingTask.id, data);
+              updateTask.mutate({ id: editingTask.id, ...data });
             } else {
-              createTask(data);
+              createTask.mutate(data);
             }
             setFormOpen(false);
             setEditingTask(null);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
-import useStore from '../../store/useStore';
+import { useUsers } from '../../hooks/useUsers';
+import { useRanges } from '../../hooks/useRanges';
 import type { User, Role } from '../../types';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -18,6 +19,7 @@ const ROLE_COLORS: Record<Role, string> = {
 interface UserFormData {
   name: string;
   email: string;
+  password: string;
   phone: string;
   role: Role;
   rangeId: string;
@@ -33,10 +35,11 @@ function UserFormModal({
   onSave: (data: UserFormData) => void;
   onClose: () => void;
 }) {
-  const ranges = useStore((s) => s.ranges);
+  const { ranges } = useRanges();
   const [form, setForm] = useState<UserFormData>({
     name: initial?.name ?? '',
     email: initial?.email ?? '',
+    password: '',
     phone: initial?.phone ?? '',
     role: initial?.role ?? 'guard',
     rangeId: initial?.rangeId ?? '',
@@ -52,7 +55,8 @@ function UserFormModal({
   const validate = (): boolean => {
     const errs: Partial<UserFormData> = {};
     if (!form.name.trim()) errs.name = 'Name is required';
-    if (!form.email.trim()) errs.email = 'Email is required';
+    if (!initial && !form.email.trim()) errs.email = 'Email is required';
+    if (!initial && !form.password.trim()) errs.password = 'Password is required';
     if (!form.designation.trim()) errs.designation = 'Designation is required';
     if (form.role !== 'director' && !form.rangeId) errs.rangeId = 'Range is required for this role';
     setErrors(errs);
@@ -81,16 +85,32 @@ function UserFormModal({
             {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-ptr-brown mb-1.5">Email <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+              Email {!initial && <span className="text-red-500">*</span>}
+            </label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => set('email', e.target.value)}
-              className={`input-field ${errors.email ? 'input-error' : ''}`}
+              className={`input-field ${errors.email ? 'input-error' : ''} ${initial ? 'opacity-60 cursor-not-allowed' : ''}`}
               placeholder="e.g. staff@ptr.in"
+              disabled={!!initial}
             />
             {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
           </div>
+          {!initial && (
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">Password <span className="text-red-500">*</span></label>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => set('password', e.target.value)}
+                className={`input-field ${errors.password ? 'input-error' : ''}`}
+                placeholder="Minimum 8 characters"
+              />
+              {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Phone</label>
             <input
@@ -157,11 +177,8 @@ function UserFormModal({
 }
 
 export default function DirectorUsers() {
-  const users = useStore((s) => s.users);
-  const ranges = useStore((s) => s.ranges);
-  const createUser = useStore((s) => s.createUser);
-  const updateUser = useStore((s) => s.updateUser);
-  const deleteUser = useStore((s) => s.deleteUser);
+  const { users, createUser, updateUser, deleteUser } = useUsers();
+  const { ranges } = useRanges();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
@@ -176,19 +193,12 @@ export default function DirectorUsers() {
       .map((w) => w[0].toUpperCase())
       .slice(0, 2)
       .join('');
+    const rangeId = data.role === 'director' ? undefined : data.rangeId || undefined;
 
     if (editing) {
-      updateUser(editing.id, {
-        ...data,
-        avatarInitials: initials,
-        rangeId: data.role === 'director' ? undefined : data.rangeId || undefined,
-      });
+      updateUser.mutate({ id: editing.id, name: data.name, role: data.role, phone: data.phone || undefined, designation: data.designation, avatarInitials: initials, rangeId });
     } else {
-      createUser({
-        ...data,
-        avatarInitials: initials,
-        rangeId: data.role === 'director' ? undefined : data.rangeId || undefined,
-      });
+      createUser.mutate({ email: data.email, password: data.password, name: data.name, role: data.role, phone: data.phone || undefined, designation: data.designation, avatarInitials: initials, rangeId });
     }
     setFormOpen(false);
     setEditing(null);
@@ -196,7 +206,7 @@ export default function DirectorUsers() {
 
   const handleDelete = (user: User) => {
     if (confirm(`Delete ${user.name}? This cannot be undone.`)) {
-      deleteUser(user.id);
+      deleteUser.mutate(user.id);
     }
   };
 

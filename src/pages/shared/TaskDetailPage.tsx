@@ -16,6 +16,9 @@ import {
   Send,
 } from 'lucide-react';
 import useStore from '../../store/useStore';
+import { useTask } from '../../hooks/useTask';
+import { useUsers } from '../../hooks/useUsers';
+import { useRanges } from '../../hooks/useRanges';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate, formatDateTime } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -24,7 +27,6 @@ import CommentThread from '../../components/CommentThread';
 import AttachmentList from '../../components/AttachmentList';
 import TaskForm from '../../components/TaskForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
-import type { Attachment } from '../../types';
 
 function ProgressBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.max(0, value));
@@ -72,20 +74,22 @@ export default function TaskDetailPage() {
   const navigate = useNavigate();
 
   const currentUser = useStore((s) => s.currentUser);
-  const tasks = useStore((s) => s.tasks);
-  const users = useStore((s) => s.users);
-  const ranges = useStore((s) => s.ranges);
-  const areas = useStore((s) => s.areas);
-  const updateTask = useStore((s) => s.updateTask);
-  const deleteTask = useStore((s) => s.deleteTask);
-  const addComment = useStore((s) => s.addComment);
-  const addAttachment = useStore((s) => s.addAttachment);
-  const removeAttachment = useStore((s) => s.removeAttachment);
-  const addTaskUpdate = useStore((s) => s.addTaskUpdate);
-  const startTask = useStore((s) => s.startTask);
-  const completeTask = useStore((s) => s.completeTask);
-  const archiveTask = useStore((s) => s.archiveTask);
-  const requestChanges = useStore((s) => s.requestChanges);
+  const {
+    task,
+    isLoading,
+    updateTask,
+    deleteTask,
+    startTask,
+    completeTask,
+    archiveTask,
+    requestChanges,
+    addComment,
+    addTaskUpdate,
+    uploadAttachment,
+    removeAttachment,
+  } = useTask(id);
+  const { users } = useUsers();
+  const { ranges, areas } = useRanges();
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -95,8 +99,15 @@ export default function TaskDetailPage() {
   const [updateNote, setUpdateNote] = useState('');
   const [updatePct, setUpdatePct] = useState(0);
 
-  const task = tasks.find((t) => t.id === id);
   const role = currentUser?.role;
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-64">
+        <span className="text-ptr-brown-light text-sm">Loading task…</span>
+      </div>
+    );
+  }
 
   if (!task) {
     const back = role === 'director' ? '/director' : role === 'range_officer' ? '/officer' : '/guard';
@@ -125,26 +136,20 @@ export default function TaskDetailPage() {
       : '/guard';
 
   const handleDelete = () => {
-    deleteTask(task.id);
-    navigate(backPath);
+    deleteTask.mutate(undefined, {
+      onSuccess: () => navigate(backPath),
+    });
   };
 
   const handleUpload = (files: FileList) => {
     Array.from(files).forEach((file) => {
-      const attachment: Attachment = {
-        id: crypto.randomUUID(),
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-      };
-      addAttachment(task.id, attachment);
+      uploadAttachment.mutate(file);
     });
   };
 
   const handleAddUpdate = () => {
-    if (!updateNote.trim() || !currentUser) return;
-    addTaskUpdate(task.id, updateNote.trim(), updatePct, currentUser.id);
+    if (!updateNote.trim()) return;
+    addTaskUpdate.mutate({ note: updateNote.trim(), progressPercentage: updatePct });
     setUpdateNote('');
     setUpdatePct(task.completionPercentage);
     setShowUpdateForm(false);
@@ -216,7 +221,7 @@ export default function TaskDetailPage() {
           {task.status === 'NotStarted' && (
             <div>
               <p className="text-sm text-ptr-brown mb-3">Acknowledge this task to begin work.</p>
-              <button onClick={() => startTask(task.id)} className="btn-primary">
+              <button onClick={() => startTask.mutate()} className="btn-primary">
                 <CheckCircle className="w-4 h-4" />
                 Acknowledge & Start
               </button>
@@ -229,7 +234,7 @@ export default function TaskDetailPage() {
                   <TrendingUp className="w-4 h-4" />
                   Add Progress Update
                 </button>
-                <button onClick={() => completeTask(task.id)} className="btn-primary text-sm">
+                <button onClick={() => completeTask.mutate()} className="btn-primary text-sm">
                   <CheckCircle className="w-4 h-4" />
                   Mark as Done
                 </button>
@@ -299,7 +304,7 @@ export default function TaskDetailPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    requestChanges(task.id, requestChangesNote.trim() || undefined);
+                    requestChanges.mutate(requestChangesNote.trim());
                     setShowRequestChanges(false);
                     setRequestChangesNote('');
                   }}
@@ -315,7 +320,7 @@ export default function TaskDetailPage() {
             </div>
           ) : (
             <div className="flex flex-wrap gap-3">
-              <button onClick={() => archiveTask(task.id)} className="btn-primary">
+              <button onClick={() => archiveTask.mutate()} className="btn-primary">
                 <Archive className="w-4 h-4" />
                 Archive Task
               </button>
@@ -396,7 +401,7 @@ export default function TaskDetailPage() {
           canUpload={isAssignee || canManage}
           canRemove={canManage}
           onUpload={handleUpload}
-          onRemove={(attId) => removeAttachment(task.id, attId)}
+          onRemove={(attId) => removeAttachment.mutate(attId)}
         />
       </div>
 
@@ -410,7 +415,7 @@ export default function TaskDetailPage() {
             comments={task.comments}
             users={users}
             currentUser={currentUser}
-            onAddComment={(content) => addComment(task.id, content, currentUser.id)}
+            onAddComment={(content) => addComment.mutate(content)}
           />
         )}
       </div>
@@ -419,7 +424,7 @@ export default function TaskDetailPage() {
         <TaskForm
           isOpen={editOpen}
           onClose={() => setEditOpen(false)}
-          onSave={(data) => { updateTask(task.id, data); setEditOpen(false); }}
+          onSave={(data) => { updateTask.mutate(data); setEditOpen(false); }}
           assignableUsers={assignableUsers}
           initialData={task}
           currentUserId={currentUser.id}

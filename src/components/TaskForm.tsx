@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { X } from 'lucide-react';
-import useStore from '../store/useStore';
+import { useRanges } from '../hooks/useRanges';
 import type { Task, User, TaskPriority, TaskCategory } from '../types';
 
 interface Props {
@@ -38,8 +38,7 @@ export default function TaskForm({
   currentUserId,
   defaultRangeId,
 }: Props) {
-  const ranges = useStore((s) => s.ranges);
-  const areas = useStore((s) => s.areas);
+  const { ranges, areas } = useRanges();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

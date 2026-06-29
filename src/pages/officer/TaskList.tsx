@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Pencil, Eye } from 'lucide-react';
 import useStore from '../../store/useStore';
+import { useTasks } from '../../hooks/useTasks';
+import { useUsers } from '../../hooks/useUsers';
+import { useRanges } from '../../hooks/useRanges';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -13,11 +16,9 @@ import type { Task, TaskStatus, TaskPriority } from '../../types';
 export default function OfficerTaskList() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const tasks = useStore((s) => s.tasks);
-  const users = useStore((s) => s.users);
-  const areas = useStore((s) => s.areas);
-  const createTask = useStore((s) => s.createTask);
-  const updateTask = useStore((s) => s.updateTask);
+  const { tasks, createTask, updateTask } = useTasks();
+  const { users } = useUsers();
+  const { areas } = useRanges();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -156,9 +157,9 @@ export default function OfficerTaskList() {
           onClose={() => { setFormOpen(false); setEditingTask(null); }}
           onSave={(data) => {
             if (editingTask) {
-              updateTask(editingTask.id, data);
+              updateTask.mutate({ id: editingTask.id, ...data });
             } else {
-              createTask(data);
+              createTask.mutate(data);
             }
             setFormOpen(false);
             setEditingTask(null);

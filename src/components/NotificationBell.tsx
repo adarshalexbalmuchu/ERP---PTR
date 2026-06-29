@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store/useStore';
+import { useNotifications } from '../hooks/useNotifications';
 import { formatRelative } from '../utils/formatters';
 
 export default function NotificationBell() {
@@ -9,12 +10,9 @@ export default function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const notifications = useStore((s) => s.notifications);
-  const markNotificationRead = useStore((s) => s.markNotificationRead);
-  const markAllNotificationsRead = useStore((s) => s.markAllNotificationsRead);
+  const { notifications, markRead, markAllRead } = useNotifications();
 
-  const myNotifications = notifications.filter((n) => n.userId === currentUser?.id);
-  const unreadCount = myNotifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -27,7 +25,7 @@ export default function NotificationBell() {
   }, []);
 
   const handleNotifClick = (notifId: string, taskId: string) => {
-    markNotificationRead(notifId);
+    markRead.mutate(notifId);
     setOpen(false);
     const base = currentUser?.role === 'director' ? '/director' : currentUser?.role === 'range_officer' ? '/officer' : '/guard';
     navigate(`${base}/tasks/${taskId}`);
@@ -54,7 +52,7 @@ export default function NotificationBell() {
             <h3 className="text-sm font-semibold text-ptr-brown">Notifications</h3>
             {unreadCount > 0 && (
               <button
-                onClick={() => markAllNotificationsRead()}
+                onClick={() => markAllRead.mutate()}
                 className="text-xs text-ptr-green font-medium flex items-center gap-1"
               >
                 <Check className="w-3 h-3" />
@@ -63,12 +61,12 @@ export default function NotificationBell() {
             )}
           </div>
           <div className="max-h-80 overflow-y-auto">
-            {myNotifications.length === 0 ? (
+            {notifications.length === 0 ? (
               <div className="py-8 text-center text-sm text-ptr-brown-light">
                 No notifications yet
               </div>
             ) : (
-              myNotifications.slice(0, 15).map((notif) => (
+              notifications.slice(0, 15).map((notif) => (
                 <button
                   key={notif.id}
                   onClick={() => handleNotifClick(notif.id, notif.taskId)}

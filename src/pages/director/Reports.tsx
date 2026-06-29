@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { FileText, Download, RefreshCw } from 'lucide-react';
 import useStore from '../../store/useStore';
+import { useTasks } from '../../hooks/useTasks';
+import { useRanges } from '../../hooks/useRanges';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
+import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import type { DailyReport } from '../../types';
 
@@ -73,19 +78,78 @@ function ReportCard({ report }: { report: DailyReport }) {
 
 export default function DirectorReports() {
   const currentUser = useStore((s) => s.currentUser);
-  const reports = useStore((s) => s.reports);
-  const generateDailyReport = useStore((s) => s.generateDailyReport);
-  const [generating, setGenerating] = useState(false);
+  const queryClient = useQueryClient();
+  const { tasks } = useTasks();
+  const { ranges } = useRanges();
   const [generated, setGenerated] = useState<DailyReport | null>(null);
 
-  const handleGenerate = () => {
-    setGenerating(true);
-    setTimeout(() => {
-      const report = generateDailyReport();
-      setGenerated(report);
-      setGenerating(false);
-    }, 500);
-  };
+  const { data: reports = [] } = useQuery({
+    queryKey: ['reports'],
+    queryFn: async (): Promise<DailyReport[]> => {
+      const { data, error } = await supabase
+        .from('daily_reports')
+        .select('*')
+        .order('report_date', { ascending: false });
+      if (error) throw error;
+      return data.map((r) => ({
+        id: r.id,
+        reportDate: r.report_date,
+        generatedBy: r.generated_by,
+        totalTasks: r.total_tasks,
+        completedCount: r.completed_count,
+        inProgressCount: r.in_progress_count,
+        notStartedCount: r.not_started_count,
+        overdueCount: r.overdue_count,
+        rangeBreakdown: r.range_breakdown as DailyReport['rangeBreakdown'],
+        createdAt: r.created_at,
+      }));
+    },
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser) throw new Error('Not authenticated');
+      const today = new Date().toISOString().split('T')[0];
+      const rangeBreakdown = ranges.map((range) => {
+        const rt = tasks.filter((t) => t.rangeId === range.id);
+        return {
+          rangeId: range.id,
+          rangeName: range.name,
+          total: rt.length,
+          completed: rt.filter((t) => t.status === 'Completed' || t.status === 'Archived').length,
+          overdue: rt.filter(isOverdue).length,
+        };
+      });
+      const report = {
+        report_date: today,
+        generated_by: currentUser.id,
+        total_tasks: tasks.length,
+        completed_count: tasks.filter((t) => t.status === 'Completed' || t.status === 'Archived').length,
+        in_progress_count: tasks.filter((t) => t.status === 'InProgress').length,
+        not_started_count: tasks.filter((t) => t.status === 'NotStarted').length,
+        overdue_count: tasks.filter(isOverdue).length,
+        range_breakdown: rangeBreakdown,
+      };
+      const { data, error } = await supabase.from('daily_reports').upsert(report, { onConflict: 'report_date' }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setGenerated({
+        id: data.id,
+        reportDate: data.report_date,
+        generatedBy: data.generated_by,
+        totalTasks: data.total_tasks,
+        completedCount: data.completed_count,
+        inProgressCount: data.in_progress_count,
+        notStartedCount: data.not_started_count,
+        overdueCount: data.overdue_count,
+        rangeBreakdown: data.range_breakdown as DailyReport['rangeBreakdown'],
+        createdAt: data.created_at,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+  });
 
   const handleExport = (report: DailyReport) => {
     const lines: string[] = [
@@ -116,6 +180,7 @@ export default function DirectorReports() {
   };
 
   const sorted = [...reports].sort((a, b) => b.reportDate.localeCompare(a.reportDate));
+  const generating = generateMutation.isPending;
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -124,7 +189,7 @@ export default function DirectorReports() {
           <h1 className="text-xl font-bold text-ptr-brown">Daily Reports</h1>
           <p className="text-sm text-ptr-brown-light">Generate and review daily task reports</p>
         </div>
-        <button onClick={handleGenerate} disabled={generating} className="btn-primary">
+        <button onClick={() => generateMutation.mutate()} disabled={generating} className="btn-primary">
           <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline">{generating ? 'Generating…' : 'Generate Report'}</span>
         </button>
