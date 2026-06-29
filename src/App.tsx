@@ -3,30 +3,46 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import useStore from './store/useStore';
 import Login from './pages/Login';
 import Layout from './components/Layout';
-import Dashboard from './pages/admin/Dashboard';
-import AdminTaskList from './pages/admin/TaskList';
-import AdminTaskDetailPage from './pages/admin/TaskDetailPage';
-import StaffMyTasks from './pages/staff/MyTasks';
-import StaffTaskDetailPage from './pages/staff/TaskDetailPage';
+import DirectorDashboard from './pages/director/Dashboard';
+import DirectorTaskList from './pages/director/TaskList';
+import DirectorReports from './pages/director/Reports';
+import DirectorUsers from './pages/director/Users';
+import OfficerDashboard from './pages/officer/Dashboard';
+import OfficerTaskList from './pages/officer/TaskList';
+import TaskDetailPage from './pages/shared/TaskDetailPage';
+import GuardMyTasks from './pages/guard/MyTasks';
 
-function ProtectedAdmin({ children }: { children: ReactNode }) {
+function roleHome(role: string): string {
+  if (role === 'director') return '/director';
+  if (role === 'range_officer') return '/officer';
+  return '/guard';
+}
+
+function ProtectedDirector({ children }: { children: ReactNode }) {
   const user = useStore((s) => s.currentUser);
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/staff" replace />;
+  if (user.role !== 'director') return <Navigate to={roleHome(user.role)} replace />;
   return <>{children}</>;
 }
 
-function ProtectedStaff({ children }: { children: ReactNode }) {
+function ProtectedOfficer({ children }: { children: ReactNode }) {
   const user = useStore((s) => s.currentUser);
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'staff') return <Navigate to="/admin" replace />;
+  if (user.role !== 'range_officer') return <Navigate to={roleHome(user.role)} replace />;
+  return <>{children}</>;
+}
+
+function ProtectedGuard({ children }: { children: ReactNode }) {
+  const user = useStore((s) => s.currentUser);
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'guard') return <Navigate to={roleHome(user.role)} replace />;
   return <>{children}</>;
 }
 
 function Root() {
   const user = useStore((s) => s.currentUser);
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === 'admin' ? '/admin' : '/staff'} replace />;
+  return <Navigate to={roleHome(user.role)} replace />;
 }
 
 export default function App() {
@@ -35,29 +51,50 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Root />} />
         <Route path="/login" element={<Login />} />
+
+        {/* Director */}
         <Route
-          path="/admin"
+          path="/director"
           element={
-            <ProtectedAdmin>
+            <ProtectedDirector>
               <Layout />
-            </ProtectedAdmin>
+            </ProtectedDirector>
           }
         >
-          <Route index element={<Dashboard />} />
-          <Route path="tasks" element={<AdminTaskList />} />
-          <Route path="tasks/:id" element={<AdminTaskDetailPage />} />
+          <Route index element={<DirectorDashboard />} />
+          <Route path="tasks" element={<DirectorTaskList />} />
+          <Route path="tasks/:id" element={<TaskDetailPage />} />
+          <Route path="reports" element={<DirectorReports />} />
+          <Route path="users" element={<DirectorUsers />} />
         </Route>
+
+        {/* Range Officer */}
         <Route
-          path="/staff"
+          path="/officer"
           element={
-            <ProtectedStaff>
+            <ProtectedOfficer>
               <Layout />
-            </ProtectedStaff>
+            </ProtectedOfficer>
           }
         >
-          <Route index element={<StaffMyTasks />} />
-          <Route path="tasks/:id" element={<StaffTaskDetailPage />} />
+          <Route index element={<OfficerDashboard />} />
+          <Route path="tasks" element={<OfficerTaskList />} />
+          <Route path="tasks/:id" element={<TaskDetailPage />} />
         </Route>
+
+        {/* Guard */}
+        <Route
+          path="/guard"
+          element={
+            <ProtectedGuard>
+              <Layout />
+            </ProtectedGuard>
+          }
+        >
+          <Route index element={<GuardMyTasks />} />
+          <Route path="tasks/:id" element={<TaskDetailPage />} />
+        </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

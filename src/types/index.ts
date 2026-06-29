@@ -1,8 +1,8 @@
-export type Role = 'admin' | 'staff';
+export type Role = 'director' | 'range_officer' | 'guard';
 
-export type TaskStatus = 'Unread' | 'InProgress' | 'Done' | 'Approved';
+export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 
-export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 
 export type TaskCategory =
   | 'Patrol'
@@ -12,13 +12,26 @@ export type TaskCategory =
   | 'Admin'
   | 'Other';
 
+export interface Range {
+  id: string;
+  name: string;
+}
+
+export interface Area {
+  id: string;
+  rangeId: string;
+  name: string;
+}
+
 export interface User {
   id: string;
   name: string;
   role: Role;
   email: string;
+  phone?: string;
   avatarInitials: string;
   designation: string;
+  rangeId?: string;
 }
 
 export interface Comment {
@@ -33,7 +46,16 @@ export interface Attachment {
   name: string;
   type: string;
   size: number;
-  previewUrl?: string; // object URL — only kept in memory, NOT persisted
+  previewUrl?: string;
+}
+
+export interface TaskUpdate {
+  id: string;
+  taskId: string;
+  userId: string;
+  note: string;
+  progressPercentage: number;
+  createdAt: string;
 }
 
 export interface Task {
@@ -42,12 +64,17 @@ export interface Task {
   description: string;
   assigneeId: string;
   createdById: string;
+  rangeId: string;
+  areaId?: string;
   status: TaskStatus;
   priority: TaskPriority;
   category: TaskCategory;
-  dueDate: string; // ISO string
+  dueDate: string;
+  completionPercentage: number;
+  taskUpdates: TaskUpdate[];
   acknowledgedAt?: string;
   completedAt?: string;
+  archivedAt?: string;
   createdAt: string;
   comments: Comment[];
   attachments: Attachment[];
@@ -56,6 +83,12 @@ export interface Task {
 export interface Notification {
   id: string;
   userId: string;
+  type:
+    | 'task_assigned'
+    | 'task_updated'
+    | 'task_completed'
+    | 'changes_requested'
+    | 'task_archived';
   title: string;
   message: string;
   taskId: string;
@@ -63,30 +96,60 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface DailyReport {
+  id: string;
+  reportDate: string;
+  generatedBy: string;
+  totalTasks: number;
+  completedCount: number;
+  inProgressCount: number;
+  notStartedCount: number;
+  overdueCount: number;
+  rangeBreakdown: Array<{
+    rangeId: string;
+    rangeName: string;
+    total: number;
+    completed: number;
+    overdue: number;
+  }>;
+  createdAt: string;
+}
+
 export interface AppState {
-  // Auth
   currentUser: User | null;
-  // Data
   users: User[];
+  ranges: Range[];
+  areas: Area[];
   tasks: Task[];
   notifications: Notification[];
+  reports: DailyReport[];
 }
 
 export interface AppActions {
   login: (email: string, password: string) => User | null;
   logout: () => void;
   createTask: (
-    data: Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments'>
+    data: Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>
   ) => Task;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   addComment: (taskId: string, content: string, userId: string) => void;
   addAttachment: (taskId: string, attachment: Attachment) => void;
   removeAttachment: (taskId: string, attachmentId: string) => void;
-  acknowledgeTask: (taskId: string) => void;
+  addTaskUpdate: (
+    taskId: string,
+    note: string,
+    progressPercentage: number,
+    userId: string
+  ) => void;
+  startTask: (taskId: string) => void;
   completeTask: (taskId: string) => void;
-  approveTask: (taskId: string) => void;
+  archiveTask: (taskId: string) => void;
   requestChanges: (taskId: string, comment?: string) => void;
+  createUser: (user: Omit<User, 'id'>) => User;
+  updateUser: (id: string, updates: Partial<User>) => void;
+  deleteUser: (id: string) => void;
+  generateDailyReport: () => DailyReport;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => void;

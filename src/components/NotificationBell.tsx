@@ -29,7 +29,7 @@ export default function NotificationBell() {
   const handleNotifClick = (notifId: string, taskId: string) => {
     markNotificationRead(notifId);
     setOpen(false);
-    const base = currentUser?.role === 'admin' ? '/admin' : '/staff';
+    const base = currentUser?.role === 'director' ? '/director' : currentUser?.role === 'range_officer' ? '/officer' : '/guard';
     navigate(`${base}/tasks/${taskId}`);
   };
 

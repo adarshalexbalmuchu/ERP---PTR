@@ -1,7 +1,39 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Eye, EyeOff } from 'lucide-react';
+import { Leaf, Eye, EyeOff, Shield, MapPin, User } from 'lucide-react';
 import useStore from '../store/useStore';
+
+type DemoRole = 'director' | 'officer' | 'guard';
+
+const DEMO: Record<DemoRole, { email: string; label: string; sub: string; icon: React.ReactNode; color: string }> = {
+  director: {
+    email: 'director@ptr.in',
+    label: 'Director (Super Admin)',
+    sub: 'Full access — all ranges, reports, users',
+    icon: <Shield className="w-4 h-4" />,
+    color: 'text-ptr-green',
+  },
+  officer: {
+    email: 'officer@ptr.in',
+    label: 'Range Officer',
+    sub: 'Betla Range — task assignment, staff view',
+    icon: <MapPin className="w-4 h-4" />,
+    color: 'text-amber-600',
+  },
+  guard: {
+    email: 'guard@ptr.in',
+    label: 'Forest Guard',
+    sub: 'Field staff — my tasks, progress updates',
+    icon: <User className="w-4 h-4" />,
+    color: 'text-blue-600',
+  },
+};
+
+function roleHome(role: string): string {
+  if (role === 'director') return '/director';
+  if (role === 'range_officer') return '/officer';
+  return '/guard';
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -17,20 +49,19 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     setTimeout(() => {
       const user = login(email.trim().toLowerCase(), password);
       setLoading(false);
       if (!user) {
-        setError('Invalid email or password. Please check the demo credentials below.');
+        setError('Invalid email or password. Use the demo credentials below.');
         return;
       }
-      navigate(user.role === 'admin' ? '/admin' : '/staff', { replace: true });
+      navigate(roleHome(user.role), { replace: true });
     }, 400);
   };
 
-  const fillDemo = (role: 'admin' | 'staff') => {
-    setEmail(role === 'admin' ? 'admin@ptr.in' : 'staff@ptr.in');
+  const fillDemo = (role: DemoRole) => {
+    setEmail(DEMO[role].email);
     setPassword('demo123');
     setError('');
   };
@@ -43,21 +74,16 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-ptr-green mb-4 shadow-lg">
             <Leaf className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">
-            Palamu Tiger Reserve
-          </h1>
-          <p className="text-ptr-brown-light text-sm mt-1">Task Management System</p>
+          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Palamu Tiger Reserve</h1>
+          <p className="text-ptr-brown-light text-sm mt-1">Tiger Cell Task Management System</p>
         </div>
 
-        {/* Card */}
+        {/* Login card */}
         <div className="card p-8">
           <h2 className="text-lg font-semibold text-ptr-brown mb-6">Sign in to continue</h2>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
-                Email address
-              </label>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">Email address</label>
               <input
                 type="email"
                 value={email}
@@ -68,11 +94,8 @@ export default function Login() {
                 required
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
-                Password
-              </label>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -93,18 +116,12 @@ export default function Login() {
                 </button>
               </div>
             </div>
-
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
                 {error}
               </div>
             )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full justify-center"
-            >
+            <button type="submit" disabled={loading} className="btn-primary w-full justify-center">
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
@@ -113,29 +130,25 @@ export default function Login() {
         {/* Demo credentials */}
         <div className="mt-6 card p-4">
           <p className="text-xs font-semibold text-ptr-brown-light uppercase tracking-wide mb-3">
-            Demo Credentials
+            Demo Accounts · Password: demo123
           </p>
           <div className="space-y-2">
-            <button
-              onClick={() => fillDemo('admin')}
-              className="w-full flex items-center justify-between p-3 bg-ptr-cream rounded-xl hover:bg-ptr-cream-dark transition-colors text-left"
-            >
-              <div>
-                <div className="text-xs font-semibold text-ptr-brown">Admin (IFS Officer)</div>
-                <div className="text-xs text-ptr-brown-light">admin@ptr.in · demo123</div>
-              </div>
-              <span className="text-xs text-ptr-green font-medium">Use →</span>
-            </button>
-            <button
-              onClick={() => fillDemo('staff')}
-              className="w-full flex items-center justify-between p-3 bg-ptr-cream rounded-xl hover:bg-ptr-cream-dark transition-colors text-left"
-            >
-              <div>
-                <div className="text-xs font-semibold text-ptr-brown">Staff (Field Staff)</div>
-                <div className="text-xs text-ptr-brown-light">staff@ptr.in · demo123</div>
-              </div>
-              <span className="text-xs text-ptr-green font-medium">Use →</span>
-            </button>
+            {(Object.entries(DEMO) as [DemoRole, typeof DEMO[DemoRole]][]).map(([role, d]) => (
+              <button
+                key={role}
+                onClick={() => fillDemo(role)}
+                className="w-full flex items-center justify-between p-3 bg-ptr-cream rounded-xl hover:bg-ptr-cream-dark transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className={d.color}>{d.icon}</span>
+                  <div>
+                    <div className="text-xs font-semibold text-ptr-brown">{d.label}</div>
+                    <div className="text-xs text-ptr-brown-light">{d.sub}</div>
+                  </div>
+                </div>
+                <span className="text-xs text-ptr-green font-medium flex-shrink-0">Use →</span>
+              </button>
+            ))}
           </div>
         </div>
 

@@ -1,135 +1,237 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Store, User, Task, Notification, Attachment } from '../types';
+import { isOverdue } from '../utils/overdue';
+import type {
+  Store,
+  User,
+  Task,
+  Notification,
+  Attachment,
+  Range,
+  Area,
+  TaskUpdate,
+  DailyReport,
+} from '../types';
 
-// ─── Seed data ────────────────────────────────────────────────────────────────
+// ─── Seed: Ranges ─────────────────────────────────────────────────────────────
+
+const SEED_RANGES: Range[] = [
+  { id: 'range-betla', name: 'Betla Range' },
+  { id: 'range-latehar', name: 'Latehar Range' },
+  { id: 'range-kechki', name: 'Kechki Range' },
+];
+
+// ─── Seed: Areas ──────────────────────────────────────────────────────────────
+
+const SEED_AREAS: Area[] = [
+  { id: 'area-b1', rangeId: 'range-betla', name: 'North Core Zone' },
+  { id: 'area-b2', rangeId: 'range-betla', name: 'South Core Zone' },
+  { id: 'area-b3', rangeId: 'range-betla', name: 'Buffer Zone' },
+  { id: 'area-l1', rangeId: 'range-latehar', name: 'Tiger Reserve Area' },
+  { id: 'area-l2', rangeId: 'range-latehar', name: 'Corridor Zone' },
+  { id: 'area-k1', rangeId: 'range-kechki', name: 'Core Area' },
+  { id: 'area-k2', rangeId: 'range-kechki', name: 'Village Buffer' },
+];
+
+// ─── Seed: Users ──────────────────────────────────────────────────────────────
 
 const SEED_USERS: User[] = [
   {
     id: 'user-1',
-    name: 'Prajesh Kant Jena',
-    role: 'admin',
-    email: 'admin@ptr.in',
-    avatarInitials: 'PJ',
-    designation: 'IFS — Deputy Director',
+    name: 'Dr. Arvind Mishra',
+    role: 'director',
+    email: 'director@ptr.in',
+    phone: '9431200001',
+    avatarInitials: 'AM',
+    designation: 'IFS — Director, PTR',
   },
   {
     id: 'user-2',
-    name: 'Abhay Kumar',
-    role: 'staff',
-    email: 'staff@ptr.in',
-    avatarInitials: 'AK',
-    designation: 'Forest Guard',
+    name: 'Rajesh Kumar',
+    role: 'range_officer',
+    email: 'officer@ptr.in',
+    phone: '9431200002',
+    avatarInitials: 'RK',
+    designation: 'Range Officer — Betla',
+    rangeId: 'range-betla',
   },
   {
     id: 'user-3',
-    name: 'Iqbal Ahmed',
-    role: 'staff',
-    email: 'iqbal@ptr.in',
-    avatarInitials: 'IA',
-    designation: 'Range Officer',
+    name: 'Priya Oraon',
+    role: 'range_officer',
+    email: 'officer.latehar@ptr.in',
+    phone: '9431200003',
+    avatarInitials: 'PO',
+    designation: 'Range Officer — Latehar',
+    rangeId: 'range-latehar',
   },
   {
     id: 'user-4',
-    name: 'Manish Oraon',
-    role: 'staff',
-    email: 'manish@ptr.in',
-    avatarInitials: 'MO',
+    name: 'Abhay Kumar',
+    role: 'guard',
+    email: 'guard@ptr.in',
+    phone: '9431200004',
+    avatarInitials: 'AK',
     designation: 'Forest Guard',
+    rangeId: 'range-betla',
   },
   {
     id: 'user-5',
-    name: 'Vivek Singh',
-    role: 'staff',
-    email: 'vivek@ptr.in',
-    avatarInitials: 'VS',
+    name: 'Manish Singh',
+    role: 'guard',
+    email: 'manish@ptr.in',
+    phone: '9431200005',
+    avatarInitials: 'MS',
     designation: 'Anti-Poaching Watcher',
+    rangeId: 'range-betla',
+  },
+  {
+    id: 'user-6',
+    name: 'Iqbal Ahmed',
+    role: 'guard',
+    email: 'iqbal@ptr.in',
+    phone: '9431200006',
+    avatarInitials: 'IA',
+    designation: 'Forest Guard',
+    rangeId: 'range-latehar',
+  },
+  {
+    id: 'user-7',
+    name: 'Vivek Sahu',
+    role: 'guard',
+    email: 'vivek@ptr.in',
+    phone: '9431200007',
+    avatarInitials: 'VS',
+    designation: 'Tiger Cell Staff',
+    rangeId: 'range-kechki',
   },
 ];
+
+// ─── Seed: Tasks ──────────────────────────────────────────────────────────────
 
 const SEED_TASKS: Task[] = [
   {
     id: 'task-1',
-    title: 'Retrieve camera-trap SD cards from Betla Range',
+    title: 'Retrieve camera-trap SD cards from Betla North Core',
     description:
-      'Collect all SD cards installed at camera-trap stations in Betla Range. Download footage to the central server, label each card with date/location, and replace them in the field before sunset.',
-    assigneeId: 'user-3', // Iqbal Ahmed
-    createdById: 'user-1',
+      'Collect all SD cards from camera-trap stations in North Core Zone. Download footage, label each card by grid reference/date, and replace before sunset. Submit footage log to Range Officer.',
+    assigneeId: 'user-4',
+    createdById: 'user-2',
+    rangeId: 'range-betla',
+    areaId: 'area-b1',
     status: 'InProgress',
-    priority: 'MEDIUM',
+    priority: 'Medium',
     category: 'Camera Trap',
     dueDate: '2026-07-05',
+    completionPercentage: 40,
+    taskUpdates: [
+      {
+        id: 'tu-1-1',
+        taskId: 'task-1',
+        userId: 'user-4',
+        note: 'Collected cards from stations B1 and B2. Footage downloaded. Heading to B3 tomorrow.',
+        progressPercentage: 40,
+        createdAt: '2026-06-25T11:00:00.000Z',
+      },
+    ],
     acknowledgedAt: '2026-06-20T09:00:00.000Z',
     createdAt: '2026-06-18T08:00:00.000Z',
     comments: [
       {
         id: 'c-1-1',
-        userId: 'user-1',
-        content:
-          'Please make sure to label cards by grid reference, not just date. Refer to the camera-trap SOP document.',
+        userId: 'user-2',
+        content: 'Label cards by grid reference, not just date. Follow the camera-trap SOP.',
         createdAt: '2026-06-18T09:30:00.000Z',
-      },
-      {
-        id: 'c-1-2',
-        userId: 'user-3',
-        content:
-          'Understood, sir. Will follow the SOP and submit the footage log by EOD on 5th July.',
-        createdAt: '2026-06-20T10:00:00.000Z',
       },
     ],
     attachments: [],
   },
   {
     id: 'task-2',
-    title: 'Sign survey — Compartment 4, Kechki',
+    title: 'Wildlife sign survey — Compartment 4, Kechki',
     description:
-      'Conduct a wildlife sign survey in Forest Compartment 4 near Kechki village. Document pugmarks, scat, and any direct sightings. Fill the standard survey form and submit photographs as evidence.',
-    assigneeId: 'user-2', // Abhay Kumar
+      'Conduct sign survey in Forest Compartment 4 near Kechki. Document pugmarks, scat, direct sightings. Fill standard survey form and submit photographs as evidence.',
+    assigneeId: 'user-7',
     createdById: 'user-1',
-    status: 'Unread',
-    priority: 'HIGH',
+    rangeId: 'range-kechki',
+    areaId: 'area-k1',
+    status: 'NotStarted',
+    priority: 'High',
     category: 'Survey',
     dueDate: '2026-07-02',
+    completionPercentage: 0,
+    taskUpdates: [],
     createdAt: '2026-06-25T07:00:00.000Z',
     comments: [],
     attachments: [],
   },
   {
     id: 'task-3',
-    title: 'Repair patrol vehicle JH-12-PA-3456 before weekend',
+    title: 'Repair patrol vehicle JH-12-PA-3456',
     description:
-      'Vehicle JH-12-PA-3456 has been reported with a faulty cooling system and worn brake pads. Coordinate with the divisional workshop for immediate repair. Obtain a fitness certificate before the vehicle is deployed for weekend patrol.',
-    assigneeId: 'user-4', // Manish Oraon
-    createdById: 'user-1',
-    status: 'Done',
-    priority: 'HIGH',
+      'Vehicle has faulty cooling system and worn brake pads. Coordinate with divisional workshop for immediate repair. Obtain fitness certificate before weekend patrol deployment.',
+    assigneeId: 'user-5',
+    createdById: 'user-2',
+    rangeId: 'range-betla',
+    status: 'Completed',
+    priority: 'High',
     category: 'Maintenance',
     dueDate: '2026-06-29',
-    completedAt: '2026-06-27T14:00:00.000Z',
+    completionPercentage: 100,
+    taskUpdates: [
+      {
+        id: 'tu-3-1',
+        taskId: 'task-3',
+        userId: 'user-5',
+        note: 'Vehicle taken to workshop. Cooling system being inspected.',
+        progressPercentage: 50,
+        createdAt: '2026-06-22T10:00:00.000Z',
+      },
+      {
+        id: 'tu-3-2',
+        taskId: 'task-3',
+        userId: 'user-5',
+        note: 'Repair complete. Cooling system fixed, brake pads replaced. Fitness certificate obtained.',
+        progressPercentage: 100,
+        createdAt: '2026-06-27T14:00:00.000Z',
+      },
+    ],
     acknowledgedAt: '2026-06-22T08:30:00.000Z',
+    completedAt: '2026-06-27T14:00:00.000Z',
     createdAt: '2026-06-21T10:00:00.000Z',
     comments: [
       {
         id: 'c-3-1',
-        userId: 'user-4',
-        content:
-          'Repair completed. Cooling system fixed and brake pads replaced. Fitness certificate obtained from workshop. Vehicle ready for deployment.',
-        createdAt: '2026-06-27T14:00:00.000Z',
+        userId: 'user-2',
+        content: 'Well done. Vehicle cleared for deployment.',
+        createdAt: '2026-06-27T15:00:00.000Z',
       },
     ],
     attachments: [],
   },
   {
     id: 'task-4',
-    title: 'Submit monthly waste-management report',
+    title: 'Monthly waste-management report — June 2026',
     description:
-      'Compile data from all range offices on waste generated, disposed, and segregated in June 2026. Include photographs of waste disposal sites and prepare the summary in the prescribed MoEFCC format for submission.',
-    assigneeId: 'user-2', // Abhay Kumar
-    createdById: 'user-1',
+      'Compile data from all range offices on waste generated, disposed, and segregated in June 2026. Include photographs of disposal sites. Prepare summary in MoEFCC format for submission.',
+    assigneeId: 'user-4',
+    createdById: 'user-2',
+    rangeId: 'range-betla',
     status: 'InProgress',
-    priority: 'MEDIUM',
+    priority: 'Medium',
     category: 'Admin',
     dueDate: '2026-07-01',
+    completionPercentage: 60,
+    taskUpdates: [
+      {
+        id: 'tu-4-1',
+        taskId: 'task-4',
+        userId: 'user-4',
+        note: 'Data collected from Betla and Buffer zones. Latehar data pending.',
+        progressPercentage: 60,
+        createdAt: '2026-06-28T09:00:00.000Z',
+      },
+    ],
     acknowledgedAt: '2026-06-24T08:00:00.000Z',
     createdAt: '2026-06-23T09:00:00.000Z',
     comments: [],
@@ -137,22 +239,25 @@ const SEED_TASKS: Task[] = [
   },
   {
     id: 'task-5',
-    title: 'Investigate cattle-grazing report near Mandal',
+    title: 'Cattle-grazing report near Mandal — URGENT',
     description:
-      'Residents near Mandal have reported illegal cattle grazing inside the core zone boundary. Conduct a ground inspection, identify the entry points, document with GPS coordinates and photographs. Issue notices if required and report findings to the Range Officer.',
-    assigneeId: 'user-5', // Vivek Singh
+      'Illegal cattle grazing reported inside core zone near Mandal. Ground inspection required. Identify entry points, document with GPS coordinates and photos. Issue notices and report to Range Officer.',
+    assigneeId: 'user-7',
     createdById: 'user-1',
-    status: 'Unread',
-    priority: 'CRITICAL',
+    rangeId: 'range-kechki',
+    areaId: 'area-k2',
+    status: 'NotStarted',
+    priority: 'Critical',
     category: 'Patrol',
     dueDate: '2026-06-25',
+    completionPercentage: 0,
+    taskUpdates: [],
     createdAt: '2026-06-22T11:00:00.000Z',
     comments: [
       {
         id: 'c-5-1',
         userId: 'user-1',
-        content:
-          'This is CRITICAL. The cattle grazing has been escalating. Act immediately and report back by EOD today.',
+        content: 'CRITICAL. Cattle grazing escalating. Act immediately and report back by EOD.',
         createdAt: '2026-06-22T11:30:00.000Z',
       },
     ],
@@ -160,30 +265,47 @@ const SEED_TASKS: Task[] = [
   },
   {
     id: 'task-6',
-    title: 'Install new camera trap at Grid B-7, Betla',
+    title: 'Install camera trap at Grid B-7, Betla North',
     description:
-      'Set up a new camera trap unit at Grid Reference B-7 in the Betla core zone. Select a suitable tree with a clear game trail view. Configure trap settings (day/night, burst mode), record GPS coordinates, and submit installation report.',
-    assigneeId: 'user-3', // Iqbal Ahmed
-    createdById: 'user-1',
-    status: 'Unread',
-    priority: 'HIGH',
+      'Set up new camera trap at Grid B-7 in Betla North Core Zone. Select tree with clear game trail view. Configure settings (day/night, burst mode), record GPS, submit installation report.',
+    assigneeId: 'user-4',
+    createdById: 'user-2',
+    rangeId: 'range-betla',
+    areaId: 'area-b1',
+    status: 'NotStarted',
+    priority: 'High',
     category: 'Camera Trap',
     dueDate: '2026-07-10',
+    completionPercentage: 0,
+    taskUpdates: [],
     createdAt: '2026-06-26T08:00:00.000Z',
     comments: [],
     attachments: [],
   },
   {
     id: 'task-7',
-    title: 'Conduct wildlife census in Northern Zone',
+    title: 'Wildlife census — Latehar Northern Zone',
     description:
-      'Carry out a comprehensive wildlife census in the Northern Zone covering all major animal species. Use block counting method. Coordinate with range staff for simultaneous counts. Submit data sheets to the Director\'s office within 3 days of census.',
-    assigneeId: 'user-2', // Abhay Kumar
-    createdById: 'user-1',
+      'Comprehensive wildlife census in Latehar Northern Zone. Use block counting method. Coordinate range staff for simultaneous counts. Submit data sheets to Director within 3 days.',
+    assigneeId: 'user-6',
+    createdById: 'user-3',
+    rangeId: 'range-latehar',
+    areaId: 'area-l1',
     status: 'InProgress',
-    priority: 'HIGH',
+    priority: 'High',
     category: 'Survey',
     dueDate: '2026-07-15',
+    completionPercentage: 25,
+    taskUpdates: [
+      {
+        id: 'tu-7-1',
+        taskId: 'task-7',
+        userId: 'user-6',
+        note: 'Zone A census completed. Tiger sightings: 2 adults, 1 cub. Moving to Zone B tomorrow.',
+        progressPercentage: 25,
+        createdAt: '2026-06-26T17:00:00.000Z',
+      },
+    ],
     acknowledgedAt: '2026-06-25T07:30:00.000Z',
     createdAt: '2026-06-24T08:00:00.000Z',
     comments: [],
@@ -191,29 +313,37 @@ const SEED_TASKS: Task[] = [
   },
   {
     id: 'task-8',
-    title: 'Repair boundary fence at southern perimeter',
+    title: 'Repair boundary fence — Southern Perimeter, Latehar',
     description:
-      'Multiple sections of the boundary fence at the southern perimeter have been damaged by elephants. Repair all damaged sections using approved materials. Mark repaired sections with geo-tagged photographs.',
-    assigneeId: 'user-4', // Manish Oraon
-    createdById: 'user-1',
-    status: 'Approved',
-    priority: 'MEDIUM',
+      'Boundary fence damaged by elephants. Repair all damaged sections using approved materials. Mark repaired sections with geo-tagged photographs.',
+    assigneeId: 'user-6',
+    createdById: 'user-3',
+    rangeId: 'range-latehar',
+    areaId: 'area-l2',
+    status: 'Archived',
+    priority: 'Medium',
     category: 'Maintenance',
     dueDate: '2026-06-20',
+    completionPercentage: 100,
+    taskUpdates: [
+      {
+        id: 'tu-8-1',
+        taskId: 'task-8',
+        userId: 'user-6',
+        note: 'All 6 damaged sections repaired. Photographs submitted.',
+        progressPercentage: 100,
+        createdAt: '2026-06-19T16:00:00.000Z',
+      },
+    ],
     acknowledgedAt: '2026-06-12T08:00:00.000Z',
     completedAt: '2026-06-19T16:00:00.000Z',
+    archivedAt: '2026-06-20T10:00:00.000Z',
     createdAt: '2026-06-10T09:00:00.000Z',
     comments: [
       {
         id: 'c-8-1',
-        userId: 'user-4',
-        content: 'All 6 damaged sections have been repaired. Photographs submitted.',
-        createdAt: '2026-06-19T16:00:00.000Z',
-      },
-      {
-        id: 'c-8-2',
-        userId: 'user-1',
-        content: 'Good work. Task approved. Keep monitoring this perimeter during monsoon.',
+        userId: 'user-3',
+        content: 'Excellent work. Archived. Keep monitoring during monsoon.',
         createdAt: '2026-06-20T10:00:00.000Z',
       },
     ],
@@ -221,71 +351,83 @@ const SEED_TASKS: Task[] = [
   },
   {
     id: 'task-9',
-    title: 'File anti-poaching patrol report for June',
+    title: 'Anti-poaching patrol report — June 2026',
     description:
-      'Compile and file the monthly anti-poaching patrol report for June 2026. Include all patrol routes covered, suspicious activity logs, seizures (if any), and staff attendance. Submit to the Deputy Director by 3rd July.',
-    assigneeId: 'user-5', // Vivek Singh
-    createdById: 'user-1',
-    status: 'Unread',
-    priority: 'LOW',
+      'Compile and file monthly anti-poaching patrol report for June 2026. Include patrol routes, suspicious activity logs, seizures, staff attendance. Submit to Director by 3rd July.',
+    assigneeId: 'user-5',
+    createdById: 'user-2',
+    rangeId: 'range-betla',
+    status: 'NotStarted',
+    priority: 'Low',
     category: 'Admin',
     dueDate: '2026-07-03',
+    completionPercentage: 0,
+    taskUpdates: [],
     createdAt: '2026-06-26T09:00:00.000Z',
     comments: [],
     attachments: [],
   },
   {
     id: 'task-10',
-    title: 'Set up new patrol routes for monsoon season',
+    title: 'Monsoon patrol routes — Kechki Range',
     description:
-      'Redesign patrol routes for the monsoon season considering flooded forest tracks and increased tiger movement near water bodies. Prepare route maps, brief all field staff, and upload updated routes to the patrol management app.',
-    assigneeId: 'user-2', // Abhay Kumar
+      'Redesign patrol routes for monsoon season considering flooded tracks and tiger movement near water bodies. Prepare route maps, brief staff, upload routes to patrol management app.',
+    assigneeId: 'user-7',
     createdById: 'user-1',
-    status: 'Done',
-    priority: 'HIGH',
+    rangeId: 'range-kechki',
+    status: 'Completed',
+    priority: 'High',
     category: 'Patrol',
     dueDate: '2026-06-28',
-    acknowledgedAt: '2026-06-23T08:00:00.000Z',
-    completedAt: '2026-06-27T12:00:00.000Z',
-    createdAt: '2026-06-22T08:00:00.000Z',
-    comments: [
+    completionPercentage: 100,
+    taskUpdates: [
       {
-        id: 'c-10-1',
-        userId: 'user-2',
-        content:
-          'Monsoon patrol routes have been finalized. 4 new routes added in the North zone. Staff briefing done on 26th June.',
+        id: 'tu-10-1',
+        taskId: 'task-10',
+        userId: 'user-7',
+        note: 'Monsoon routes finalized. 4 new routes added in North zone. Staff briefing done.',
+        progressPercentage: 100,
         createdAt: '2026-06-27T12:00:00.000Z',
       },
     ],
+    acknowledgedAt: '2026-06-23T08:00:00.000Z',
+    completedAt: '2026-06-27T12:00:00.000Z',
+    createdAt: '2026-06-22T08:00:00.000Z',
+    comments: [],
     attachments: [],
   },
   {
     id: 'task-11',
-    title: 'Deploy water monitoring sensors at Koel River',
+    title: 'Water monitoring sensors — Koel River, Latehar',
     description:
-      'Install three IoT water level monitoring sensors at designated points along the Koel River within PTR buffer zone. Calibrate sensors, set up alerts, and verify data transmission to the central dashboard.',
-    assigneeId: 'user-3', // Iqbal Ahmed
-    createdById: 'user-1',
+      'Install three IoT water level sensors at designated points along Koel River in buffer zone. Calibrate sensors, set alerts, verify data transmission to central dashboard.',
+    assigneeId: 'user-6',
+    createdById: 'user-3',
+    rangeId: 'range-latehar',
+    areaId: 'area-l1',
     status: 'InProgress',
-    priority: 'CRITICAL',
+    priority: 'Critical',
     category: 'Survey',
     dueDate: '2026-06-24',
+    completionPercentage: 65,
+    taskUpdates: [
+      {
+        id: 'tu-11-1',
+        taskId: 'task-11',
+        userId: 'user-6',
+        note: 'Sensors 1 & 2 deployed. Site 3 inaccessible due to early flooding. Will deploy by 28th June.',
+        progressPercentage: 65,
+        createdAt: '2026-06-25T11:00:00.000Z',
+      },
+    ],
     acknowledgedAt: '2026-06-21T07:00:00.000Z',
     createdAt: '2026-06-20T09:00:00.000Z',
     comments: [
       {
         id: 'c-11-1',
-        userId: 'user-1',
-        content:
-          'This is overdue. Please provide an update immediately. The monsoon season is approaching and we need these sensors operational.',
-        createdAt: '2026-06-25T09:00:00.000Z',
-      },
-      {
-        id: 'c-11-2',
         userId: 'user-3',
-        content:
-          'Two sensors deployed. Third location is inaccessible due to early flooding. Will deploy by 28th June when water recedes.',
-        createdAt: '2026-06-25T11:00:00.000Z',
+        content: 'Overdue. Provide update — monsoon sensors must be operational.',
+        createdAt: '2026-06-25T09:00:00.000Z',
       },
     ],
     attachments: [],
@@ -294,23 +436,32 @@ const SEED_TASKS: Task[] = [
     id: 'task-12',
     title: 'Annual vehicle inspection documentation',
     description:
-      'Complete annual vehicle inspection documentation for all 8 reserve vehicles. Coordinate with the transport officer for physical inspections, collect fitness certificates, update vehicle log books, and submit consolidated report to the Director\'s office.',
-    assigneeId: 'user-4', // Manish Oraon
-    createdById: 'user-1',
-    status: 'Unread',
-    priority: 'LOW',
+      'Complete annual inspection docs for all 8 reserve vehicles. Coordinate with transport officer, collect fitness certificates, update log books, submit report to Director.',
+    assigneeId: 'user-5',
+    createdById: 'user-2',
+    rangeId: 'range-betla',
+    status: 'NotStarted',
+    priority: 'Low',
     category: 'Admin',
     dueDate: '2026-07-20',
+    completionPercentage: 0,
+    taskUpdates: [],
     createdAt: '2026-06-27T08:00:00.000Z',
     comments: [],
     attachments: [],
   },
 ];
 
-// Credentials map (email → password)
+// ─── Credentials ──────────────────────────────────────────────────────────────
+
 const CREDENTIALS: Record<string, string> = {
-  'admin@ptr.in': 'demo123',
-  'staff@ptr.in': 'demo123',
+  'director@ptr.in': 'demo123',
+  'officer@ptr.in': 'demo123',
+  'officer.latehar@ptr.in': 'demo123',
+  'guard@ptr.in': 'demo123',
+  'manish@ptr.in': 'demo123',
+  'iqbal@ptr.in': 'demo123',
+  'vivek@ptr.in': 'demo123',
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -321,13 +472,16 @@ const useStore = create<Store>()(
       // State
       currentUser: null,
       users: SEED_USERS,
+      ranges: SEED_RANGES,
+      areas: SEED_AREAS,
       tasks: SEED_TASKS,
       notifications: [],
+      reports: [],
 
       // Auth
-      login: (email: string, password: string) => {
-        const expectedPassword = CREDENTIALS[email.toLowerCase().trim()];
-        if (!expectedPassword || expectedPassword !== password) return null;
+      login: (email, password) => {
+        const expected = CREDENTIALS[email.toLowerCase().trim()];
+        if (!expected || expected !== password) return null;
         const user = get().users.find(
           (u) => u.email.toLowerCase() === email.toLowerCase().trim()
         );
@@ -336,9 +490,7 @@ const useStore = create<Store>()(
         return user;
       },
 
-      logout: () => {
-        set({ currentUser: null });
-      },
+      logout: () => set({ currentUser: null }),
 
       // Tasks
       createTask: (data) => {
@@ -348,29 +500,27 @@ const useStore = create<Store>()(
           createdAt: new Date().toISOString(),
           comments: [],
           attachments: [],
+          taskUpdates: [],
         };
         set((state) => ({ tasks: [task, ...state.tasks] }));
 
-        // Notify assignee
         const assignee = get().users.find((u) => u.id === data.assigneeId);
         if (assignee) {
           get().addNotification({
             userId: assignee.id,
+            type: 'task_assigned',
             title: 'New Task Assigned',
             message: `You have been assigned: "${task.title}"`,
             taskId: task.id,
             read: false,
           });
         }
-
         return task;
       },
 
       updateTask: (id, updates) => {
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === id ? { ...t, ...updates } : t
-          ),
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
         }));
       },
 
@@ -390,15 +540,12 @@ const useStore = create<Store>()(
         };
         set((state) => ({
           tasks: state.tasks.map((t) =>
-            t.id === taskId
-              ? { ...t, comments: [...t.comments, comment] }
-              : t
+            t.id === taskId ? { ...t, comments: [...t.comments, comment] } : t
           ),
         }));
       },
 
-      addAttachment: (taskId: string, attachment: Attachment) => {
-        // Store attachment metadata but strip previewUrl before persisting
+      addAttachment: (taskId, attachment: Attachment) => {
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId
@@ -408,33 +555,70 @@ const useStore = create<Store>()(
         }));
       },
 
-      removeAttachment: (taskId: string, attachmentId: string) => {
+      removeAttachment: (taskId, attachmentId) => {
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId
-              ? {
-                  ...t,
-                  attachments: t.attachments.filter((a) => a.id !== attachmentId),
-                }
+              ? { ...t, attachments: t.attachments.filter((a) => a.id !== attachmentId) }
               : t
           ),
         }));
       },
 
-      acknowledgeTask: (taskId) => {
+      // Diary / progress update
+      addTaskUpdate: (taskId, note, progressPercentage, userId) => {
+        const update: TaskUpdate = {
+          id: crypto.randomUUID(),
+          taskId,
+          userId,
+          note,
+          progressPercentage,
+          createdAt: new Date().toISOString(),
+        };
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId
               ? {
                   ...t,
-                  status: 'InProgress' as const,
-                  acknowledgedAt: new Date().toISOString(),
+                  completionPercentage: progressPercentage,
+                  taskUpdates: [...t.taskUpdates, update],
                 }
+              : t
+          ),
+        }));
+
+        // Notify range officer / director about update
+        const task = get().tasks.find((t) => t.id === taskId);
+        if (task) {
+          const rangeOfficers = get().users.filter(
+            (u) => u.role === 'range_officer' && u.rangeId === task.rangeId
+          );
+          const directors = get().users.filter((u) => u.role === 'director');
+          [...rangeOfficers, ...directors].forEach((u) => {
+            get().addNotification({
+              userId: u.id,
+              type: 'task_updated',
+              title: 'Task Progress Update',
+              message: `${progressPercentage}% — "${task.title}"`,
+              taskId,
+              read: false,
+            });
+          });
+        }
+      },
+
+      // Guard starts task (NotStarted → InProgress)
+      startTask: (taskId) => {
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId
+              ? { ...t, status: 'InProgress' as const, acknowledgedAt: new Date().toISOString() }
               : t
           ),
         }));
       },
 
+      // Guard marks task complete (InProgress → Completed)
       completeTask: (taskId) => {
         const task = get().tasks.find((t) => t.id === taskId);
         set((state) => ({
@@ -442,71 +626,136 @@ const useStore = create<Store>()(
             t.id === taskId
               ? {
                   ...t,
-                  status: 'Done' as const,
+                  status: 'Completed' as const,
+                  completionPercentage: 100,
                   completedAt: new Date().toISOString(),
                 }
               : t
           ),
         }));
-
-        // Notify admin
-        const admins = get().users.filter((u) => u.role === 'admin');
-        admins.forEach((admin) => {
-          get().addNotification({
-            userId: admin.id,
-            title: 'Task Ready for Approval',
-            message: `"${task?.title}" has been marked as Done and is awaiting your approval.`,
-            taskId: taskId,
-            read: false,
+        if (task) {
+          const rangeOfficers = get().users.filter(
+            (u) => u.role === 'range_officer' && u.rangeId === task.rangeId
+          );
+          const directors = get().users.filter((u) => u.role === 'director');
+          [...rangeOfficers, ...directors].forEach((u) => {
+            get().addNotification({
+              userId: u.id,
+              type: 'task_completed',
+              title: 'Task Completed',
+              message: `"${task.title}" marked complete — awaiting review.`,
+              taskId,
+              read: false,
+            });
           });
-        });
+        }
       },
 
-      approveTask: (taskId) => {
+      // Officer/Director archives completed task
+      archiveTask: (taskId) => {
+        const task = get().tasks.find((t) => t.id === taskId);
         set((state) => ({
           tasks: state.tasks.map((t) =>
-            t.id === taskId ? { ...t, status: 'Approved' as const } : t
+            t.id === taskId
+              ? { ...t, status: 'Archived' as const, archivedAt: new Date().toISOString() }
+              : t
           ),
         }));
-
-        // Notify assignee
-        const task = get().tasks.find((t) => t.id === taskId);
         if (task) {
           get().addNotification({
             userId: task.assigneeId,
-            title: 'Task Approved',
-            message: `Your task "${task.title}" has been approved.`,
-            taskId: taskId,
+            type: 'task_archived',
+            title: 'Task Archived',
+            message: `Your task "${task.title}" has been reviewed and archived.`,
+            taskId,
             read: false,
           });
         }
       },
 
+      // Officer/Director sends task back (Completed → InProgress)
       requestChanges: (taskId, comment) => {
         set((state) => ({
           tasks: state.tasks.map((t) =>
-            t.id === taskId ? { ...t, status: 'InProgress' as const } : t
+            t.id === taskId
+              ? { ...t, status: 'InProgress' as const, completedAt: undefined }
+              : t
           ),
         }));
-
         if (comment) {
           const { currentUser } = get();
           if (currentUser) {
             get().addComment(taskId, `[Changes Requested] ${comment}`, currentUser.id);
           }
         }
-
-        // Notify assignee
         const task = get().tasks.find((t) => t.id === taskId);
         if (task) {
           get().addNotification({
             userId: task.assigneeId,
+            type: 'changes_requested',
             title: 'Changes Requested',
-            message: `Changes have been requested for your task "${task.title}".`,
-            taskId: taskId,
+            message: `Changes requested for "${task.title}".`,
+            taskId,
             read: false,
           });
         }
+      },
+
+      // User management (director only)
+      createUser: (userData) => {
+        const user: User = { ...userData, id: crypto.randomUUID() };
+        set((state) => ({ users: [...state.users, user] }));
+        return user;
+      },
+
+      updateUser: (id, updates) => {
+        set((state) => ({
+          users: state.users.map((u) => (u.id === id ? { ...u, ...updates } : u)),
+        }));
+      },
+
+      deleteUser: (id) => {
+        set((state) => ({
+          users: state.users.filter((u) => u.id !== id),
+        }));
+      },
+
+      // Daily report generation
+      generateDailyReport: () => {
+        const { tasks, ranges, currentUser } = get();
+        const now = new Date();
+        const todayStr = now.toISOString().substring(0, 10);
+
+        const rangeBreakdown = ranges.map((range) => {
+          const rangeTasks = tasks.filter((t) => t.rangeId === range.id);
+          return {
+            rangeId: range.id,
+            rangeName: range.name,
+            total: rangeTasks.length,
+            completed: rangeTasks.filter(
+              (t) => t.status === 'Completed' || t.status === 'Archived'
+            ).length,
+            overdue: rangeTasks.filter(isOverdue).length,
+          };
+        });
+
+        const report: DailyReport = {
+          id: crypto.randomUUID(),
+          reportDate: todayStr,
+          generatedBy: currentUser?.id ?? 'system',
+          totalTasks: tasks.length,
+          completedCount: tasks.filter(
+            (t) => t.status === 'Completed' || t.status === 'Archived'
+          ).length,
+          inProgressCount: tasks.filter((t) => t.status === 'InProgress').length,
+          notStartedCount: tasks.filter((t) => t.status === 'NotStarted').length,
+          overdueCount: tasks.filter(isOverdue).length,
+          rangeBreakdown,
+          createdAt: now.toISOString(),
+        };
+
+        set((state) => ({ reports: [report, ...state.reports] }));
+        return report;
       },
 
       // Notifications
@@ -525,27 +774,29 @@ const useStore = create<Store>()(
       },
 
       addNotification: (notification) => {
-        const newNotification: Notification = {
+        const newNotif: Notification = {
           ...notification,
           id: crypto.randomUUID(),
           createdAt: new Date().toISOString(),
         };
         set((state) => ({
-          notifications: [newNotification, ...state.notifications],
+          notifications: [newNotif, ...state.notifications],
         }));
       },
     }),
     {
-      name: 'ptr-store',
-      // Exclude previewUrls from persistence (object URLs don't survive page reloads)
+      name: 'ptr-store-v2',
       partialize: (state) => ({
         currentUser: state.currentUser,
         users: state.users,
+        ranges: state.ranges,
+        areas: state.areas,
         tasks: state.tasks.map((task) => ({
           ...task,
           attachments: task.attachments.map(({ previewUrl: _ignored, ...rest }) => rest),
         })),
         notifications: state.notifications,
+        reports: state.reports,
       }),
     }
   )

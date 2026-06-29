@@ -19,9 +19,7 @@ export default function TaskCard({ task, users, showAssignee = false, onClick }:
   return (
     <div
       onClick={onClick}
-      className={`card p-4 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${
-        task.status === 'Unread' ? 'border-l-4 border-l-amber-400' : ''
-      }`}
+      className="card p-4 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
@@ -29,9 +27,6 @@ export default function TaskCard({ task, users, showAssignee = false, onClick }:
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            {task.status === 'Unread' && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-            )}
             <h3 className="text-sm font-semibold text-ptr-brown line-clamp-2 leading-snug">
               {task.title}
             </h3>

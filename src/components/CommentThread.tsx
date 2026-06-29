@@ -52,9 +52,9 @@ export default function CommentThread({ comments, users, currentUser, onAddComme
                     <span className="text-xs text-ptr-brown-light">
                       {formatRelative(comment.createdAt)}
                     </span>
-                    {user?.role === 'admin' && (
+                    {(user?.role === 'director' || user?.role === 'range_officer') && (
                       <span className="text-xs bg-ptr-green/10 text-ptr-green px-1.5 py-0.5 rounded-full font-medium">
-                        Admin
+                        {user.role === 'director' ? 'Director' : 'Officer'}
                       </span>
                     )}
                   </div>
