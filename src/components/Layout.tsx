@@ -11,6 +11,7 @@ import {
   Leaf,
 } from 'lucide-react';
 import useStore from '../store/useStore';
+import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 
 type NavItem = { to: string; label: string; icon: React.ReactNode };
@@ -82,12 +83,12 @@ function Sidebar({
 }
 
 function AdminLayout({ items }: { items: NavItem[] }) {
-  const logout = useStore((s) => s.logout);
+  const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logoutFromSupabase();
     navigate('/login', { replace: true });
   };
 
@@ -158,11 +159,11 @@ function AdminLayout({ items }: { items: NavItem[] }) {
 
 function GuardLayout() {
   const currentUser = useStore((s) => s.currentUser);
-  const logout = useStore((s) => s.logout);
+  const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logoutFromSupabase();
     navigate('/login', { replace: true });
   };
 

@@ -479,6 +479,8 @@ const useStore = create<Store>()(
       reports: [],
 
       // Auth
+      setCurrentUser: (user) => set({ currentUser: user }),
+
       login: (email, password) => {
         const expected = CREDENTIALS[email.toLowerCase().trim()];
         if (!expected || expected !== password) return null;

@@ -126,6 +126,7 @@ export interface AppState {
 }
 
 export interface AppActions {
+  setCurrentUser: (user: User | null) => void;
   login: (email: string, password: string) => User | null;
   logout: () => void;
   createTask: (

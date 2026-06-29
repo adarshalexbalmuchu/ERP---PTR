@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Leaf, Eye, EyeOff, Shield, MapPin, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import useStore from '../store/useStore';
 
 type DemoRole = 'director' | 'officer' | 'guard';
@@ -37,7 +38,8 @@ function roleHome(role: string): string {
 
 export default function Login() {
   const navigate = useNavigate();
-  const login = useStore((s) => s.login);
+  const { loginWithSupabase } = useAuth();
+  const storeLogin = useStore((s) => s.login);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,19 +47,33 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      const user = login(email.trim().toLowerCase(), password);
-      setLoading(false);
-      if (!user) {
-        setError('Invalid email or password. Use the demo credentials below.');
-        return;
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    try {
+      // Try Supabase auth first
+      await loginWithSupabase(trimmedEmail, password);
+      // onAuthStateChange in AuthContext will set currentUser via setCurrentUser
+      // Wait briefly for the state to propagate, then navigate
+      setTimeout(() => {
+        const user = useStore.getState().currentUser;
+        if (user) navigate(roleHome(user.role), { replace: true });
+        setLoading(false);
+      }, 500);
+    } catch {
+      // Fall back to local demo login (works without Supabase users)
+      const user = storeLogin(trimmedEmail, password);
+      if (user) {
+        navigate(roleHome(user.role), { replace: true });
+      } else {
+        setError('Invalid email or password.');
       }
-      navigate(roleHome(user.role), { replace: true });
-    }, 400);
+      setLoading(false);
+    }
   };
 
   const fillDemo = (role: DemoRole) => {
