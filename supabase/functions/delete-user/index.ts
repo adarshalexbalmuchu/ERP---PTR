@@ -24,7 +24,9 @@ serve(async (req) => {
       global: { headers: { authorization: authHeader } },
     });
     const { data: { user: caller }, error: callerErr } = await callerClient.auth.getUser();
-    if (callerErr || !caller) throw new Error('Unauthorized');
+    if (callerErr || !caller) {
+      throw new Error(`Unauthorized: ${callerErr?.message ?? 'no user for this token'}`);
+    }
 
     const { data: callerProfile, error: profileErr } = await callerClient
       .from('profiles')
@@ -32,7 +34,9 @@ serve(async (req) => {
       .eq('id', caller.id)
       .single();
     if (profileErr || callerProfile?.role !== 'director') {
-      throw new Error('Only directors can delete users');
+      throw new Error(
+        `Only directors can delete users (role check: ${callerProfile?.role ?? 'none'}${profileErr ? `, error: ${profileErr.message}` : ''})`,
+      );
     }
 
     const { userId } = await req.json() as { userId: string };
