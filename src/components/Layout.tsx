@@ -13,6 +13,7 @@ import {
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
+import GovStrip from './GovStrip';
 
 type NavItem = { to: string; label: string; icon: React.ReactNode };
 
@@ -93,65 +94,68 @@ function AdminLayout({ items }: { items: NavItem[] }) {
   };
 
   return (
-    <div className="flex h-screen bg-ptr-cream overflow-hidden">
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex flex-col w-64 flex-shrink-0">
-        <Sidebar items={items} onLogout={handleLogout} />
-      </div>
-
-      {/* Mobile sidebar overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileOpen(false)}
-            style={{ animation: 'fadeIn 0.15s ease-out' }}
-          />
-          <div
-            className="absolute left-0 top-0 bottom-0 w-72"
-            style={{ animation: 'slideRight 0.2s ease-out' }}
-          >
-            <Sidebar items={items} onLogout={handleLogout} onClose={() => setMobileOpen(false)} />
-          </div>
+    <div className="flex flex-col h-screen bg-ptr-cream overflow-hidden">
+      <GovStrip />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Desktop sidebar */}
+        <div className="hidden md:flex flex-col w-64 flex-shrink-0">
+          <Sidebar items={items} onLogout={handleLogout} />
         </div>
-      )}
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile top bar */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-ptr-cream-dark">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
-            aria-label="Open navigation"
-          >
-            <Menu className="w-5 h-5 text-ptr-brown" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-ptr-green flex items-center justify-center">
-              <Leaf className="w-3 h-3 text-white" />
+        {/* Mobile sidebar overlay */}
+        {mobileOpen && (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setMobileOpen(false)}
+              style={{ animation: 'fadeIn 0.15s ease-out' }}
+            />
+            <div
+              className="absolute left-0 top-0 bottom-0 w-72"
+              style={{ animation: 'slideRight 0.2s ease-out' }}
+            >
+              <Sidebar items={items} onLogout={handleLogout} onClose={() => setMobileOpen(false)} />
             </div>
-            <span className="text-sm font-bold text-ptr-brown">PTR Tasks</span>
           </div>
-          <NotificationBell />
-        </header>
+        )}
 
-        {/* Desktop top bar */}
-        <div className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-ptr-cream-dark">
-          <p className="text-sm text-ptr-brown-light">
-            {new Date().toLocaleDateString('en-IN', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })}
-          </p>
-          <NotificationBell />
+        {/* Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Mobile top bar */}
+          <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-ptr-cream-dark">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
+              aria-label="Open navigation"
+            >
+              <Menu className="w-5 h-5 text-ptr-brown" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-ptr-green flex items-center justify-center">
+                <Leaf className="w-3 h-3 text-white" />
+              </div>
+              <span className="text-sm font-bold text-ptr-brown">PTR Tasks</span>
+            </div>
+            <NotificationBell />
+          </header>
+
+          {/* Desktop top bar */}
+          <div className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-ptr-cream-dark">
+            <p className="text-sm text-ptr-brown-light">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+            <NotificationBell />
+          </div>
+
+          <main className="flex-1 overflow-y-auto">
+            <Outlet />
+          </main>
         </div>
-
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
       </div>
     </div>
   );
@@ -169,6 +173,7 @@ function GuardLayout() {
 
   return (
     <div className="min-h-screen bg-ptr-cream flex flex-col">
+      <GovStrip />
       <header className="bg-white border-b border-ptr-cream-dark px-4 py-3 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-ptr-green flex items-center justify-center">
