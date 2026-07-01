@@ -267,7 +267,33 @@ export interface Database {
         Relationships: Relationships;
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      task_dashboard_stats: {
+        Row: {
+          total_tasks: number;
+          critical_count: number;
+          in_progress_count: number;
+          completed_count: number;
+          archived_count: number;
+          overdue_count: number;
+        };
+        Relationships: Relationships;
+      };
+      task_range_stats: {
+        Row: {
+          range_id: string;
+          range_name: string;
+          total: number;
+          not_started_count: number;
+          in_progress_count: number;
+          completed_count: number;
+          archived_count: number;
+          completed: number;
+          overdue: number;
+        };
+        Relationships: Relationships;
+      };
+    };
     Functions: Record<string, never>;
     Enums: {
       user_role: UserRole;

@@ -8,6 +8,30 @@ import type { Task } from '../types';
 
 type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>;
 
+const ATTACHMENT_URL_TTL_SECONDS = 3600;
+
+// attachments.url stores a bare storage path (the bucket is private); this
+// swaps in a time-limited signed URL before the task reaches the UI.
+async function resolveAttachmentUrls(task: Task): Promise<Task> {
+  if (task.attachments.length === 0) return task;
+  const paths = task.attachments.map((a) => a.path);
+  const { data } = await supabase.storage
+    .from('task-attachments')
+    .createSignedUrls(paths, ATTACHMENT_URL_TTL_SECONDS);
+  const signedByPath = new Map((data ?? []).map((d) => [d.path, d.signedUrl]));
+  return {
+    ...task,
+    attachments: task.attachments.map((a) => {
+      const signedUrl = signedByPath.get(a.path) ?? a.url;
+      return {
+        ...a,
+        url: signedUrl,
+        previewUrl: a.type.startsWith('image/') ? signedUrl : undefined,
+      };
+    }),
+  };
+}
+
 export function useTask(id: string | undefined) {
   const queryClient = useQueryClient();
   const currentUser = useStore((s) => s.currentUser);
@@ -22,7 +46,7 @@ export function useTask(id: string | undefined) {
         .eq('id', id)
         .single();
       if (error) throw error;
-      return mapTask(data);
+      return resolveAttachmentUrls(mapTask(data));
     },
     enabled: !!id,
   });
@@ -204,17 +228,15 @@ export function useTask(id: string | undefined) {
         .upload(path, file);
       if (uploadErr) throw uploadErr;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('task-attachments')
-        .getPublicUrl(path);
-
+      // Store the bare storage path — the bucket is private, so viewing
+      // requires a signed URL generated on demand (see resolveAttachmentUrls).
       const { data, error } = await supabase
         .from('attachments')
         .insert({
           task_id: id,
           user_id: currentUser.id,
           name: file.name,
-          url: publicUrl,
+          url: path,
           size: file.size,
           mime_type: file.type,
         })
@@ -228,14 +250,12 @@ export function useTask(id: string | undefined) {
 
   const removeAttachment = useMutation({
     mutationFn: async (attachmentId: string) => {
-      // Find the attachment to get its URL for storage deletion
       const att = task?.attachments.find((a) => a.id === attachmentId);
       const { error } = await supabase.from('attachments').delete().eq('id', attachmentId);
       if (error) throw error;
       // Attempt to remove from storage (non-fatal if it fails)
-      if (att?.url) {
-        const path = att.url.split('/task-attachments/')[1];
-        if (path) await supabase.storage.from('task-attachments').remove([path]);
+      if (att?.path) {
+        await supabase.storage.from('task-attachments').remove([att.path]);
       }
     },
     onSuccess: invalidate,

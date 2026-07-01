@@ -8,6 +8,7 @@ import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
+import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -38,6 +39,7 @@ export default function OfficerDashboard() {
   const { tasks, createTask } = useTasks();
   const { users } = useUsers();
   const { ranges, areas } = useRanges();
+  const { stats } = useDashboardStats();
 
   const [formOpen, setFormOpen] = useState(false);
 
@@ -46,13 +48,16 @@ export default function OfficerDashboard() {
   const myGuards = users.filter((u) => u.role === 'guard' && u.rangeId === currentUser?.rangeId);
   const myAreas = areas.filter((a) => a.rangeId === currentUser?.rangeId);
 
-  const totalTasks = myTasks.length;
-  const critical = myTasks.filter((t) => t.priority === 'Critical' && t.status !== 'Archived').length;
-  const inProgress = myTasks.filter((t) => t.status === 'InProgress').length;
-  const overdueCount = myTasks.filter(isOverdue).length;
-  const completed = myTasks.filter((t) => t.status === 'Completed').length;
+  // Top metrics come from the RLS-scoped task_dashboard_stats view (already
+  // limited to this officer's range by Postgres RLS) instead of recomputing
+  // from the full task list on every render.
+  const totalTasks = stats?.totalTasks ?? 0;
+  const critical = stats?.criticalCount ?? 0;
+  const inProgress = stats?.inProgressCount ?? 0;
+  const overdueCount = stats?.overdueCount ?? 0;
+  const completed = stats?.completedCount ?? 0;
   const completionRate = totalTasks > 0
-    ? Math.round((myTasks.filter((t) => t.status === 'Completed' || t.status === 'Archived').length / totalTasks) * 100)
+    ? Math.round((((stats?.completedCount ?? 0) + (stats?.archivedCount ?? 0)) / totalTasks) * 100)
     : 0;
 
   // Chart: tasks per guard

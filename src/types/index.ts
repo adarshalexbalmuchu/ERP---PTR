@@ -46,6 +46,9 @@ export interface Attachment {
   name: string;
   type: string;
   size: number;
+  /** Raw storage path (bucket-relative), used to generate/revoke signed URLs. */
+  path: string;
+  /** Time-limited signed URL for viewing/downloading. */
   url: string;
   previewUrl?: string;
 }

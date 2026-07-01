@@ -327,3 +327,41 @@ create policy "attachments_download" on storage.objects
 
 create policy "attachments_delete" on storage.objects
   for delete using (bucket_id = 'task-attachments' and auth.uid() is not null);
+
+-- ─────────────────────────────────────────────
+-- Dashboard aggregate views
+-- security_invoker = true is required: without it, a view runs with the
+-- view owner's privileges and BYPASSES the RLS policies on the underlying
+-- tasks table, leaking every task to every role. With it, the view is
+-- evaluated as the querying user, so RLS still scopes rows exactly as it
+-- does for a direct `select * from tasks`.
+-- ─────────────────────────────────────────────
+create or replace view task_dashboard_stats
+  with (security_invoker = true) as
+  select
+    count(*) as total_tasks,
+    count(*) filter (where priority = 'Critical' and status <> 'Archived') as critical_count,
+    count(*) filter (where status = 'InProgress') as in_progress_count,
+    count(*) filter (where status = 'Completed') as completed_count,
+    count(*) filter (where status = 'Archived') as archived_count,
+    count(*) filter (where due_date < now() and status not in ('Completed', 'Archived')) as overdue_count
+  from tasks;
+
+create or replace view task_range_stats
+  with (security_invoker = true) as
+  select
+    r.id as range_id,
+    r.name as range_name,
+    count(t.id) as total,
+    count(t.id) filter (where t.status = 'NotStarted') as not_started_count,
+    count(t.id) filter (where t.status = 'InProgress') as in_progress_count,
+    count(t.id) filter (where t.status = 'Completed') as completed_count,
+    count(t.id) filter (where t.status = 'Archived') as archived_count,
+    count(t.id) filter (where t.status = 'Completed' or t.status = 'Archived') as completed,
+    count(t.id) filter (where t.due_date < now() and t.status not in ('Completed', 'Archived')) as overdue
+  from ranges r
+  left join tasks t on t.range_id = r.id
+  group by r.id, r.name;
+
+grant select on task_dashboard_stats to authenticated;
+grant select on task_range_stats to authenticated;

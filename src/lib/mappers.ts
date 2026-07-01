@@ -42,13 +42,16 @@ export function mapComment(row: CommentRow): Comment {
 }
 
 export function mapAttachment(row: AttachmentRow): Attachment {
+  // row.url stores the bare storage path; resolveAttachmentUrls() replaces
+  // url/previewUrl with a time-limited signed URL before this reaches the UI.
   return {
     id: row.id,
     name: row.name,
     type: row.mime_type,
     size: row.size,
+    path: row.url,
     url: row.url,
-    previewUrl: row.mime_type.startsWith('image/') ? row.url : undefined,
+    previewUrl: undefined,
   };
 }
 

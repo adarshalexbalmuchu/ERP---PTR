@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Leaf } from 'lucide-react';
@@ -7,14 +7,17 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import useStore from './store/useStore';
 import Login from './pages/Login';
 import Layout from './components/Layout';
-import DirectorDashboard from './pages/director/Dashboard';
-import DirectorTaskList from './pages/director/TaskList';
-import DirectorReports from './pages/director/Reports';
-import DirectorUsers from './pages/director/Users';
-import OfficerDashboard from './pages/officer/Dashboard';
-import OfficerTaskList from './pages/officer/TaskList';
-import TaskDetailPage from './pages/shared/TaskDetailPage';
-import GuardMyTasks from './pages/guard/MyTasks';
+
+// Route-level code splitting: a guard never downloads director/officer
+// bundles (charts, user management, etc.) and vice versa.
+const DirectorDashboard = lazy(() => import('./pages/director/Dashboard'));
+const DirectorTaskList = lazy(() => import('./pages/director/TaskList'));
+const DirectorReports = lazy(() => import('./pages/director/Reports'));
+const DirectorUsers = lazy(() => import('./pages/director/Users'));
+const OfficerDashboard = lazy(() => import('./pages/officer/Dashboard'));
+const OfficerTaskList = lazy(() => import('./pages/officer/TaskList'));
+const TaskDetailPage = lazy(() => import('./pages/shared/TaskDetailPage'));
+const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
 
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
@@ -75,6 +78,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
+          <Suspense fallback={<LoadingScreen />}>
           <Routes>
             <Route path="/" element={<Root />} />
             <Route path="/login" element={<Login />} />
@@ -124,6 +128,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>

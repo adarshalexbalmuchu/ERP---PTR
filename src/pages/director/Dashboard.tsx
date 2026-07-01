@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart,
   Bar,
@@ -22,7 +23,9 @@ import {
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
-import { useRanges } from '../../hooks/useRanges';
+import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { supabase } from '../../lib/supabase';
+import { mapTask } from '../../lib/mappers';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -79,42 +82,55 @@ function TaskRow({ task, assigneeName, onClick }: { task: Task; assigneeName: st
 export default function DirectorDashboard() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const { tasks } = useTasks();
   const { users } = useUsers();
-  const { ranges } = useRanges();
   const { createTask } = useTasks();
+  const { stats, rangeStats } = useDashboardStats();
 
   const [formOpen, setFormOpen] = useState(false);
 
-  // Metrics
-  const totalTasks = tasks.length;
-  const critical = tasks.filter((t) => t.priority === 'Critical' && t.status !== 'Archived').length;
-  const inProgress = tasks.filter((t) => t.status === 'InProgress').length;
-  const completed = tasks.filter((t) => t.status === 'Completed').length;
-  const overdueCount = tasks.filter(isOverdue).length;
+  // Metrics come from Postgres aggregate views (task_dashboard_stats /
+  // task_range_stats) instead of fetching every task row — stays fast
+  // regardless of how many years of tasks accumulate.
+  const totalTasks = stats?.totalTasks ?? 0;
+  const critical = stats?.criticalCount ?? 0;
+  const inProgress = stats?.inProgressCount ?? 0;
+  const completed = stats?.completedCount ?? 0;
+  const overdueCount = stats?.overdueCount ?? 0;
   const completionRate = totalTasks > 0
-    ? Math.round(
-        (tasks.filter((t) => t.status === 'Completed' || t.status === 'Archived').length / totalTasks) * 100
-      )
+    ? Math.round((((stats?.completedCount ?? 0) + (stats?.archivedCount ?? 0)) / totalTasks) * 100)
     : 0;
 
-  // Chart: tasks per range
-  const chartData = ranges.map((range) => {
-    const rt = tasks.filter((t) => t.rangeId === range.id);
-    return {
-      name: range.name.replace(' Range', ''),
-      'Not Started': rt.filter((t) => t.status === 'NotStarted').length,
-      'In Progress': rt.filter((t) => t.status === 'InProgress').length,
-      Completed: rt.filter((t) => t.status === 'Completed').length,
-      Archived: rt.filter((t) => t.status === 'Archived').length,
-    };
+  const chartData = rangeStats.map((r) => ({
+    name: r.rangeName.replace(' Range', ''),
+    'Not Started': r.notStartedCount,
+    'In Progress': r.inProgressCount,
+    Completed: r.completedCount,
+    Archived: r.archivedCount,
+  }));
+
+  // Only the handful of rows these lists actually display — not the full
+  // task table.
+  const { data: recentTasks = [] } = useQuery({
+    queryKey: ['dashboard-recent-tasks'],
+    queryFn: async (): Promise<Task[]> => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(6);
+      if (error) throw error;
+      return data.map((t) => mapTask(t));
+    },
   });
 
-  const recentTasks = [...tasks]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 6);
-
-  const completedPendingReview = tasks.filter((t) => t.status === 'Completed');
+  const { data: completedPendingReview = [] } = useQuery({
+    queryKey: ['dashboard-pending-review'],
+    queryFn: async (): Promise<Task[]> => {
+      const { data, error } = await supabase.from('tasks').select('*').eq('status', 'Completed');
+      if (error) throw error;
+      return data.map((t) => mapTask(t));
+    },
+  });
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -167,36 +183,30 @@ export default function DirectorDashboard() {
 
       {/* Range breakdown */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {ranges.map((range) => {
-          const rt = tasks.filter((t) => t.rangeId === range.id);
-          const ov = rt.filter(isOverdue).length;
-          return (
-            <button
-              key={range.id}
-              onClick={() => navigate('/director/tasks')}
-              className="card p-4 text-left hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <MapPin className="w-4 h-4 text-ptr-green" />
-                <span className="text-sm font-semibold text-ptr-brown">{range.name}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-ptr-brown-light">
-                <span>{rt.length} tasks</span>
-                {ov > 0 && <span className="text-red-600 font-medium">{ov} overdue</span>}
-              </div>
-              <div className="mt-2 h-1.5 bg-ptr-cream-dark rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-ptr-green rounded-full"
-                  style={{
-                    width: rt.length > 0
-                      ? `${Math.round((rt.filter((t) => t.status === 'Completed' || t.status === 'Archived').length / rt.length) * 100)}%`
-                      : '0%',
-                  }}
-                />
-              </div>
-            </button>
-          );
-        })}
+        {rangeStats.map((range) => (
+          <button
+            key={range.rangeId}
+            onClick={() => navigate('/director/tasks')}
+            className="card p-4 text-left hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="w-4 h-4 text-ptr-green" />
+              <span className="text-sm font-semibold text-ptr-brown">{range.rangeName}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-ptr-brown-light">
+              <span>{range.total} tasks</span>
+              {range.overdue > 0 && <span className="text-red-600 font-medium">{range.overdue} overdue</span>}
+            </div>
+            <div className="mt-2 h-1.5 bg-ptr-cream-dark rounded-full overflow-hidden">
+              <div
+                className="h-full bg-ptr-green rounded-full"
+                style={{
+                  width: range.total > 0 ? `${Math.round((range.completed / range.total) * 100)}%` : '0%',
+                }}
+              />
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* Chart + Recent */}
