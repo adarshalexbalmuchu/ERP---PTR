@@ -19,14 +19,32 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Verify caller is a director
+    // Call /auth/v1/user directly with fetch rather than the supabase-js
+    // client's auth.getUser() — the client-side call fails unreliably here
+    // (see create-user for the same fix). Raw fetch works reliably and
+    // surfaces the real status code/body if it ever fails again.
+    const authCheckRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { authorization: authHeader, apikey: anonKey },
+    });
+    const authCheckText = await authCheckRes.text();
+    if (!authCheckRes.ok) {
+      throw new Error(
+        `Unauthorized: auth check got HTTP ${authCheckRes.status} from ${supabaseUrl}/auth/v1/user — body: ${authCheckText.slice(0, 300)}`,
+      );
+    }
+    let caller: { id: string } | undefined;
+    try {
+      caller = JSON.parse(authCheckText);
+    } catch {
+      throw new Error(
+        `Unauthorized: auth check returned non-JSON (HTTP ${authCheckRes.status}) from ${supabaseUrl}/auth/v1/user — body: ${authCheckText.slice(0, 300)}`,
+      );
+    }
+    if (!caller?.id) throw new Error('Unauthorized: no user id in auth check response');
+
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { authorization: authHeader } },
     });
-    const { data: { user: caller }, error: callerErr } = await callerClient.auth.getUser();
-    if (callerErr || !caller) {
-      throw new Error(`Unauthorized: ${callerErr?.message ?? 'no user for this token'}`);
-    }
 
     const { data: callerProfile, error: profileErr } = await callerClient
       .from('profiles')

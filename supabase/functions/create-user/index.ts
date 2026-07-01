@@ -31,10 +31,11 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Temporary diagnostic: call /auth/v1/user directly with fetch instead of
-    // through the supabase-js client, so a non-JSON response (proxy/WAF page,
-    // wrong URL, etc.) shows its real status code and body instead of being
-    // swallowed into a generic client-side parse error.
+    // Call /auth/v1/user directly with fetch rather than the supabase-js
+    // client's auth.getUser() — the client-side call was failing here for
+    // reasons that only showed as an opaque "not valid JSON" parse error.
+    // Raw fetch works reliably and, as a bonus, surfaces the real status
+    // code/body if it ever fails again.
     const authCheckRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: { authorization: authHeader, apikey: anonKey },
     });
