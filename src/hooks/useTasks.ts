@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
+import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask } from '../lib/mappers';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
@@ -10,14 +10,14 @@ type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments'
 
 async function insertNotification(
   userId: string,
-  type: string,
+  type: NotificationType,
   title: string,
   message: string,
   taskId: string,
 ) {
   await supabase.from('notifications').insert({
     user_id: userId,
-    type: type as never,
+    type,
     title,
     message,
     task_id: taskId,

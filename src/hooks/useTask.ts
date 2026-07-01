@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
+import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask, mapComment, mapTaskUpdate, mapAttachment } from '../lib/mappers';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
@@ -103,7 +103,7 @@ export function useTask(id: string | undefined) {
       if (task.createdById !== currentUser.id) {
         await supabase.from('notifications').insert({
           user_id: task.createdById,
-          type: 'task_completed' as never,
+          type: 'task_completed' as NotificationType,
           title: 'Task Completed',
           message: `${currentUser.name} marked "${task.title}" as done`,
           task_id: id,
@@ -124,7 +124,7 @@ export function useTask(id: string | undefined) {
       // Notify assignee
       await supabase.from('notifications').insert({
         user_id: task.assigneeId,
-        type: 'task_archived' as never,
+        type: 'task_archived' as NotificationType,
         title: 'Task Archived',
         message: `"${task.title}" has been approved and archived`,
         task_id: id,
@@ -154,7 +154,7 @@ export function useTask(id: string | undefined) {
 
       await supabase.from('notifications').insert({
         user_id: task.assigneeId,
-        type: 'changes_requested' as never,
+        type: 'changes_requested' as NotificationType,
         title: 'Changes Requested',
         message: `Revisions needed for "${task.title}"`,
         task_id: id,
