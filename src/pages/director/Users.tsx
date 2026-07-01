@@ -30,10 +30,14 @@ function UserFormModal({
   initial,
   onSave,
   onClose,
+  submitError,
+  saving,
 }: {
   initial?: User | null;
   onSave: (data: UserFormData) => void;
   onClose: () => void;
+  submitError?: string;
+  saving?: boolean;
 }) {
   const { ranges } = useRanges();
   const [form, setForm] = useState<UserFormData>({
@@ -161,13 +165,19 @@ function UserFormModal({
               {errors.rangeId && <p className="text-xs text-red-600 mt-1">{errors.rangeId}</p>}
             </div>
           </div>
+          {submitError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+              {submitError}
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2 border-t border-ptr-cream-dark">
             <button onClick={onClose} className="btn-secondary">Cancel</button>
             <button
               onClick={() => { if (validate()) onSave(form); }}
+              disabled={saving}
               className="btn-primary"
             >
-              {initial ? 'Save Changes' : 'Add User'}
+              {saving ? 'Saving…' : initial ? 'Save Changes' : 'Add User'}
             </button>
           </div>
         </div>
@@ -194,14 +204,19 @@ export default function DirectorUsers() {
       .slice(0, 2)
       .join('');
     const rangeId = data.role === 'director' ? undefined : data.rangeId || undefined;
+    const onSuccess = () => { setFormOpen(false); setEditing(null); };
 
     if (editing) {
-      updateUser.mutate({ id: editing.id, name: data.name, role: data.role, phone: data.phone || undefined, designation: data.designation, avatarInitials: initials, rangeId });
+      updateUser.mutate(
+        { id: editing.id, name: data.name, role: data.role, phone: data.phone || undefined, designation: data.designation, avatarInitials: initials, rangeId },
+        { onSuccess },
+      );
     } else {
-      createUser.mutate({ email: data.email, password: data.password, name: data.name, role: data.role, phone: data.phone || undefined, designation: data.designation, avatarInitials: initials, rangeId });
+      createUser.mutate(
+        { email: data.email, password: data.password, name: data.name, role: data.role, phone: data.phone || undefined, designation: data.designation, avatarInitials: initials, rangeId },
+        { onSuccess },
+      );
     }
-    setFormOpen(false);
-    setEditing(null);
   };
 
   const handleDelete = (user: User) => {
@@ -276,6 +291,8 @@ export default function DirectorUsers() {
           initial={editing}
           onSave={handleSave}
           onClose={() => { setFormOpen(false); setEditing(null); }}
+          submitError={(editing ? updateUser.error : createUser.error)?.message}
+          saving={editing ? updateUser.isPending : createUser.isPending}
         />
       )}
     </div>
