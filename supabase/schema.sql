@@ -446,9 +446,24 @@ create policy "attachments_guard_insert" on attachments
     exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = auth.uid())
   );
 
--- notifications: users see only their own
-create policy "notifications_own" on notifications
-  for all using (user_id = auth.uid());
+-- notifications: everyone reads/updates/deletes only their own, but ANY
+-- authenticated user can insert a notification for someone else — that's
+-- the entire point of the feature (task assignment, completion, archive,
+-- and changes-requested notifications are all written by someone other
+-- than the recipient). A single "for all using (user_id = auth.uid())"
+-- policy would implicitly reuse that USING clause as the INSERT check too,
+-- blocking every one of those inserts with a 403.
+create policy "notifications_read" on notifications
+  for select using (user_id = auth.uid());
+
+create policy "notifications_insert" on notifications
+  for insert with check (auth.uid() is not null);
+
+create policy "notifications_update" on notifications
+  for update using (user_id = auth.uid());
+
+create policy "notifications_delete" on notifications
+  for delete using (user_id = auth.uid());
 
 -- daily_reports: director full, others read-only
 create policy "daily_reports_director" on daily_reports
