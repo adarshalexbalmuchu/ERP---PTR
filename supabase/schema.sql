@@ -87,8 +87,14 @@ create table if not exists task_updates (
   user_id             uuid not null references profiles(id) on delete restrict,
   note                text not null,
   progress_percentage int not null default 0 check (progress_percentage between 0 and 100),
+  lat                 double precision,
+  lng                 double precision,
   created_at          timestamptz not null default now()
 );
+
+-- Idempotent for databases where task_updates already existed before geotagging was added.
+alter table task_updates add column if not exists lat double precision;
+alter table task_updates add column if not exists lng double precision;
 
 create table if not exists comments (
   id         uuid primary key default uuid_generate_v4(),

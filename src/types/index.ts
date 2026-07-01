@@ -59,6 +59,8 @@ export interface TaskUpdate {
   userId: string;
   note: string;
   progressPercentage: number;
+  lat?: number;
+  lng?: number;
   createdAt: string;
 }
 

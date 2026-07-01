@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask, mapComment, mapTaskUpdate, mapAttachment } from '../lib/mappers';
+import { getCurrentPosition } from '../utils/geolocation';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
 
@@ -206,9 +207,19 @@ export function useTask(id: string | undefined) {
   const addTaskUpdate = useMutation({
     mutationFn: async ({ note, progressPercentage }: { note: string; progressPercentage: number }) => {
       if (!id || !currentUser) throw new Error('Not authenticated');
+      // Geotag the field entry (M-STrIPES style patrol log); silently
+      // omitted if location is denied/unavailable, never blocks the update.
+      const position = await getCurrentPosition();
       const { data, error } = await supabase
         .from('task_updates')
-        .insert({ task_id: id, user_id: currentUser.id, note, progress_percentage: progressPercentage })
+        .insert({
+          task_id: id,
+          user_id: currentUser.id,
+          note,
+          progress_percentage: progressPercentage,
+          lat: position?.lat ?? null,
+          lng: position?.lng ?? null,
+        })
         .select()
         .single();
       if (error) throw error;

@@ -127,6 +127,8 @@ export interface Database {
           user_id: string;
           note: string;
           progress_percentage: number;
+          lat: number | null;
+          lng: number | null;
           created_at: string;
         };
         Insert: {
@@ -135,6 +137,8 @@ export interface Database {
           user_id: string;
           note: string;
           progress_percentage: number;
+          lat?: number | null;
+          lng?: number | null;
         };
         Update: {
           id?: string;
@@ -142,6 +146,8 @@ export interface Database {
           user_id?: string;
           note?: string;
           progress_percentage?: number;
+          lat?: number | null;
+          lng?: number | null;
         };
         Relationships: Relationships;
       };

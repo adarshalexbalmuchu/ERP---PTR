@@ -28,6 +28,8 @@ export function mapTaskUpdate(row: TaskUpdateRow): TaskUpdate {
     userId: row.user_id,
     note: row.note,
     progressPercentage: row.progress_percentage,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
     createdAt: row.created_at,
   };
 }

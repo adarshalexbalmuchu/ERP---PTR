@@ -372,6 +372,17 @@ export default function TaskDetailPage() {
                       </div>
                     </div>
                     <p className="text-sm text-ptr-brown">{upd.note}</p>
+                    {upd.lat !== undefined && upd.lng !== undefined && (
+                      <a
+                        href={`https://www.google.com/maps?q=${upd.lat},${upd.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-ptr-green font-medium mt-1.5 hover:underline"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        View location
+                      </a>
+                    )}
                   </div>
                 </div>
               );
