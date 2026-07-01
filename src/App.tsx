@@ -1,12 +1,13 @@
 import { type ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Leaf } from 'lucide-react';
-import { queryClient } from './lib/queryClient';
+import { queryClient, queryPersister } from './lib/queryClient';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import useStore from './store/useStore';
 import Login from './pages/Login';
 import Layout from './components/Layout';
+import OfflineBanner from './components/OfflineBanner';
 
 // Route-level code splitting: a guard never downloads director/officer
 // bundles (charts, user management, etc.) and vice versa.
@@ -78,9 +79,20 @@ function Root() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: queryPersister }}
+      onSuccess={() => {
+        // Replay any mutations (progress updates, start/complete, etc.)
+        // that were queued while offline and survived a page reload.
+        void queryClient.resumePausedMutations().then(() => {
+          void queryClient.invalidateQueries();
+        });
+      }}
+    >
       <AuthProvider>
         <BrowserRouter>
+          <OfflineBanner />
           <Suspense fallback={<LoadingScreen />}>
           <Routes>
             <Route path="/" element={<Root />} />
@@ -142,6 +154,6 @@ export default function App() {
           </Suspense>
         </BrowserRouter>
       </AuthProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
