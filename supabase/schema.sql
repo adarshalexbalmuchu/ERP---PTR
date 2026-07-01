@@ -29,6 +29,14 @@ do $$ begin
   create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived');
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  create type incident_type as enum ('human_attack', 'livestock_attack', 'crop_damage', 'property_damage', 'poaching_sign', 'wildlife_sighting', 'other');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type incident_severity as enum ('Low', 'Medium', 'High', 'Critical');
+exception when duplicate_object then null; end $$;
+
 -- ─────────────────────────────────────────────
 -- Tables
 -- ─────────────────────────────────────────────
@@ -139,6 +147,22 @@ create table if not exists daily_reports (
   created_at       timestamptz not null default now()
 );
 
+-- Human-wildlife conflict / field observation log, modeled on the "conflict
+-- module" of India's own NTCA M-STrIPES tiger reserve monitoring system.
+create table if not exists incidents (
+  id            uuid primary key default uuid_generate_v4(),
+  type          incident_type not null,
+  severity      incident_severity not null default 'Medium',
+  description   text not null,
+  range_id      uuid not null references ranges(id) on delete restrict,
+  area_id       uuid references areas(id) on delete set null,
+  lat           double precision,
+  lng           double precision,
+  reported_by   uuid not null references profiles(id) on delete restrict,
+  incident_date timestamptz not null default now(),
+  created_at    timestamptz not null default now()
+);
+
 -- ─────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────
@@ -149,6 +173,9 @@ create index if not exists notifications_user_id_idx on notifications(user_id);
 create index if not exists notifications_read_idx   on notifications(read) where not read;
 create index if not exists task_updates_task_id_idx on task_updates(task_id);
 create index if not exists comments_task_id_idx     on comments(task_id);
+create index if not exists incidents_range_id_idx   on incidents(range_id);
+create index if not exists incidents_type_idx       on incidents(type);
+create index if not exists incidents_date_idx       on incidents(incident_date);
 
 -- ─────────────────────────────────────────────
 -- updated_at trigger
@@ -194,6 +221,7 @@ alter table comments      enable row level security;
 alter table attachments   enable row level security;
 alter table notifications enable row level security;
 alter table daily_reports enable row level security;
+alter table incidents     enable row level security;
 
 -- Drop all policies before recreating (idempotent)
 do $$ declare r record; begin
@@ -317,6 +345,22 @@ create policy "daily_reports_director" on daily_reports
 
 create policy "daily_reports_read" on daily_reports
   for select using (get_my_role() = 'range_officer' or get_my_role() = 'guard');
+
+-- incidents: director full; officer full within their range; guard can
+-- report (insert) and read incidents within their own range for situational
+-- awareness (conflict data is operationally relevant to everyone patrolling
+-- that area, not just the person who reported it).
+create policy "incidents_director" on incidents
+  for all using (get_my_role() = 'director');
+
+create policy "incidents_officer" on incidents
+  for all using (get_my_role() = 'range_officer' and range_id = get_my_range_id());
+
+create policy "incidents_guard_read" on incidents
+  for select using (get_my_role() = 'guard' and range_id = get_my_range_id());
+
+create policy "incidents_guard_insert" on incidents
+  for insert with check (get_my_role() = 'guard' and reported_by = auth.uid());
 
 -- ─────────────────────────────────────────────
 -- Storage bucket for attachments

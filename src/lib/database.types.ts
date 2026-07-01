@@ -5,6 +5,8 @@ export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
 export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived';
+export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'poaching_sign' | 'wildlife_sighting' | 'other';
+export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
 type Relationships = {
   foreignKeyName: string;
@@ -272,6 +274,46 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      incidents: {
+        Row: {
+          id: string;
+          type: IncidentType;
+          severity: IncidentSeverity;
+          description: string;
+          range_id: string;
+          area_id: string | null;
+          lat: number | null;
+          lng: number | null;
+          reported_by: string;
+          incident_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          type: IncidentType;
+          severity?: IncidentSeverity;
+          description: string;
+          range_id: string;
+          area_id?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          reported_by: string;
+          incident_date?: string;
+        };
+        Update: {
+          id?: string;
+          type?: IncidentType;
+          severity?: IncidentSeverity;
+          description?: string;
+          range_id?: string;
+          area_id?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          reported_by?: string;
+          incident_date?: string;
+        };
+        Relationships: Relationships;
+      };
     };
     Views: {
       task_dashboard_stats: {
@@ -307,6 +349,8 @@ export interface Database {
       task_priority: TaskPriority;
       task_category: TaskCategory;
       notification_type: NotificationType;
+      incident_type: IncidentType;
+      incident_severity: IncidentSeverity;
     };
   };
 }

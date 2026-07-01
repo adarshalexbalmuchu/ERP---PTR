@@ -1,5 +1,5 @@
 import type { Database } from './database.types';
-import type { User, Task, TaskUpdate, Comment, Attachment, Notification } from '../types';
+import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident } from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TaskRow = Database['public']['Tables']['tasks']['Row'];
@@ -7,6 +7,7 @@ type TaskUpdateRow = Database['public']['Tables']['task_updates']['Row'];
 type CommentRow = Database['public']['Tables']['comments']['Row'];
 type AttachmentRow = Database['public']['Tables']['attachments']['Row'];
 type NotificationRow = Database['public']['Tables']['notifications']['Row'];
+type IncidentRow = Database['public']['Tables']['incidents']['Row'];
 
 export function mapProfile(row: ProfileRow): User {
   return {
@@ -96,6 +97,22 @@ export function mapNotification(row: NotificationRow): Notification {
     message: row.message,
     taskId: row.task_id,
     read: row.read,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapIncident(row: IncidentRow): Incident {
+  return {
+    id: row.id,
+    type: row.type,
+    severity: row.severity,
+    description: row.description,
+    rangeId: row.range_id,
+    areaId: row.area_id ?? undefined,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
+    reportedBy: row.reported_by,
+    incidentDate: row.incident_date,
     createdAt: row.created_at,
   };
 }

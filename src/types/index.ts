@@ -121,6 +121,31 @@ export interface DailyReport {
   createdAt: string;
 }
 
+export type IncidentType =
+  | 'human_attack'
+  | 'livestock_attack'
+  | 'crop_damage'
+  | 'property_damage'
+  | 'poaching_sign'
+  | 'wildlife_sighting'
+  | 'other';
+
+export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
+
+export interface Incident {
+  id: string;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  description: string;
+  rangeId: string;
+  areaId?: string;
+  lat?: number;
+  lng?: number;
+  reportedBy: string;
+  incidentDate: string;
+  createdAt: string;
+}
+
 export interface AppState {
   currentUser: User | null;
   users: User[];

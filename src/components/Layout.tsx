@@ -9,6 +9,7 @@ import {
   X,
   LogOut,
   Leaf,
+  AlertTriangle,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -200,9 +201,34 @@ function GuardLayout() {
           </div>
         </div>
       </header>
-      <main className="flex-1">
+      <main className="flex-1 pb-16">
         <Outlet />
       </main>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-ptr-cream-dark flex items-stretch z-30">
+        <NavLink
+          to="/guard"
+          end
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+              isActive ? 'text-ptr-green' : 'text-ptr-brown-light'
+            }`
+          }
+        >
+          <ClipboardList className="w-5 h-5" />
+          My Tasks
+        </NavLink>
+        <NavLink
+          to="/guard/incidents"
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+              isActive ? 'text-ptr-green' : 'text-ptr-brown-light'
+            }`
+          }
+        >
+          <AlertTriangle className="w-5 h-5" />
+          Incidents
+        </NavLink>
+      </nav>
     </div>
   );
 }
@@ -215,6 +241,7 @@ export default function Layout() {
       { to: '/director', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 flex-shrink-0" /> },
       { to: '/director/tasks', label: 'All Tasks', icon: <ClipboardList className="w-5 h-5 flex-shrink-0" /> },
       { to: '/director/reports', label: 'Reports', icon: <FileText className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/director/incidents', label: 'Incidents', icon: <AlertTriangle className="w-5 h-5 flex-shrink-0" /> },
       { to: '/director/users', label: 'Users', icon: <Users className="w-5 h-5 flex-shrink-0" /> },
     ];
     return <AdminLayout items={items} />;
@@ -224,6 +251,7 @@ export default function Layout() {
     const items: NavItem[] = [
       { to: '/officer', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 flex-shrink-0" /> },
       { to: '/officer/tasks', label: 'Range Tasks', icon: <ClipboardList className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/officer/incidents', label: 'Incidents', icon: <AlertTriangle className="w-5 h-5 flex-shrink-0" /> },
     ];
     return <AdminLayout items={items} />;
   }
