@@ -325,6 +325,12 @@ insert into storage.buckets (id, name, public)
   values ('task-attachments', 'task-attachments', false)
   on conflict do nothing;
 
+-- The public-schema policy DROP loop above only covers schemaname = 'public',
+-- so storage.objects policies need their own explicit drops to stay idempotent.
+drop policy if exists "attachments_upload" on storage.objects;
+drop policy if exists "attachments_download" on storage.objects;
+drop policy if exists "attachments_delete" on storage.objects;
+
 create policy "attachments_upload" on storage.objects
   for insert with check (bucket_id = 'task-attachments' and auth.uid() is not null);
 
