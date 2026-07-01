@@ -71,7 +71,7 @@ export function useTask(id: string | undefined) {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [id, queryClient]);
+  }, [id, queryClient, channelId]);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['task', id] });

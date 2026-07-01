@@ -79,6 +79,7 @@ export default function CommentThread({ comments, users, currentUser, onAddComme
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Add a comment..."
+            maxLength={2000}
             className="input-field flex-1"
           />
           <button

@@ -52,7 +52,7 @@ export function useTasks() {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, channelId]);
 
   const createTask = useMutation({
     mutationFn: async (data: CreateTaskData) => {

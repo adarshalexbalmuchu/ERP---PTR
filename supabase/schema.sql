@@ -194,6 +194,35 @@ create index if not exists audit_log_range_id_idx   on audit_log(range_id);
 create index if not exists audit_log_task_id_idx    on audit_log(task_id);
 
 -- ─────────────────────────────────────────────
+-- Length limits (defense in depth — the app already limits input, this
+-- guards against a malformed/malicious direct API call flooding a text
+-- column). Wrapped in DO/EXCEPTION so re-running this file is safe.
+-- ─────────────────────────────────────────────
+do $$ begin
+  alter table tasks add constraint tasks_title_len check (char_length(title) <= 300);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table tasks add constraint tasks_description_len check (char_length(description) <= 5000);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table task_updates add constraint task_updates_note_len check (char_length(note) <= 2000);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table comments add constraint comments_content_len check (char_length(content) <= 2000);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table incidents add constraint incidents_description_len check (char_length(description) <= 3000);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table audit_log add constraint audit_log_detail_len check (char_length(detail) <= 1000);
+exception when duplicate_object then null; end $$;
+
+-- ─────────────────────────────────────────────
 -- updated_at trigger
 -- ─────────────────────────────────────────────
 create or replace function set_updated_at()
@@ -224,6 +253,71 @@ create or replace function get_my_range_id()
 returns uuid language sql security definer stable as $$
   select range_id from profiles where id = auth.uid();
 $$;
+
+-- ─────────────────────────────────────────────
+-- Column-level guards
+-- RLS policies (USING/WITH CHECK) can only gate row visibility, not which
+-- columns change on an UPDATE. These triggers close that gap for the two
+-- places a broad "for update using (...)" policy would otherwise let a
+-- lower-privileged role write to fields it should never touch.
+-- ─────────────────────────────────────────────
+
+-- Without this, profiles_self_update (id = auth.uid()) lets ANY user set
+-- their own role to 'director' or move themselves to another range via a
+-- direct API call — a full privilege escalation. Only a director may
+-- change role/range_id; everyone may still edit their own name/phone/etc.
+create or replace function enforce_profile_self_update()
+returns trigger language plpgsql as $$
+begin
+  if auth.uid() = new.id and get_my_role() <> 'director' then
+    if new.role is distinct from old.role or new.range_id is distinct from old.range_id then
+      raise exception 'Only a director can change role or range assignment';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_self_update_guard on profiles;
+create trigger profiles_self_update_guard
+  before update on profiles
+  for each row execute function enforce_profile_self_update();
+
+-- Without this, tasks_guard_update (assignee_id = auth.uid()) lets a guard
+-- change ANY column on their assigned task via a direct API call —
+-- reassigning it, editing its priority/due date, or setting status
+-- straight to 'Archived' and bypassing officer/director review entirely.
+-- A guard may only move status forward through the normal flow and touch
+-- the progress/acknowledgement fields the app's own mutations use.
+create or replace function enforce_guard_task_update()
+returns trigger language plpgsql as $$
+begin
+  if get_my_role() = 'guard' then
+    if new.title is distinct from old.title
+      or new.description is distinct from old.description
+      or new.assignee_id is distinct from old.assignee_id
+      or new.created_by_id is distinct from old.created_by_id
+      or new.range_id is distinct from old.range_id
+      or new.area_id is distinct from old.area_id
+      or new.priority is distinct from old.priority
+      or new.category is distinct from old.category
+      or new.due_date is distinct from old.due_date
+      or new.archived_at is distinct from old.archived_at
+    then
+      raise exception 'Guards may only update status/progress fields on their own tasks';
+    end if;
+    if new.status is distinct from old.status and new.status = 'Archived' then
+      raise exception 'Only a range officer or director can archive a task';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists tasks_guard_update_guard on tasks;
+create trigger tasks_guard_update_guard
+  before update on tasks
+  for each row execute function enforce_guard_task_update();
 
 -- ─────────────────────────────────────────────
 -- Row Level Security

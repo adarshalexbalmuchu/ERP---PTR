@@ -108,6 +108,7 @@ function ReportForm({
               onChange={(e) => { setDescription(e.target.value); setError(''); }}
               placeholder="Describe what happened..."
               rows={4}
+              maxLength={3000}
               className={`input-field resize-none ${error ? 'input-error' : ''}`}
             />
             {error && <p className="text-xs text-red-600 mt-1">{error}</p>}

@@ -263,6 +263,7 @@ export default function TaskDetailPage() {
                       onChange={(e) => setUpdateNote(e.target.value)}
                       placeholder="Describe what was done..."
                       rows={2}
+                      maxLength={2000}
                       className="input-field resize-none text-sm"
                     />
                   </div>
@@ -299,6 +300,7 @@ export default function TaskDetailPage() {
                 onChange={(e) => setRequestChangesNote(e.target.value)}
                 placeholder="Describe what needs to be revised..."
                 rows={3}
+                maxLength={2000}
                 className="input-field resize-none text-sm"
               />
               <div className="flex gap-2">

@@ -122,6 +122,7 @@ export default function TaskForm({
               value={title}
               onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: '' })); }}
               placeholder="Enter task title"
+              maxLength={300}
               className={`input-field ${errors.title ? 'input-error' : ''}`}
             />
             {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
@@ -134,6 +135,7 @@ export default function TaskForm({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the task in detail..."
               rows={3}
+              maxLength={5000}
               className="input-field resize-none"
             />
           </div>

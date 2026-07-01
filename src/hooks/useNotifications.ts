@@ -42,7 +42,7 @@ export function useNotifications() {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [currentUser?.id, queryClient]);
+  }, [currentUser?.id, queryClient, channelId]);
 
   const markRead = useMutation({
     mutationFn: async (notifId: string) => {
