@@ -1,34 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Eye, EyeOff, Shield, MapPin, User } from 'lucide-react';
+import { Leaf, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import useStore from '../store/useStore';
-
-type DemoRole = 'director' | 'officer' | 'guard';
-
-const DEMO: Record<DemoRole, { email: string; label: string; sub: string; icon: React.ReactNode; color: string }> = {
-  director: {
-    email: 'director@ptr.in',
-    label: 'Director (Super Admin)',
-    sub: 'Full access — all ranges, reports, users',
-    icon: <Shield className="w-4 h-4" />,
-    color: 'text-ptr-green',
-  },
-  officer: {
-    email: 'officer@ptr.in',
-    label: 'Range Officer',
-    sub: 'Betla Range — task assignment, staff view',
-    icon: <MapPin className="w-4 h-4" />,
-    color: 'text-amber-600',
-  },
-  guard: {
-    email: 'guard@ptr.in',
-    label: 'Forest Guard',
-    sub: 'Field staff — my tasks, progress updates',
-    icon: <User className="w-4 h-4" />,
-    color: 'text-blue-600',
-  },
-};
 
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
@@ -39,7 +13,6 @@ function roleHome(role: string): string {
 export default function Login() {
   const navigate = useNavigate();
   const { loginWithSupabase } = useAuth();
-  const storeLogin = useStore((s) => s.login);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,7 +28,6 @@ export default function Login() {
     const trimmedEmail = email.trim().toLowerCase();
 
     try {
-      // Try Supabase auth first
       await loginWithSupabase(trimmedEmail, password);
       // onAuthStateChange in AuthContext will set currentUser via setCurrentUser
       // Wait briefly for the state to propagate, then navigate
@@ -64,22 +36,10 @@ export default function Login() {
         if (user) navigate(roleHome(user.role), { replace: true });
         setLoading(false);
       }, 500);
-    } catch {
-      // Fall back to local demo login (works without Supabase users)
-      const user = storeLogin(trimmedEmail, password);
-      if (user) {
-        navigate(roleHome(user.role), { replace: true });
-      } else {
-        setError('Invalid email or password.');
-      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid email or password.');
       setLoading(false);
     }
-  };
-
-  const fillDemo = (role: DemoRole) => {
-    setEmail(DEMO[role].email);
-    setPassword('demo123');
-    setError('');
   };
 
   return (
@@ -141,31 +101,6 @@ export default function Login() {
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-        </div>
-
-        {/* Demo credentials */}
-        <div className="mt-6 card p-4">
-          <p className="text-xs font-semibold text-ptr-brown-light uppercase tracking-wide mb-3">
-            Demo Accounts · Password: demo123
-          </p>
-          <div className="space-y-2">
-            {(Object.entries(DEMO) as [DemoRole, typeof DEMO[DemoRole]][]).map(([role, d]) => (
-              <button
-                key={role}
-                onClick={() => fillDemo(role)}
-                className="w-full flex items-center justify-between p-3 bg-ptr-cream rounded-xl hover:bg-ptr-cream-dark transition-colors text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <span className={d.color}>{d.icon}</span>
-                  <div>
-                    <div className="text-xs font-semibold text-ptr-brown">{d.label}</div>
-                    <div className="text-xs text-ptr-brown-light">{d.sub}</div>
-                  </div>
-                </div>
-                <span className="text-xs text-ptr-green font-medium flex-shrink-0">Use →</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         <p className="text-center text-xs text-ptr-brown-light mt-4">

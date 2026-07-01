@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { Database, NotificationType } from '../lib/database.types';
@@ -27,11 +27,13 @@ export function useTask(id: string | undefined) {
     enabled: !!id,
   });
 
-  // Realtime subscription for this specific task
+  // Realtime subscription for this specific task — unique topic per mount
+  // avoids reusing a channel still mid-teardown from a previous mount.
+  const channelId = useRef(crypto.randomUUID()).current;
   useEffect(() => {
     if (!id) return;
     const channel = supabase
-      .channel(`task-${id}`)
+      .channel(`task-${id}-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `id=eq.${id}` }, () => {
         void queryClient.invalidateQueries({ queryKey: ['task', id] });
       })

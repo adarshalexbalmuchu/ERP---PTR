@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { mapNotification } from '../lib/mappers';
@@ -25,11 +25,13 @@ export function useNotifications() {
     enabled: !!currentUser,
   });
 
-  // Realtime
+  // Realtime — unique topic per mount avoids reusing a channel still
+  // mid-teardown from a previous mount (removeChannel is async).
+  const channelId = useRef(crypto.randomUUID()).current;
   useEffect(() => {
     if (!currentUser) return;
     const channel = supabase
-      .channel(`notifications-${currentUser.id}`)
+      .channel(`notifications-${currentUser.id}-${channelId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
