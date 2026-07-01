@@ -1,5 +1,5 @@
 import type { Database } from './database.types';
-import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident } from '../types';
+import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, AuditLogEntry } from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TaskRow = Database['public']['Tables']['tasks']['Row'];
@@ -8,6 +8,7 @@ type CommentRow = Database['public']['Tables']['comments']['Row'];
 type AttachmentRow = Database['public']['Tables']['attachments']['Row'];
 type NotificationRow = Database['public']['Tables']['notifications']['Row'];
 type IncidentRow = Database['public']['Tables']['incidents']['Row'];
+type AuditLogRow = Database['public']['Tables']['audit_log']['Row'];
 
 export function mapProfile(row: ProfileRow): User {
   return {
@@ -113,6 +114,19 @@ export function mapIncident(row: IncidentRow): Incident {
     lng: row.lng ?? undefined,
     reportedBy: row.reported_by,
     incidentDate: row.incident_date,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapAuditLogEntry(row: AuditLogRow): AuditLogEntry {
+  return {
+    id: row.id,
+    taskId: row.task_id ?? undefined,
+    taskTitle: row.task_title,
+    rangeId: row.range_id ?? undefined,
+    actorId: row.actor_id,
+    action: row.action,
+    detail: row.detail,
     createdAt: row.created_at,
   };
 }

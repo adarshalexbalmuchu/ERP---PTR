@@ -163,6 +163,20 @@ create table if not exists incidents (
   created_at    timestamptz not null default now()
 );
 
+-- Accountability log for significant task changes (reassignment, status
+-- transitions, deletion). range_id/task_title are denormalized so entries
+-- stay meaningful and range-scoped even after the source task is deleted.
+create table if not exists audit_log (
+  id         uuid primary key default uuid_generate_v4(),
+  task_id    uuid references tasks(id) on delete set null,
+  task_title text not null default '',
+  range_id   uuid references ranges(id) on delete set null,
+  actor_id   uuid not null references profiles(id) on delete restrict,
+  action     text not null,
+  detail     text not null default '',
+  created_at timestamptz not null default now()
+);
+
 -- ─────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────
@@ -176,6 +190,8 @@ create index if not exists comments_task_id_idx     on comments(task_id);
 create index if not exists incidents_range_id_idx   on incidents(range_id);
 create index if not exists incidents_type_idx       on incidents(type);
 create index if not exists incidents_date_idx       on incidents(incident_date);
+create index if not exists audit_log_range_id_idx   on audit_log(range_id);
+create index if not exists audit_log_task_id_idx    on audit_log(task_id);
 
 -- ─────────────────────────────────────────────
 -- updated_at trigger
@@ -222,6 +238,7 @@ alter table attachments   enable row level security;
 alter table notifications enable row level security;
 alter table daily_reports enable row level security;
 alter table incidents     enable row level security;
+alter table audit_log     enable row level security;
 
 -- Drop all policies before recreating (idempotent)
 do $$ declare r record; begin
@@ -361,6 +378,19 @@ create policy "incidents_guard_read" on incidents
 
 create policy "incidents_guard_insert" on incidents
   for insert with check (get_my_role() = 'guard' and reported_by = auth.uid());
+
+-- audit_log: management-only read (director all, officer their range);
+-- insert is open to any authenticated user but only as themselves, since
+-- guards also trigger logged actions (starting/completing their own tasks)
+-- even though they can't read the log back.
+create policy "audit_log_director_read" on audit_log
+  for select using (get_my_role() = 'director');
+
+create policy "audit_log_officer_read" on audit_log
+  for select using (get_my_role() = 'range_officer' and range_id = get_my_range_id());
+
+create policy "audit_log_insert" on audit_log
+  for insert with check (actor_id = auth.uid());
 
 -- ─────────────────────────────────────────────
 -- Storage bucket for attachments

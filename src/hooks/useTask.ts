@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask, mapComment, mapTaskUpdate, mapAttachment } from '../lib/mappers';
 import { getCurrentPosition } from '../utils/geolocation';
+import { logTaskAction, logTaskChanges, logTaskDeletion } from '../lib/audit';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
 
@@ -93,6 +94,7 @@ export function useTask(id: string | undefined) {
       if (data.completionPercentage !== undefined) patch.completion_percentage = data.completionPercentage;
       const { error } = await supabase.from('tasks').update(patch).eq('id', id);
       if (error) throw error;
+      if (task && currentUser) await logTaskChanges(task, data, currentUser.id);
     },
     onSuccess: invalidate,
   });
@@ -100,6 +102,7 @@ export function useTask(id: string | undefined) {
   const deleteTask = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('No task id');
+      if (task && currentUser) await logTaskDeletion(task, currentUser.id);
       const { error } = await supabase.from('tasks').delete().eq('id', id);
       if (error) throw error;
     },
@@ -108,12 +111,13 @@ export function useTask(id: string | undefined) {
 
   const startTask = useMutation({
     mutationFn: async () => {
-      if (!id) throw new Error('No task id');
+      if (!id || !task || !currentUser) throw new Error('No task id');
       const { error } = await supabase
         .from('tasks')
         .update({ status: 'InProgress', acknowledged_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
+      await logTaskAction(task, currentUser.id, 'status', 'Acknowledged & started');
     },
     onSuccess: invalidate,
   });
@@ -136,13 +140,14 @@ export function useTask(id: string | undefined) {
           task_id: id,
         });
       }
+      await logTaskAction(task, currentUser.id, 'status', 'Marked as done');
     },
     onSuccess: invalidate,
   });
 
   const archiveTask = useMutation({
     mutationFn: async () => {
-      if (!id || !task) throw new Error('No task id');
+      if (!id || !task || !currentUser) throw new Error('No task id');
       const { error } = await supabase
         .from('tasks')
         .update({ status: 'Archived', archived_at: new Date().toISOString() })
@@ -156,6 +161,7 @@ export function useTask(id: string | undefined) {
         message: `"${task.title}" has been approved and archived`,
         task_id: id,
       });
+      await logTaskAction(task, currentUser.id, 'status', 'Archived (approved)');
     },
     onSuccess: invalidate,
   });
@@ -186,6 +192,7 @@ export function useTask(id: string | undefined) {
         message: `Revisions needed for "${task.title}"`,
         task_id: id,
       });
+      await logTaskAction(task, currentUser.id, 'status', `Changes requested${note ? `: ${note}` : ''}`);
     },
     onSuccess: invalidate,
   });

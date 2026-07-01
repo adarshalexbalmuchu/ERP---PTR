@@ -314,6 +314,37 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      audit_log: {
+        Row: {
+          id: string;
+          task_id: string | null;
+          task_title: string;
+          range_id: string | null;
+          actor_id: string;
+          action: string;
+          detail: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id?: string | null;
+          task_title?: string;
+          range_id?: string | null;
+          actor_id: string;
+          action: string;
+          detail?: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string | null;
+          task_title?: string;
+          range_id?: string | null;
+          actor_id?: string;
+          action?: string;
+          detail?: string;
+        };
+        Relationships: Relationships;
+      };
     };
     Views: {
       task_dashboard_stats: {

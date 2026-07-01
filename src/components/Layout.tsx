@@ -10,6 +10,8 @@ import {
   LogOut,
   Leaf,
   AlertTriangle,
+  Map as MapIcon,
+  History,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -228,6 +230,17 @@ function GuardLayout() {
           <AlertTriangle className="w-5 h-5" />
           Incidents
         </NavLink>
+        <NavLink
+          to="/guard/map"
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+              isActive ? 'text-ptr-green' : 'text-ptr-brown-light'
+            }`
+          }
+        >
+          <MapIcon className="w-5 h-5" />
+          Map
+        </NavLink>
       </nav>
     </div>
   );
@@ -242,6 +255,8 @@ export default function Layout() {
       { to: '/director/tasks', label: 'All Tasks', icon: <ClipboardList className="w-5 h-5 flex-shrink-0" /> },
       { to: '/director/reports', label: 'Reports', icon: <FileText className="w-5 h-5 flex-shrink-0" /> },
       { to: '/director/incidents', label: 'Incidents', icon: <AlertTriangle className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/director/map', label: 'Field Map', icon: <MapIcon className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/director/audit', label: 'Audit Log', icon: <History className="w-5 h-5 flex-shrink-0" /> },
       { to: '/director/users', label: 'Users', icon: <Users className="w-5 h-5 flex-shrink-0" /> },
     ];
     return <AdminLayout items={items} />;
@@ -252,6 +267,8 @@ export default function Layout() {
       { to: '/officer', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 flex-shrink-0" /> },
       { to: '/officer/tasks', label: 'Range Tasks', icon: <ClipboardList className="w-5 h-5 flex-shrink-0" /> },
       { to: '/officer/incidents', label: 'Incidents', icon: <AlertTriangle className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/officer/map', label: 'Field Map', icon: <MapIcon className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/officer/audit', label: 'Audit Log', icon: <History className="w-5 h-5 flex-shrink-0" /> },
     ];
     return <AdminLayout items={items} />;
   }

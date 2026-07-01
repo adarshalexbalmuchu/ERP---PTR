@@ -146,6 +146,17 @@ export interface Incident {
   createdAt: string;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  taskId?: string;
+  taskTitle: string;
+  rangeId?: string;
+  actorId: string;
+  action: string;
+  detail: string;
+  createdAt: string;
+}
+
 export interface AppState {
   currentUser: User | null;
   users: User[];

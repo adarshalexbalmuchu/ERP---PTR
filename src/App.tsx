@@ -18,6 +18,8 @@ const OfficerDashboard = lazy(() => import('./pages/officer/Dashboard'));
 const OfficerTaskList = lazy(() => import('./pages/officer/TaskList'));
 const TaskDetailPage = lazy(() => import('./pages/shared/TaskDetailPage'));
 const IncidentLog = lazy(() => import('./pages/shared/IncidentLog'));
+const MapView = lazy(() => import('./pages/shared/MapView'));
+const AuditLog = lazy(() => import('./pages/shared/AuditLog'));
 const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
 
 function roleHome(role: string): string {
@@ -99,6 +101,8 @@ export default function App() {
               <Route path="reports" element={<DirectorReports />} />
               <Route path="users" element={<DirectorUsers />} />
               <Route path="incidents" element={<IncidentLog />} />
+              <Route path="map" element={<MapView />} />
+              <Route path="audit" element={<AuditLog />} />
             </Route>
 
             {/* Range Officer */}
@@ -114,6 +118,8 @@ export default function App() {
               <Route path="tasks" element={<OfficerTaskList />} />
               <Route path="tasks/:id" element={<TaskDetailPage />} />
               <Route path="incidents" element={<IncidentLog />} />
+              <Route path="map" element={<MapView />} />
+              <Route path="audit" element={<AuditLog />} />
             </Route>
 
             {/* Guard */}
@@ -128,6 +134,7 @@ export default function App() {
               <Route index element={<GuardMyTasks />} />
               <Route path="tasks/:id" element={<TaskDetailPage />} />
               <Route path="incidents" element={<IncidentLog />} />
+              <Route path="map" element={<MapView />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

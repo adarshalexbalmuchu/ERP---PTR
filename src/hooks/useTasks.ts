@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask } from '../lib/mappers';
+import { logTaskChanges, logTaskDeletion } from '../lib/audit';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
 
@@ -95,6 +96,7 @@ export function useTasks() {
 
   const updateTask = useMutation({
     mutationFn: async ({ id, ...data }: { id: string } & Partial<CreateTaskData>) => {
+      const before = tasks.find((t) => t.id === id);
       const patch: Database['public']['Tables']['tasks']['Update'] = {};
       if (data.title !== undefined) patch.title = data.title;
       if (data.description !== undefined) patch.description = data.description;
@@ -109,6 +111,7 @@ export function useTasks() {
 
       const { error } = await supabase.from('tasks').update(patch).eq('id', id);
       if (error) throw error;
+      if (before && currentUser) await logTaskChanges(before, data, currentUser.id);
     },
     onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -118,6 +121,8 @@ export function useTasks() {
 
   const deleteTask = useMutation({
     mutationFn: async (taskId: string) => {
+      const before = tasks.find((t) => t.id === taskId);
+      if (before && currentUser) await logTaskDeletion(before, currentUser.id);
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) throw error;
     },
