@@ -221,7 +221,9 @@ export default function DirectorUsers() {
 
   const handleDelete = (user: User) => {
     if (confirm(`Delete ${user.name}? This cannot be undone.`)) {
-      deleteUser.mutate(user.id);
+      deleteUser.mutate(user.id, {
+        onError: (err) => alert(`Failed to delete user: ${err.message}`),
+      });
     }
   };
 
