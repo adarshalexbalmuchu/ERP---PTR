@@ -50,12 +50,19 @@ function ReportForm({
     e.preventDefault();
     if (!description.trim()) { setError('Description is required'); return; }
     if (!rangeId) { setError('Please select a range'); return; }
-    reportIncident.mutate({ type, severity, description: description.trim(), rangeId, areaId: areaId || undefined });
-    setDescription('');
-    setAreaId('');
-    setSeverity('Medium');
-    setType('wildlife_sighting');
-    onClose();
+    reportIncident.mutate(
+      { type, severity, description: description.trim(), rangeId, areaId: areaId || undefined },
+      {
+        onSuccess: () => {
+          setDescription('');
+          setAreaId('');
+          setSeverity('Medium');
+          setType('wildlife_sighting');
+          onClose();
+        },
+        onError: (err) => setError(err.message),
+      },
+    );
   };
 
   return (
@@ -119,7 +126,9 @@ function ReportForm({
           </p>
           <div className="flex justify-end gap-3 pt-2 border-t border-ptr-cream-dark">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-            <button type="submit" className="btn-primary">Submit Report</button>
+            <button type="submit" disabled={reportIncident.isPending} className="btn-primary">
+              {reportIncident.isPending ? 'Submitting…' : 'Submit Report'}
+            </button>
           </div>
         </form>
       </div>
