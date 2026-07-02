@@ -55,7 +55,7 @@ function Sidebar({
             <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-white leading-snug">Palamu Tiger Reserve</div>
+            <div className="text-sm font-bold text-white leading-snug font-serif">Palamu Tiger Reserve</div>
             <div className="text-xs text-white/50 leading-tight mt-0.5">Tiger Cell &middot; Task Mgmt</div>
           </div>
         </div>
@@ -161,7 +161,7 @@ function AdminLayout({ items }: { items: NavItem[] }) {
             <div className="w-7 h-7 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
               <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
             </div>
-            <span className="text-sm font-bold text-ptr-brown">PTR Tasks</span>
+            <span className="text-sm font-bold text-ptr-brown font-serif">PTR Tasks</span>
           </div>
           <NotificationBell />
         </header>
@@ -211,7 +211,7 @@ function GuardLayout() {
             <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
           </div>
           <div>
-            <div className="text-sm font-bold text-ptr-brown leading-none">PTR Tiger Cell</div>
+            <div className="text-sm font-bold text-ptr-brown leading-none font-serif">PTR Tiger Cell</div>
             <div className="text-xs text-ptr-brown-light leading-none">My Tasks</div>
           </div>
         </div>

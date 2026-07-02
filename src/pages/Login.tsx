@@ -76,7 +76,7 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-4 lg:p-10">
         <div className="w-full max-w-md">
           <div className="card p-8">
-            <h2 className="text-lg font-semibold text-ptr-brown mb-6">Sign in to continue</h2>
+            <h2 className="text-lg font-semibold text-ptr-brown mb-6 font-serif">Sign in to continue</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-ptr-brown mb-1.5">Email address</label>

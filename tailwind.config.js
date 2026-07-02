@@ -27,7 +27,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Serif for headings/masthead (institutional, editorial weight —
+        // the single biggest lever away from "generic SaaS template"),
+        // clean sans everywhere else for UI density and legibility.
+        sans: ['Noto Sans', 'system-ui', 'sans-serif'],
+        serif: ['Noto Serif', 'Georgia', 'serif'],
       },
       borderRadius: {
         sm: '0.1875rem',

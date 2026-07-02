@@ -8,22 +8,26 @@
   }
   body {
     margin: 0;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Noto Sans', system-ui, sans-serif;
     background-color: #F5F1E8;
     color: #2A2724;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv05', 'cv11';
   }
   #root {
     min-height: 100vh;
   }
-  h1, h2, h3, h4 {
+  h2, h3, h4 {
     letter-spacing: -0.015em;
     line-height: 1.25;
   }
+  /* Page titles and the masthead get the serif treatment — the one place
+     it belongs. Everything smaller (section labels, badges, table text)
+     stays sans; serif at small uppercase sizes reads worse, not better. */
   h1 {
-    letter-spacing: -0.02em;
+    font-family: 'Noto Serif', Georgia, serif;
+    letter-spacing: -0.005em;
+    line-height: 1.2;
   }
 }
 
