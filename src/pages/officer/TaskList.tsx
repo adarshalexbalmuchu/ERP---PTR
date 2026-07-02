@@ -49,7 +49,7 @@ export default function OfficerTaskList() {
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-ptr-brown">Range Tasks</h1>
+          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Range Tasks</h1>
           <p className="text-sm text-ptr-brown-light">{myTasks.length} tasks in your range</p>
         </div>
         <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary">

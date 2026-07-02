@@ -17,7 +17,7 @@ export default function AuditLog() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div>
-        <h1 className="text-xl font-bold text-ptr-brown">Audit Log</h1>
+        <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Audit Log</h1>
         <p className="text-sm text-ptr-brown-light">
           Who reassigned, changed, or deleted tasks {isLoading && '· loading…'}
         </p>

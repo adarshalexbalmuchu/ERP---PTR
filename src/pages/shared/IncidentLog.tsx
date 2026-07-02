@@ -163,7 +163,7 @@ export default function IncidentLog() {
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-ptr-brown">Incident Log</h1>
+          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Incident Log</h1>
           <p className="text-sm text-ptr-brown-light">Human-wildlife conflict &amp; field observations</p>
         </div>
         <button onClick={() => setFormOpen(true)} className="btn-primary">

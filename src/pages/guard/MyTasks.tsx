@@ -82,7 +82,7 @@ export default function GuardMyTasks() {
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-ptr-brown">My Tasks</h1>
+        <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">My Tasks</h1>
         <p className="text-sm text-ptr-brown-light">
           {activeCount} active · {overdueCount > 0 ? <span className="text-red-600 font-medium">{overdueCount} overdue</span> : '0 overdue'}
         </p>

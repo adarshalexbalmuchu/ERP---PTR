@@ -54,7 +54,7 @@ export default function DirectorTaskList() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-ptr-brown">All Tasks</h1>
+        <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">All Tasks</h1>
         <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">New Task</span>

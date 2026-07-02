@@ -7,10 +7,19 @@ export default {
         ptr: {
           green: '#1A4731',
           'green-light': '#2D6A4F',
+          'green-dark': '#0F2E1E',
+          amber: '#D97706',
           cream: '#F5F1E8',
           'cream-dark': '#EFE7D6',
           brown: '#2A2724',
           'brown-light': '#6B6356',
+        },
+        status: {
+          notstarted: '#9CA3AF',
+          progress: '#F59E0B',
+          completed: '#3B82F6',
+          archived: '#10B981',
+          overdue: '#DC2626',
         },
       },
       fontFamily: {

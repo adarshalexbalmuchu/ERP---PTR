@@ -85,7 +85,7 @@ export default function OfficerDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-ptr-brown">{myRange?.name ?? 'Range'} Dashboard</h1>
+          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">{myRange?.name ?? 'Range'} Dashboard</h1>
           <p className="text-sm text-ptr-brown-light">
             {myGuards.length} staff · {myAreas.length} areas
           </p>

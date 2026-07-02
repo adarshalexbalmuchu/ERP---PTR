@@ -231,7 +231,7 @@ export default function DirectorUsers() {
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-ptr-brown">User Management</h1>
+          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">User Management</h1>
           <p className="text-sm text-ptr-brown-light">{users.length} users in system</p>
         </div>
         <button onClick={() => { setEditing(null); setFormOpen(true); }} className="btn-primary">
