@@ -5,6 +5,10 @@
 -- Extensions
 -- ─────────────────────────────────────────────
 create extension if not exists "uuid-ossp";
+-- Lets a Postgres trigger make an outbound HTTP call (used to fire the
+-- send-push Edge Function the instant a notification row is inserted,
+-- regardless of which code path created it).
+create extension if not exists pg_net with schema extensions;
 
 -- ─────────────────────────────────────────────
 -- Enums (idempotent)
@@ -134,6 +138,19 @@ create table if not exists notifications (
   created_at timestamptz not null default now()
 );
 
+-- One row per browser/device push subscription. endpoint is globally
+-- unique (it identifies the device's push channel), so re-subscribing the
+-- same device — even as a different user after a logout/login — updates
+-- the existing row instead of creating a duplicate.
+create table if not exists push_subscriptions (
+  id         uuid primary key default uuid_generate_v4(),
+  user_id    uuid not null references profiles(id) on delete cascade,
+  endpoint   text not null unique,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists daily_reports (
   id               uuid primary key default uuid_generate_v4(),
   report_date      date not null unique,
@@ -185,6 +202,7 @@ create index if not exists tasks_range_id_idx       on tasks(range_id);
 create index if not exists tasks_status_idx         on tasks(status);
 create index if not exists notifications_user_id_idx on notifications(user_id);
 create index if not exists notifications_read_idx   on notifications(read) where not read;
+create index if not exists push_subscriptions_user_id_idx on push_subscriptions(user_id);
 create index if not exists task_updates_task_id_idx on task_updates(task_id);
 create index if not exists comments_task_id_idx     on comments(task_id);
 create index if not exists incidents_range_id_idx   on incidents(range_id);
@@ -319,6 +337,39 @@ create trigger tasks_guard_update_guard
   before update on tasks
   for each row execute function enforce_guard_task_update();
 
+-- Fires the send-push Edge Function for every new in-app notification, so
+-- a device notification shows up no matter which client code path wrote
+-- the row. The function itself has verify_jwt = false (see
+-- supabase/config.toml) and instead checks the x-webhook-secret header
+-- against its own PUSH_WEBHOOK_SECRET env var — set the same value with:
+--   supabase secrets set PUSH_WEBHOOK_SECRET=<a-random-string>
+-- and put that string below in place of 'CHANGE_ME_PUSH_WEBHOOK_SECRET'.
+-- If this project is ever recreated, update the project ref in the URL too.
+create or replace function notify_push_on_notification_insert()
+returns trigger language plpgsql as $$
+begin
+  perform net.http_post(
+    url := 'https://hsaqgpuvdbyrineknwzf.supabase.co/functions/v1/send-push',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-webhook-secret', 'CHANGE_ME_PUSH_WEBHOOK_SECRET'
+    ),
+    body := jsonb_build_object(
+      'user_id', new.user_id,
+      'title', new.title,
+      'message', new.message,
+      'task_id', new.task_id
+    )
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists notifications_push_trigger on notifications;
+create trigger notifications_push_trigger
+  after insert on notifications
+  for each row execute function notify_push_on_notification_insert();
+
 -- ─────────────────────────────────────────────
 -- Row Level Security
 -- ─────────────────────────────────────────────
@@ -333,6 +384,7 @@ alter table notifications enable row level security;
 alter table daily_reports enable row level security;
 alter table incidents     enable row level security;
 alter table audit_log     enable row level security;
+alter table push_subscriptions enable row level security;
 
 -- Drop all policies before recreating (idempotent)
 do $$ declare r record; begin
@@ -464,6 +516,13 @@ create policy "notifications_update" on notifications
 
 create policy "notifications_delete" on notifications
   for delete using (user_id = auth.uid());
+
+-- push_subscriptions: a device's subscription belongs to whoever is
+-- currently signed in on it. "for all" is safe here (unlike notifications)
+-- because a user only ever writes their OWN row — there's no cross-user
+-- insert case to worry about.
+create policy "push_subscriptions_own" on push_subscriptions
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- daily_reports: director full, others read-only
 create policy "daily_reports_director" on daily_reports

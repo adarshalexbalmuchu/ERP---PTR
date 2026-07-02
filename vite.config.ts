@@ -8,23 +8,17 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // App shell (JS/CSS/HTML) is precached so the app itself opens
-      // offline. Supabase API responses are cached separately at runtime
-      // (GET only — Workbox never caches mutating requests) so a guard can
-      // still see their last-loaded tasks with no signal.
-      workbox: {
+      // A custom service worker (src/sw.ts) instead of the auto-generated
+      // one — needed for the push/notificationclick listeners that make
+      // task notifications show up at the OS/device level, not just as an
+      // in-app bell badge. Precaching and the Supabase API runtime cache
+      // are set up by hand inside src/sw.ts using the same Workbox
+      // primitives generateSW used to configure declaratively here.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/rest/v1/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'ptr-api-cache',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 200, maxAgeSeconds: 24 * 60 * 60 },
-            },
-          },
-        ],
       },
       manifest: {
         name: 'Palamu Tiger Reserve — Tiger Cell',

@@ -1,0 +1,6 @@
+# send-push is invoked by a Postgres trigger (net.http_post), not by an
+# authenticated browser request, so there's no user JWT to verify. It
+# checks its own x-webhook-secret header instead — see
+# supabase/functions/send-push/index.ts.
+[functions.send-push]
+verify_jwt = false

@@ -1,5 +1,5 @@
 import { type ReactNode, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryClient, queryPersister } from './lib/queryClient';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -77,6 +77,18 @@ function Root() {
   return <Navigate to={roleHome(user.role)} replace />;
 }
 
+// Role-agnostic deep link used by push notification clicks (the service
+// worker has no idea which role opened it) — resolves to the same task
+// under whichever role-scoped route the signed-in user actually has.
+function TaskRedirect() {
+  const { loading } = useAuth();
+  const user = useStore((s) => s.currentUser);
+  const { id } = useParams();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={`${roleHome(user.role)}/tasks/${id}`} replace />;
+}
+
 export default function App() {
   return (
     <PersistQueryClientProvider
@@ -97,6 +109,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Root />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/tasks/:id" element={<TaskRedirect />} />
 
             {/* Director */}
             <Route
