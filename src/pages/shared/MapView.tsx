@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import type { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AlertTriangle, ClipboardList } from 'lucide-react';
 import { useMapPoints } from '../../hooks/useMapPoints';
@@ -30,6 +31,17 @@ export default function MapView() {
   const { incidents, patrolPoints, loading } = useMapPoints();
   const [showIncidents, setShowIncidents] = useState(true);
   const [showPatrols, setShowPatrols] = useState(true);
+  const mapRef = useRef<LeafletMap | null>(null);
+
+  // Explicit teardown as a safety net: Leaflet's zoom-control panes use
+  // z-index up to 1000 (higher than our own modals/dropdowns). If the map
+  // instance isn't fully destroyed on unmount, its leftover DOM can render
+  // on top of whatever page you navigate to next.
+  useEffect(() => {
+    return () => {
+      mapRef.current?.remove();
+    };
+  }, []);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -53,8 +65,8 @@ export default function MapView() {
         </label>
       </div>
 
-      <div className="card overflow-hidden" style={{ height: '65vh' }}>
-        <MapContainer center={PTR_CENTER} zoom={10} style={{ height: '100%', width: '100%' }}>
+      <div className="card overflow-hidden" style={{ height: '65vh', isolation: 'isolate' }}>
+        <MapContainer ref={mapRef} center={PTR_CENTER} zoom={10} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
