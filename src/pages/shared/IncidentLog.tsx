@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { AlertTriangle, Plus, X, MapPin } from 'lucide-react';
+import { AlertTriangle, Plus, X, MapPin, Trash2 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useIncidents } from '../../hooks/useIncidents';
 import { useRanges } from '../../hooks/useRanges';
@@ -138,13 +138,20 @@ function ReportForm({
 
 export default function IncidentLog() {
   const currentUser = useStore((s) => s.currentUser);
-  const { incidents, isLoading } = useIncidents();
+  const { incidents, isLoading, deleteIncident } = useIncidents();
   const { ranges, areas } = useRanges();
   const [formOpen, setFormOpen] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
 
   const lockRange = currentUser?.role !== 'director';
+  const canManage = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
+
+  const handleDelete = (id: string) => {
+    if (confirm('Delete this incident report? This cannot be undone.')) {
+      deleteIncident.mutate(id);
+    }
+  };
 
   const filtered = incidents.filter((i) => {
     if (filterType && i.type !== filterType) return false;
@@ -194,7 +201,18 @@ export default function IncidentLog() {
                     <span className="text-sm font-semibold text-ptr-brown">{TYPE_LABELS[incident.type]}</span>
                     <PriorityBadge priority={incident.severity} size="sm" />
                   </div>
-                  <span className="text-xs text-ptr-brown-light">{formatDateTime(incident.incidentDate)}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-ptr-brown-light">{formatDateTime(incident.incidentDate)}</span>
+                    {canManage && (
+                      <button
+                        onClick={() => handleDelete(incident.id)}
+                        className="p-1 rounded-lg hover:bg-red-50 text-ptr-brown-light hover:text-red-600 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm text-ptr-brown">{incident.description}</p>
                 <div className="flex items-center gap-2 flex-wrap text-xs text-ptr-brown-light">

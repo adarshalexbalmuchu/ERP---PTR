@@ -62,5 +62,13 @@ export function useIncidents() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['incidents'] }),
   });
 
-  return { incidents, isLoading, reportIncident };
+  const deleteIncident = useMutation({
+    mutationFn: async (incidentId: string) => {
+      const { error } = await supabase.from('incidents').delete().eq('id', incidentId);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['incidents'] }),
+  });
+
+  return { incidents, isLoading, reportIncident, deleteIncident };
 }
