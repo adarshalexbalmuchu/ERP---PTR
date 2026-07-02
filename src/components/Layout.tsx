@@ -16,6 +16,7 @@ import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 import GovStrip from './GovStrip';
+import Footer from './Footer';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 import ptrLogo from '../assets/ptr-logo.png';
 
@@ -123,70 +124,76 @@ function AdminLayout({ items }: { items: NavItem[] }) {
   };
 
   return (
-    <div className="flex h-screen bg-ptr-cream overflow-hidden">
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex flex-col w-64 flex-shrink-0">
-        <Sidebar items={items} onLogout={handleLogout} />
-      </div>
-
-      {/* Mobile sidebar overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileOpen(false)}
-            style={{ animation: 'fadeIn 0.15s ease-out' }}
-          />
-          <div
-            className="absolute left-0 top-0 bottom-0 w-72"
-            style={{ animation: 'slideRight 0.2s ease-out' }}
-          >
-            <Sidebar items={items} onLogout={handleLogout} onClose={() => setMobileOpen(false)} />
-          </div>
+    <div className="flex flex-col h-screen bg-ptr-cream overflow-hidden">
+      <GovStrip />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Desktop sidebar */}
+        <div className="hidden md:flex flex-col w-64 flex-shrink-0">
+          <Sidebar items={items} onLogout={handleLogout} />
         </div>
-      )}
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile top bar */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
-            aria-label="Open navigation"
-          >
-            <Menu className="w-5 h-5 text-ptr-brown" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
-              <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
+        {/* Mobile sidebar overlay */}
+        {mobileOpen && (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setMobileOpen(false)}
+              style={{ animation: 'fadeIn 0.15s ease-out' }}
+            />
+            <div
+              className="absolute left-0 top-0 bottom-0 w-72"
+              style={{ animation: 'slideRight 0.2s ease-out' }}
+            >
+              <Sidebar items={items} onLogout={handleLogout} onClose={() => setMobileOpen(false)} />
             </div>
-            <span className="text-sm font-bold text-ptr-brown">PTR Tasks</span>
           </div>
-          <NotificationBell />
-        </header>
+        )}
 
-        {/* Desktop top bar */}
-        <div className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
-          <div>
-            <p className="text-sm font-bold text-ptr-brown leading-tight">
-              {greeting()}{currentUser ? `, ${currentUser.name.split(' ')[0]}` : ''}
-            </p>
-            <p className="text-xs text-ptr-brown-light leading-tight mt-0.5">
-              {new Date().toLocaleDateString('en-IN', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </p>
+        {/* Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Mobile top bar */}
+          <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
+              aria-label="Open navigation"
+            >
+              <Menu className="w-5 h-5 text-ptr-brown" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
+                <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-sm font-bold text-ptr-brown">PTR Tasks</span>
+            </div>
+            <NotificationBell />
+          </header>
+
+          {/* Desktop top bar */}
+          <div className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
+            <div>
+              <p className="text-sm font-bold text-ptr-brown leading-tight">
+                {greeting()}{currentUser ? `, ${currentUser.name.split(' ')[0]}` : ''}
+              </p>
+              <p className="text-xs text-ptr-brown-light leading-tight mt-0.5">
+                {new Date().toLocaleDateString('en-IN', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </p>
+            </div>
+            <NotificationBell />
           </div>
-          <NotificationBell />
+
+          <main className="flex-1 overflow-y-auto flex flex-col">
+            <div className="flex-1">
+              <Outlet />
+            </div>
+            <Footer />
+          </main>
         </div>
-
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
       </div>
     </div>
   );
@@ -233,6 +240,7 @@ function GuardLayout() {
       </header>
       <main className="flex-1 pb-16">
         <Outlet />
+        <Footer />
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-ptr-cream-dark flex items-stretch z-30">
         <NavLink
