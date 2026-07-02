@@ -21,7 +21,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
       },
       manifest: {
-        name: 'Palamu Tiger Reserve — Tiger Cell',
+        name: 'Palamu Tiger Reserve | Tiger Cell',
         short_name: 'PTR Tiger Cell',
         description: 'Task management for Palamu Tiger Reserve field operations',
         theme_color: '#1A4731',
