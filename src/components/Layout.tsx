@@ -33,26 +33,32 @@ function Sidebar({
   const currentUser = useStore((s) => s.currentUser);
   return (
     <div className="h-full flex flex-col bg-ptr-green-dark">
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-        <div className="w-11 h-11 rounded-full bg-white/95 border border-white/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
-          <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-white/60 uppercase leading-none">
-            <img src={jharkhandEmblem} alt="" className="w-3 h-3 flex-shrink-0" />
-            Govt. of Jharkhand
+      <div className="px-4 py-4 border-b border-white/10 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <img src={jharkhandEmblem} alt="" className="w-8 h-8 flex-shrink-0" />
+            <span className="text-xs font-bold tracking-wide text-white/90 uppercase leading-tight">
+              Govt. of<br />Jharkhand
+            </span>
           </div>
-          <div className="text-sm font-bold text-white leading-snug mt-1">Palamu Tiger Reserve</div>
-          <div className="text-xs text-white/50 leading-tight mt-0.5">Tiger Cell &middot; Task Mgmt</div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
+            >
+              <X className="w-5 h-5 text-white/70" />
+            </button>
+          )}
         </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
-          >
-            <X className="w-5 h-5 text-white/70" />
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full bg-white/95 border border-white/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-white leading-snug">Palamu Tiger Reserve</div>
+            <div className="text-xs text-white/50 leading-tight mt-0.5">Tiger Cell &middot; Task Mgmt</div>
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">

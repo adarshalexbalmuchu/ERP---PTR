@@ -10,9 +10,9 @@ export default function GovHeader({ compact = false }: Props) {
     <div className="bg-white border-b border-ptr-cream-dark">
       {/* Official strip */}
       <div className="bg-ptr-green">
-        <div className="max-w-6xl mx-auto px-4 md:px-6 py-1.5 flex items-center gap-2 justify-between text-white">
-          <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wide">
-            <img src={jharkhandEmblem} alt="" className="w-4 h-4 flex-shrink-0" />
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-2.5 flex items-center gap-3 justify-between text-white">
+          <span className="flex items-center gap-2.5 text-base font-bold tracking-wide">
+            <img src={jharkhandEmblem} alt="" className="w-8 h-8 flex-shrink-0" />
             Government of Jharkhand
           </span>
           <span className="hidden sm:inline text-xs text-white/75">

@@ -53,9 +53,11 @@ export default function Login() {
 
       {/* Brand panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] flex-col justify-between bg-ptr-green-dark text-white p-10 xl:p-14 flex-shrink-0">
-        <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-white/70 uppercase">
-          <img src={jharkhandEmblem} alt="" className="w-4 h-4 flex-shrink-0" />
-          Government of Jharkhand
+        <div className="flex items-center gap-3">
+          <img src={jharkhandEmblem} alt="" className="w-10 h-10 flex-shrink-0" />
+          <div className="text-base font-bold tracking-wide text-white uppercase leading-tight">
+            Government of<br />Jharkhand
+          </div>
         </div>
         <div>
           <div className="w-20 h-20 rounded-full bg-white/95 flex items-center justify-center mb-6 overflow-hidden">
