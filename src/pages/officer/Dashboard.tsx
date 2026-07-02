@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import { ClipboardList, AlertCircle, Clock, CheckCircle, TrendingUp, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
@@ -17,18 +17,14 @@ import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 
 function MetricCard({
-  label, value, icon, color, sub,
-}: { label: string; value: number | string; icon: React.ReactNode; color: string; sub?: string }) {
+  label, value, accent, sub, className = '',
+}: { label: string; value: number | string; accent: string; sub?: string; className?: string }) {
   return (
-    <div className="card p-5 flex items-center gap-4">
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${color}`}>
-        {icon}
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-ptr-brown">{value}</div>
-        <div className="text-xs text-ptr-brown-light font-medium">{label}</div>
-        {sub && <div className="text-xs text-ptr-brown-light/70 mt-0.5">{sub}</div>}
-      </div>
+    <div className={`card p-5 pl-6 relative overflow-hidden ${className}`}>
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accent}`} />
+      <div className="text-3xl font-bold text-ptr-brown tracking-tight tabular-nums">{value}</div>
+      <div className="text-xs text-ptr-brown-light font-semibold uppercase tracking-wide mt-1">{label}</div>
+      {sub && <div className="text-xs text-ptr-brown-light/70 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -97,37 +93,33 @@ export default function OfficerDashboard() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-stretch">
         <MetricCard
           label="Total Tasks"
           value={totalTasks}
-          icon={<ClipboardList className="w-6 h-6 text-ptr-green" />}
-          color="bg-ptr-green/10"
+          accent="bg-ptr-green"
         />
         <MetricCard
           label="Critical"
           value={critical}
-          icon={<AlertCircle className="w-6 h-6 text-red-500" />}
-          color="bg-red-50"
+          accent="bg-status-overdue"
         />
         <MetricCard
           label="In Progress"
           value={inProgress}
-          icon={<Clock className="w-6 h-6 text-amber-500" />}
-          color="bg-amber-50"
+          accent="bg-status-progress"
         />
         <MetricCard
           label="Overdue"
           value={overdueCount}
-          icon={<TrendingUp className="w-6 h-6 text-orange-500" />}
-          color="bg-orange-50"
+          accent="bg-orange-500"
         />
         <MetricCard
           label="Completion Rate"
           value={`${completionRate}%`}
-          icon={<CheckCircle className="w-6 h-6 text-emerald-500" />}
-          color="bg-emerald-50"
+          accent="bg-status-archived"
           sub={`${completed} completed`}
+          className="col-span-2 lg:col-span-1"
         />
       </div>
 

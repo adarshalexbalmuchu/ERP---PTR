@@ -1,13 +1,13 @@
 import { type ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { Leaf } from 'lucide-react';
 import { queryClient, queryPersister } from './lib/queryClient';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import useStore from './store/useStore';
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import OfflineBanner from './components/OfflineBanner';
+import ptrLogo from './assets/ptr-logo.png';
 
 // Route-level code splitting: a guard never downloads director/officer
 // bundles (charts, user management, etc.) and vice versa.
@@ -33,8 +33,8 @@ function LoadingScreen() {
   return (
     <div className="min-h-screen bg-ptr-cream flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-12 h-12 rounded-2xl bg-ptr-green flex items-center justify-center animate-pulse">
-          <Leaf className="w-6 h-6 text-white" />
+        <div className="w-14 h-14 rounded-full bg-white border border-ptr-cream-dark shadow-sm flex items-center justify-center overflow-hidden animate-pulse">
+          <img src={ptrLogo} alt="" className="w-full h-full object-contain p-1" />
         </div>
         <p className="text-sm text-ptr-brown-light">Loading…</p>
       </div>
