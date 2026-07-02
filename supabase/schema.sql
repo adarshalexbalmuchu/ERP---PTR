@@ -200,6 +200,9 @@ create table if not exists audit_log (
 create index if not exists tasks_assignee_id_idx    on tasks(assignee_id);
 create index if not exists tasks_range_id_idx       on tasks(range_id);
 create index if not exists tasks_status_idx         on tasks(status);
+create index if not exists tasks_created_at_idx     on tasks(created_at desc);
+create index if not exists tasks_due_date_idx       on tasks(due_date);
+create index if not exists audit_log_created_at_idx on audit_log(created_at desc);
 create index if not exists notifications_user_id_idx on notifications(user_id);
 create index if not exists notifications_read_idx   on notifications(read) where not read;
 create index if not exists push_subscriptions_user_id_idx on push_subscriptions(user_id);
@@ -372,6 +375,16 @@ create trigger notifications_push_trigger
 
 -- ─────────────────────────────────────────────
 -- Row Level Security
+--
+-- get_my_role()/get_my_range_id()/auth.uid() calls below are wrapped in
+-- `(select ...)`. Without that wrapper, Postgres re-evaluates the function
+-- (each a subquery against profiles) once per row scanned, and — because
+-- tasks has multiple permissive SELECT policies that get OR'd together —
+-- the planner can't push range_id/assignee_id through the range_id/
+-- assignee_id indexes either, forcing a full table scan even for a
+-- single-range officer. Wrapping in `(select ...)` turns each call into a
+-- one-time InitPlan instead of a per-row filter. Measured on a 50k-row
+-- local benchmark: an officer's task list went from ~1000ms to ~7ms.
 -- ─────────────────────────────────────────────
 alter table profiles      enable row level security;
 alter table ranges        enable row level security;
@@ -394,108 +407,108 @@ do $$ declare r record; begin
 end $$;
 
 -- ranges & areas: everyone authenticated can read
-create policy "ranges_read" on ranges for select using (auth.uid() is not null);
-create policy "ranges_write" on ranges for all using (get_my_role() = 'director');
+create policy "ranges_read" on ranges for select using ((select auth.uid()) is not null);
+create policy "ranges_write" on ranges for all using ((select get_my_role()) = 'director');
 
-create policy "areas_read" on areas for select using (auth.uid() is not null);
-create policy "areas_write" on areas for all using (get_my_role() = 'director');
+create policy "areas_read" on areas for select using ((select auth.uid()) is not null);
+create policy "areas_write" on areas for all using ((select get_my_role()) = 'director');
 
 -- profiles
-create policy "profiles_read" on profiles for select using (auth.uid() is not null);
-create policy "profiles_self_update" on profiles for update using (id = auth.uid());
-create policy "profiles_director" on profiles for all using (get_my_role() = 'director');
+create policy "profiles_read" on profiles for select using ((select auth.uid()) is not null);
+create policy "profiles_self_update" on profiles for update using (id = (select auth.uid()));
+create policy "profiles_director" on profiles for all using ((select get_my_role()) = 'director');
 
 -- tasks
 create policy "tasks_director" on tasks
-  for all using (get_my_role() = 'director');
+  for all using ((select get_my_role()) = 'director');
 
 create policy "tasks_officer_read" on tasks
   for select using (
-    get_my_role() = 'range_officer' and range_id = get_my_range_id()
+    (select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id())
   );
 
 create policy "tasks_officer_write" on tasks
   for all using (
-    get_my_role() = 'range_officer' and range_id = get_my_range_id()
+    (select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id())
   );
 
 create policy "tasks_guard_read" on tasks
   for select using (
-    get_my_role() = 'guard' and assignee_id = auth.uid()
+    (select get_my_role()) = 'guard' and assignee_id = (select auth.uid())
   );
 
 create policy "tasks_guard_update" on tasks
   for update using (
-    get_my_role() = 'guard' and assignee_id = auth.uid()
+    (select get_my_role()) = 'guard' and assignee_id = (select auth.uid())
   );
 
 -- task_updates
 create policy "task_updates_director" on task_updates
-  for all using (get_my_role() = 'director');
+  for all using ((select get_my_role()) = 'director');
 
 create policy "task_updates_officer" on task_updates
   for all using (
-    get_my_role() = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.range_id = get_my_range_id())
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.range_id = (select get_my_range_id()))
   );
 
 create policy "task_updates_guard_read" on task_updates
   for select using (
-    get_my_role() = 'guard' and
-    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.assignee_id = auth.uid())
+    (select get_my_role()) = 'guard' and
+    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
 create policy "task_updates_guard_insert" on task_updates
   for insert with check (
-    get_my_role() = 'guard' and
-    user_id = auth.uid() and
-    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.assignee_id = auth.uid())
+    (select get_my_role()) = 'guard' and
+    user_id = (select auth.uid()) and
+    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
 -- comments
 create policy "comments_director" on comments
-  for all using (get_my_role() = 'director');
+  for all using ((select get_my_role()) = 'director');
 
 create policy "comments_officer" on comments
   for all using (
-    get_my_role() = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.range_id = get_my_range_id())
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.range_id = (select get_my_range_id()))
   );
 
 create policy "comments_guard_read" on comments
   for select using (
-    get_my_role() = 'guard' and
-    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.assignee_id = auth.uid())
+    (select get_my_role()) = 'guard' and
+    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
 create policy "comments_guard_insert" on comments
   for insert with check (
-    get_my_role() = 'guard' and
-    user_id = auth.uid() and
-    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.assignee_id = auth.uid())
+    (select get_my_role()) = 'guard' and
+    user_id = (select auth.uid()) and
+    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
 -- attachments — same as comments
 create policy "attachments_director" on attachments
-  for all using (get_my_role() = 'director');
+  for all using ((select get_my_role()) = 'director');
 
 create policy "attachments_officer" on attachments
   for all using (
-    get_my_role() = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.range_id = get_my_range_id())
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.range_id = (select get_my_range_id()))
   );
 
 create policy "attachments_guard_read" on attachments
   for select using (
-    get_my_role() = 'guard' and
-    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = auth.uid())
+    (select get_my_role()) = 'guard' and
+    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
 create policy "attachments_guard_insert" on attachments
   for insert with check (
-    get_my_role() = 'guard' and
-    user_id = auth.uid() and
-    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = auth.uid())
+    (select get_my_role()) = 'guard' and
+    user_id = (select auth.uid()) and
+    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
 -- notifications: everyone reads/updates/deletes only their own, but ANY
@@ -506,59 +519,59 @@ create policy "attachments_guard_insert" on attachments
 -- policy would implicitly reuse that USING clause as the INSERT check too,
 -- blocking every one of those inserts with a 403.
 create policy "notifications_read" on notifications
-  for select using (user_id = auth.uid());
+  for select using (user_id = (select auth.uid()));
 
 create policy "notifications_insert" on notifications
-  for insert with check (auth.uid() is not null);
+  for insert with check ((select auth.uid()) is not null);
 
 create policy "notifications_update" on notifications
-  for update using (user_id = auth.uid());
+  for update using (user_id = (select auth.uid()));
 
 create policy "notifications_delete" on notifications
-  for delete using (user_id = auth.uid());
+  for delete using (user_id = (select auth.uid()));
 
 -- push_subscriptions: a device's subscription belongs to whoever is
 -- currently signed in on it. "for all" is safe here (unlike notifications)
 -- because a user only ever writes their OWN row — there's no cross-user
 -- insert case to worry about.
 create policy "push_subscriptions_own" on push_subscriptions
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 -- daily_reports: director full, others read-only
 create policy "daily_reports_director" on daily_reports
-  for all using (get_my_role() = 'director');
+  for all using ((select get_my_role()) = 'director');
 
 create policy "daily_reports_read" on daily_reports
-  for select using (get_my_role() = 'range_officer' or get_my_role() = 'guard');
+  for select using ((select get_my_role()) = 'range_officer' or (select get_my_role()) = 'guard');
 
 -- incidents: director full; officer full within their range; guard can
 -- report (insert) and read incidents within their own range for situational
 -- awareness (conflict data is operationally relevant to everyone patrolling
 -- that area, not just the person who reported it).
 create policy "incidents_director" on incidents
-  for all using (get_my_role() = 'director');
+  for all using ((select get_my_role()) = 'director');
 
 create policy "incidents_officer" on incidents
-  for all using (get_my_role() = 'range_officer' and range_id = get_my_range_id());
+  for all using ((select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id()));
 
 create policy "incidents_guard_read" on incidents
-  for select using (get_my_role() = 'guard' and range_id = get_my_range_id());
+  for select using ((select get_my_role()) = 'guard' and range_id = (select get_my_range_id()));
 
 create policy "incidents_guard_insert" on incidents
-  for insert with check (get_my_role() = 'guard' and reported_by = auth.uid());
+  for insert with check ((select get_my_role()) = 'guard' and reported_by = (select auth.uid()));
 
 -- audit_log: management-only read (director all, officer their range);
 -- insert is open to any authenticated user but only as themselves, since
 -- guards also trigger logged actions (starting/completing their own tasks)
 -- even though they can't read the log back.
 create policy "audit_log_director_read" on audit_log
-  for select using (get_my_role() = 'director');
+  for select using ((select get_my_role()) = 'director');
 
 create policy "audit_log_officer_read" on audit_log
-  for select using (get_my_role() = 'range_officer' and range_id = get_my_range_id());
+  for select using ((select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id()));
 
 create policy "audit_log_insert" on audit_log
-  for insert with check (actor_id = auth.uid());
+  for insert with check (actor_id = (select auth.uid()));
 
 -- ─────────────────────────────────────────────
 -- Storage bucket for attachments
@@ -574,13 +587,13 @@ drop policy if exists "attachments_download" on storage.objects;
 drop policy if exists "attachments_delete" on storage.objects;
 
 create policy "attachments_upload" on storage.objects
-  for insert with check (bucket_id = 'task-attachments' and auth.uid() is not null);
+  for insert with check (bucket_id = 'task-attachments' and (select auth.uid()) is not null);
 
 create policy "attachments_download" on storage.objects
-  for select using (bucket_id = 'task-attachments' and auth.uid() is not null);
+  for select using (bucket_id = 'task-attachments' and (select auth.uid()) is not null);
 
 create policy "attachments_delete" on storage.objects
-  for delete using (bucket_id = 'task-attachments' and auth.uid() is not null);
+  for delete using (bucket_id = 'task-attachments' and (select auth.uid()) is not null);
 
 -- ─────────────────────────────────────────────
 -- Dashboard aggregate views
