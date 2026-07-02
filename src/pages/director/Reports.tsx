@@ -39,9 +39,9 @@ function ReportCard({ report }: { report: DailyReport }) {
           {/* Summary row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Total', value: report.totalTasks, color: 'bg-ptr-green/10 text-ptr-green' },
-              { label: 'Completed', value: report.completedCount, color: 'bg-blue-50 text-blue-700' },
-              { label: 'In Progress', value: report.inProgressCount, color: 'bg-amber-50 text-amber-700' },
+              { label: 'Total', value: report.totalTasks, color: 'bg-ptr-brown/5 text-ptr-brown' },
+              { label: 'Completed', value: report.completedCount, color: 'bg-ptr-green/10 text-ptr-green' },
+              { label: 'In Progress', value: report.inProgressCount, color: 'bg-ptr-brown/5 text-ptr-brown' },
               { label: 'Overdue', value: report.overdueCount, color: 'bg-red-50 text-red-600' },
             ].map((m) => (
               <div key={m.label} className={`rounded-xl p-3 ${m.color}`}>

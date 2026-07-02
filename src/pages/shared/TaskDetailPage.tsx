@@ -30,16 +30,15 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 
 function ProgressBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.max(0, value));
-  const color = pct === 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-400' : 'bg-ptr-green';
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-ptr-brown-light">Progress</span>
         <span className="text-xs font-bold text-ptr-brown">{pct}%</span>
       </div>
-      <div className="w-full h-2 bg-ptr-cream-dark rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-ptr-brown/10 rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          className="h-full rounded-full bg-ptr-green transition-all duration-500"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -279,7 +278,7 @@ export default function TaskDetailPage() {
             </div>
           )}
           {(task.status === 'Completed' || task.status === 'Archived') && (
-            <div className="flex items-center gap-2 text-emerald-700">
+            <div className="flex items-center gap-2 text-ptr-green">
               <CheckCircle className="w-5 h-5 flex-shrink-0" />
               <span className="text-sm font-medium">
                 {task.status === 'Archived' ? 'Task archived — well done!' : 'Submitted for review'}
@@ -291,7 +290,7 @@ export default function TaskDetailPage() {
 
       {/* Manager actions for Completed tasks */}
       {canManage && task.status === 'Completed' && (
-        <div className="card p-5 border-l-4 border-l-blue-400">
+        <div className="card p-5 border-l-4 border-l-status-progress">
           <h3 className="text-sm font-semibold text-ptr-brown mb-3">Task completed — awaiting your review</h3>
           {showRequestChanges ? (
             <div className="space-y-3">
@@ -336,9 +335,9 @@ export default function TaskDetailPage() {
       )}
 
       {task.status === 'Archived' && canManage && (
-        <div className="card p-4 border-l-4 border-l-emerald-400 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          <span className="text-sm font-medium text-emerald-700">Task archived</span>
+        <div className="card p-4 border-l-4 border-l-status-archived flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-ptr-brown-light flex-shrink-0" />
+          <span className="text-sm font-medium text-ptr-brown-light">Task archived</span>
         </div>
       )}
 

@@ -112,12 +112,12 @@ export default function OfficerDashboard() {
         <MetricCard
           label="Overdue"
           value={overdueCount}
-          accent="bg-orange-500"
+          accent="bg-status-overdue"
         />
         <MetricCard
           label="Completion Rate"
           value={`${completionRate}%`}
-          accent="bg-status-archived"
+          accent="bg-status-completed"
           sub={`${completed} completed`}
           className="col-span-2 lg:col-span-1"
         />
@@ -137,8 +137,8 @@ export default function OfficerDashboard() {
                 <YAxis tick={{ fontSize: 11, fill: '#6B6356' }} allowDecimals={false} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #EFE7D6' }} />
                 <Bar dataKey="Not Started" stackId="a" fill="#9CA3AF" />
-                <Bar dataKey="In Progress" stackId="a" fill="#F59E0B" />
-                <Bar dataKey="Completed" stackId="a" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="In Progress" stackId="a" fill="#8A7F5C" />
+                <Bar dataKey="Completed" stackId="a" fill="#1A4731" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

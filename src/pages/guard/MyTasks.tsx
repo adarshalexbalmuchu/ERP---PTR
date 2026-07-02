@@ -41,13 +41,10 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-ptr-brown-light">Progress</span>
-            <span className={`font-medium ${pct === 100 ? 'text-emerald-600' : 'text-ptr-brown'}`}>{pct}%</span>
+            <span className="font-medium text-ptr-brown">{pct}%</span>
           </div>
-          <div className="h-1.5 bg-ptr-cream-dark rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-400' : 'bg-ptr-green'}`}
-              style={{ width: `${pct}%` }}
-            />
+          <div className="h-1.5 bg-ptr-brown/10 rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-ptr-green" style={{ width: `${pct}%` }} />
           </div>
         </div>
 
@@ -92,8 +89,8 @@ export default function GuardMyTasks() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Total', value: myTasks.length, color: 'bg-ptr-green/10 text-ptr-green' },
-          { label: 'Active', value: activeCount, color: 'bg-amber-50 text-amber-700' },
-          { label: 'Overdue', value: overdueCount, color: overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500' },
+          { label: 'Active', value: activeCount, color: 'bg-ptr-brown/5 text-ptr-brown' },
+          { label: 'Overdue', value: overdueCount, color: overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-ptr-brown/5 text-ptr-brown-light' },
         ].map((m) => (
           <div key={m.label} className={`rounded-2xl p-3 text-center ${m.color}`}>
             <div className="text-2xl font-bold">{m.value}</div>

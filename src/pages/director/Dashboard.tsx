@@ -177,12 +177,12 @@ export default function DirectorDashboard() {
         <MetricCard
           label="Overdue"
           value={overdueCount}
-          accent="bg-orange-500"
+          accent="bg-status-overdue"
         />
         <MetricCard
           label="Completion Rate"
           value={`${completionRate}%`}
-          accent="bg-status-archived"
+          accent="bg-status-completed"
           sub={`${completed} completed`}
           className="col-span-2 lg:col-span-1"
         />
@@ -246,8 +246,8 @@ export default function DirectorDashboard() {
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #EFE7D6' }} />
               <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
               <Line type="monotone" dataKey="Not Started" stroke="#9CA3AF" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="In Progress" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="Completed" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="In Progress" stroke="#8A7F5C" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="Completed" stroke="#1A4731" strokeWidth={2} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="Overdue" stroke="#DC2626" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>

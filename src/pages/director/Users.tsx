@@ -10,10 +10,12 @@ const ROLE_LABELS: Record<Role, string> = {
   guard: 'Guard / Field Staff',
 };
 
+// Director gets the one brand-color highlight (top authority); the other
+// two roles stay neutral — role is already legible from the label text.
 const ROLE_COLORS: Record<Role, string> = {
-  director: 'bg-purple-50 text-purple-700 border border-purple-200',
-  range_officer: 'bg-blue-50 text-blue-700 border border-blue-200',
-  guard: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  director: 'bg-ptr-green/10 text-ptr-green border border-ptr-green/20',
+  range_officer: 'bg-white text-ptr-brown border border-ptr-cream-dark',
+  guard: 'bg-white text-ptr-brown-light border border-ptr-cream-dark',
 };
 
 interface UserFormData {

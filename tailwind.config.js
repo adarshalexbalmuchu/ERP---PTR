@@ -14,11 +14,15 @@ export default {
           brown: '#2A2724',
           'brown-light': '#6B6356',
         },
+        // A deliberately restrained status palette — three signal colors
+        // (neutral / brand green / red) instead of a different saturated
+        // hue per state. Always paired with a text label, never
+        // color-alone, per the muted "government portal" direction.
         status: {
           notstarted: '#9CA3AF',
-          progress: '#F59E0B',
-          completed: '#3B82F6',
-          archived: '#10B981',
+          progress: '#8A7F5C',
+          completed: '#1A4731',
+          archived: '#9CA3AF',
           overdue: '#DC2626',
         },
       },

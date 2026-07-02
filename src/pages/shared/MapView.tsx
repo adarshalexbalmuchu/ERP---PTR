@@ -10,10 +10,13 @@ import type { IncidentSeverity } from '../../types';
 // Approximate center of Palamu Tiger Reserve, Jharkhand.
 const PTR_CENTER: [number, number] = [23.87, 84.19];
 
+// A muted, earthy severity gradient (gray → bronze → rust → red) instead
+// of bright saturated hues — reads as escalating urgency without turning
+// the map into a rainbow of pins.
 const SEVERITY_COLOR: Record<IncidentSeverity, string> = {
   Low: '#9CA3AF',
-  Medium: '#F59E0B',
-  High: '#EA580C',
+  Medium: '#8A7F5C',
+  High: '#A8551E',
   Critical: '#DC2626',
 };
 
