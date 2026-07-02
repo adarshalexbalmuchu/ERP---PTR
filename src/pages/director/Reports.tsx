@@ -60,8 +60,8 @@ function ReportCard({ report }: { report: DailyReport }) {
                 return (
                   <div key={rb.rangeId} className="flex items-center gap-3">
                     <span className="text-xs text-ptr-brown w-28 flex-shrink-0 truncate">{rb.rangeName}</span>
-                    <div className="flex-1 h-1.5 bg-ptr-cream-dark rounded-full overflow-hidden">
-                      <div className="h-full bg-ptr-green rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="flex-1 h-2 bg-ptr-brown/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-ptr-green rounded-full min-w-[3px]" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="text-xs text-ptr-brown-light w-24 text-right flex-shrink-0">
                       {rb.completed}/{rb.total} · {rb.overdue} overdue

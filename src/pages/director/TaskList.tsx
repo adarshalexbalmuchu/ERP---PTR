@@ -73,17 +73,17 @@ export default function DirectorTaskList() {
             className="input-field pl-9"
           />
         </div>
-        <select value={filterRange} onChange={(e) => setFilterRange(e.target.value)} className="input-field">
+        <select value={filterRange} onChange={(e) => setFilterRange(e.target.value)} className="input-field select-field">
           <option value="">All Ranges</option>
           {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field">
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field select-field">
           <option value="">All Statuses</option>
           {(['NotStarted', 'InProgress', 'Completed', 'Archived'] as TaskStatus[]).map((s) => (
             <option key={s} value={s}>{s === 'NotStarted' ? 'Not Started' : s === 'InProgress' ? 'In Progress' : s}</option>
           ))}
         </select>
-        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field">
+        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field select-field">
           <option value="">All Priorities</option>
           {(['Critical', 'High', 'Medium', 'Low'] as TaskPriority[]).map((p) => (
             <option key={p} value={p}>{p}</option>

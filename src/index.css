@@ -46,13 +46,20 @@
     @apply inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 text-red-700 font-semibold rounded-xl hover:bg-red-100 transition-colors min-h-[44px] text-sm tracking-tight;
   }
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ptr-green/30 focus:border-ptr-green transition-all min-h-[44px] bg-white;
+    @apply w-full px-3 py-2 border border-ptr-cream-dark rounded-xl text-sm text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/30 focus:border-ptr-green transition-all min-h-[44px] bg-white;
   }
   .input-error {
     @apply border-red-400 focus:ring-red-200 focus:border-red-400;
   }
+  .select-field {
+    @apply appearance-none bg-no-repeat pr-9 cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B6356' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+    background-size: 16px;
+  }
   .card {
-    @apply bg-white rounded-2xl shadow-sm border border-ptr-cream-dark;
+    @apply bg-white rounded-2xl border border-ptr-cream-dark;
+    box-shadow: 0 1px 2px rgba(15, 46, 30, 0.04), 0 4px 12px -4px rgba(15, 46, 30, 0.08);
   }
   .sidebar-link {
     @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all min-h-[44px];

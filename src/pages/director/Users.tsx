@@ -142,7 +142,7 @@ function UserFormModal({
               <select
                 value={form.role}
                 onChange={(e) => set('role', e.target.value as Role)}
-                className="input-field"
+                className="input-field select-field"
               >
                 <option value="director">Director</option>
                 <option value="range_officer">Range Officer</option>
@@ -157,7 +157,7 @@ function UserFormModal({
                 value={form.rangeId}
                 onChange={(e) => set('rangeId', e.target.value)}
                 disabled={form.role === 'director'}
-                className={`input-field ${errors.rangeId ? 'input-error' : ''}`}
+                className={`input-field select-field ${errors.rangeId ? 'input-error' : ''}`}
               >
                 <option value="">{form.role === 'director' ? 'N/A' : 'Select range'}</option>
                 {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -241,7 +241,7 @@ export default function DirectorUsers() {
       </div>
 
       <div className="flex items-center gap-3">
-        <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="input-field w-48">
+        <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="input-field select-field w-48">
           <option value="">All Roles</option>
           <option value="director">Director</option>
           <option value="range_officer">Range Officer</option>

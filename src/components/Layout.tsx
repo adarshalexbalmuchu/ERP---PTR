@@ -98,7 +98,15 @@ function Sidebar({
   );
 }
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 function AdminLayout({ items }: { items: NavItem[] }) {
+  const currentUser = useStore((s) => s.currentUser);
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -153,15 +161,20 @@ function AdminLayout({ items }: { items: NavItem[] }) {
         </header>
 
         {/* Desktop top bar */}
-        <div className="hidden md:flex items-center justify-between px-6 py-3.5 bg-white border-b border-ptr-cream-dark flex-shrink-0">
-          <p className="text-sm font-medium text-ptr-brown">
-            {new Date().toLocaleDateString('en-IN', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })}
-          </p>
+        <div className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
+          <div>
+            <p className="text-sm font-bold text-ptr-brown leading-tight">
+              {greeting()}{currentUser ? `, ${currentUser.name.split(' ')[0]}` : ''}
+            </p>
+            <p className="text-xs text-ptr-brown-light leading-tight mt-0.5">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
           <NotificationBell />
         </div>
 

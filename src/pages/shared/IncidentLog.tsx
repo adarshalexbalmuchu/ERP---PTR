@@ -77,13 +77,13 @@ function ReportForm({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Type</label>
-            <select value={type} onChange={(e) => setType(e.target.value as IncidentType)} className="input-field">
+            <select value={type} onChange={(e) => setType(e.target.value as IncidentType)} className="input-field select-field">
               {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Severity</label>
-            <select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)} className="input-field">
+            <select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)} className="input-field select-field">
               {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
@@ -93,7 +93,7 @@ function ReportForm({
               <select
                 value={rangeId}
                 onChange={(e) => { setRangeId(e.target.value); setAreaId(''); }}
-                className="input-field"
+                className="input-field select-field"
                 disabled={lockRange}
               >
                 <option value="">Select range</option>
@@ -102,7 +102,7 @@ function ReportForm({
             </div>
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Area / Zone</label>
-              <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="input-field" disabled={!rangeId}>
+              <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="input-field select-field" disabled={!rangeId}>
                 <option value="">Unspecified</option>
                 {filteredAreas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -173,11 +173,11 @@ export default function IncidentLog() {
       </div>
 
       <div className="card p-4 grid grid-cols-2 gap-3">
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field">
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field">
           <option value="">All Types</option>
           {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
         </select>
-        <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} className="input-field">
+        <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} className="input-field select-field">
           <option value="">All Severities</option>
           {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>

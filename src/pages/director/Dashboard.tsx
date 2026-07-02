@@ -41,15 +41,17 @@ function MetricCard({
   icon,
   color,
   sub,
+  className = '',
 }: {
   label: string;
   value: number | string;
   icon: React.ReactNode;
   color: string;
   sub?: string;
+  className?: string;
 }) {
   return (
-    <div className="card p-5 flex items-center gap-4">
+    <div className={`card p-5 flex items-center gap-4 ${className}`}>
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${color}`}>
         {icon}
       </div>
@@ -165,7 +167,7 @@ export default function DirectorDashboard() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-stretch">
         <MetricCard
           label="Total Tasks"
           value={totalTasks}
@@ -196,6 +198,7 @@ export default function DirectorDashboard() {
           icon={<CheckCircle className="w-6 h-6 text-status-archived" />}
           color="bg-emerald-50"
           sub={`${completed} completed`}
+          className="col-span-2 lg:col-span-1"
         />
       </div>
 
@@ -227,9 +230,9 @@ export default function DirectorDashboard() {
                 <div className="text-[10px] text-ptr-brown-light uppercase tracking-wide">Overdue</div>
               </div>
             </div>
-            <div className="h-1.5 bg-ptr-cream-dark rounded-full overflow-hidden">
+            <div className="h-2 bg-ptr-brown/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-ptr-green rounded-full"
+                className="h-full bg-ptr-green rounded-full min-w-[3px]"
                 style={{
                   width: range.total > 0 ? `${Math.round((range.completed / range.total) * 100)}%` : '0%',
                 }}

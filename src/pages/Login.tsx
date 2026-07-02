@@ -4,6 +4,8 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import useStore from '../store/useStore';
 import GovHeader from '../components/GovHeader';
+import jharkhandEmblem from '../assets/jharkhand-emblem.png';
+import ptrLogo from '../assets/ptr-logo.png';
 
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
@@ -44,10 +46,32 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-ptr-cream flex flex-col">
-      <GovHeader />
+    <div className="min-h-screen flex flex-col lg:flex-row bg-ptr-cream">
+      <div className="lg:hidden">
+        <GovHeader />
+      </div>
 
-      <div className="flex-1 flex items-center justify-center p-4">
+      {/* Brand panel — desktop only */}
+      <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] flex-col justify-between bg-ptr-green-dark text-white p-10 xl:p-14 flex-shrink-0">
+        <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-white/70 uppercase">
+          <img src={jharkhandEmblem} alt="" className="w-4 h-4 flex-shrink-0" />
+          Government of Jharkhand
+        </div>
+        <div>
+          <div className="w-20 h-20 rounded-full bg-white/95 flex items-center justify-center mb-6 overflow-hidden">
+            <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-1" />
+          </div>
+          <h1 className="text-3xl xl:text-4xl font-bold tracking-tight leading-tight">Palamu Tiger Reserve</h1>
+          <p className="text-white/70 mt-2 text-base font-medium">Tiger Cell &middot; Task Management System</p>
+          <p className="text-white/50 mt-6 text-sm max-w-sm leading-relaxed">
+            A unified platform for patrol coordination, incident reporting, and field task tracking across the
+            reserve&rsquo;s ranges.
+          </p>
+        </div>
+        <p className="text-xs text-white/40">Department of Forest, Environment &amp; Climate Change</p>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-10">
         <div className="w-full max-w-md">
           <div className="card p-8">
             <h2 className="text-lg font-semibold text-ptr-brown mb-6">Sign in to continue</h2>

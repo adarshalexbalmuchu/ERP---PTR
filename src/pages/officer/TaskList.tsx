@@ -70,7 +70,7 @@ export default function OfficerTaskList() {
             className="input-field pl-9"
           />
         </div>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field">
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field select-field">
           <option value="">All Statuses</option>
           {(['NotStarted', 'InProgress', 'Completed', 'Archived'] as TaskStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -78,13 +78,13 @@ export default function OfficerTaskList() {
             </option>
           ))}
         </select>
-        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field">
+        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field select-field">
           <option value="">All Priorities</option>
           {(['Critical', 'High', 'Medium', 'Low'] as TaskPriority[]).map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
-        <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-field">
+        <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-field select-field">
           <option value="">All Areas</option>
           {myAreas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
