@@ -8,7 +8,6 @@ import {
   Menu,
   X,
   LogOut,
-  TreePine,
   AlertTriangle,
   Map as MapIcon,
   History,
@@ -17,6 +16,8 @@ import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 import GovStrip from './GovStrip';
+import jharkhandEmblem from '../assets/jharkhand-emblem.png';
+import ptrLogo from '../assets/ptr-logo.png';
 
 type NavItem = { to: string; label: string; icon: React.ReactNode };
 
@@ -33,11 +34,12 @@ function Sidebar({
   return (
     <div className="h-full flex flex-col bg-ptr-green-dark">
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-        <div className="w-10 h-10 rounded-full bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-          <TreePine className="w-5 h-5 text-white" strokeWidth={1.75} />
+        <div className="w-11 h-11 rounded-full bg-white/95 border border-white/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold tracking-wide text-white/60 uppercase leading-none">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-white/60 uppercase leading-none">
+            <img src={jharkhandEmblem} alt="" className="w-3 h-3 flex-shrink-0" />
             Govt. of Jharkhand
           </div>
           <div className="text-sm font-bold text-white leading-snug mt-1">Palamu Tiger Reserve</div>
@@ -142,8 +144,8 @@ function AdminLayout({ items }: { items: NavItem[] }) {
             <Menu className="w-5 h-5 text-ptr-brown" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-ptr-green flex items-center justify-center">
-              <TreePine className="w-3 h-3 text-white" />
+            <div className="w-7 h-7 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
             </div>
             <span className="text-sm font-bold text-ptr-brown">PTR Tasks</span>
           </div>
@@ -186,8 +188,8 @@ function GuardLayout() {
       <GovStrip />
       <header className="bg-white border-b border-ptr-cream-dark px-4 py-3 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-ptr-green flex items-center justify-center">
-            <TreePine className="w-3.5 h-3.5 text-white" />
+          <div className="w-8 h-8 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
+            <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
           </div>
           <div>
             <div className="text-sm font-bold text-ptr-brown leading-none">PTR Tiger Cell</div>
