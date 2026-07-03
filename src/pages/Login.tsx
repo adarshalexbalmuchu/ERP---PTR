@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import useStore from '../store/useStore';
 import GovHeader from '../components/GovHeader';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 import ptrLogo from '../assets/ptr-logo.png';
+
+const GOV_FONT = "'IBM Plex Sans', 'Poppins', system-ui, sans-serif";
 
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
@@ -46,52 +48,110 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-ptr-cream">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-ptr-cream" style={{ fontFamily: GOV_FONT }}>
       <div className="lg:hidden">
         <GovHeader />
       </div>
 
       {/* Brand panel — desktop only */}
-      <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] flex-col justify-between bg-ptr-green-dark text-white p-10 xl:p-14 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <img src={jharkhandEmblem} alt="" className="w-10 h-10 flex-shrink-0" />
-          <div className="text-base font-bold tracking-wide text-white uppercase leading-tight">
-            Government of<br />Jharkhand
+      <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] flex-col bg-ptr-green-dark text-white p-10 xl:p-14 flex-shrink-0 relative overflow-hidden">
+        {/* subtle vertical gradient */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.12) 100%)',
+          }}
+        />
+        {/* barely-visible fine grid, evokes a topographic/map reference */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.025]"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(0deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 64px), repeating-linear-gradient(90deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 64px)',
+          }}
+        />
+
+        <div className="relative flex flex-col justify-between h-full">
+          {/* Letterhead */}
+          <div className="flex items-start gap-3.5">
+            <img src={jharkhandEmblem} alt="" className="w-11 h-11 flex-shrink-0" />
+            <div className="leading-tight pt-0.5">
+              <div className="text-[13px] font-bold tracking-[0.09em] uppercase text-white">
+                Government of Jharkhand
+              </div>
+              <div className="text-[11px] text-white/55 tracking-wide mt-1 leading-snug max-w-[13rem]">
+                Department of Forest,
+                <br />
+                Environment &amp; Climate Change
+              </div>
+            </div>
+          </div>
+
+          {/* System identity */}
+          <div className="border-t border-white/10 pt-8">
+            <div className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center mb-6 overflow-hidden">
+              <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-1" />
+            </div>
+            <div className="text-[11px] font-semibold tracking-[0.14em] uppercase text-white/60">
+              Palamu Tiger Reserve
+            </div>
+            <h1 className="text-2xl xl:text-[1.75rem] font-bold tracking-tight leading-snug mt-1.5">
+              Field Operations
+              <br />
+              Management System
+            </h1>
+
+            <div className="border-t border-white/10 mt-6 mb-5 w-14" />
+
+            <p className="text-white/55 text-[13px] leading-relaxed max-w-sm">
+              Internal platform for patrol management, incident reporting, wildlife monitoring, task assignment, and
+              reserve administration.
+            </p>
+          </div>
+
+          {/* Footer meta */}
+          <div className="border-t border-white/10 pt-5 flex flex-col gap-1.5 text-[11px] text-white/40">
+            <div className="flex items-center justify-between">
+              <span className="uppercase tracking-[0.08em]">Government Network</span>
+              <span className="tracking-wide">Version 2.1.0</span>
+            </div>
+            <div className="uppercase tracking-[0.08em] text-white/35">Authorized Personnel Only</div>
           </div>
         </div>
-        <div>
-          <div className="w-20 h-20 rounded-full bg-white/95 flex items-center justify-center mb-6 overflow-hidden">
-            <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-1" />
-          </div>
-          <h1 className="text-3xl xl:text-4xl font-bold tracking-tight leading-tight">Palamu Tiger Reserve</h1>
-          <p className="text-white/70 mt-2 text-base font-medium">Tiger Cell &middot; Task Management System</p>
-          <p className="text-white/50 mt-6 text-sm max-w-sm leading-relaxed">
-            A unified platform for patrol coordination, incident reporting, and field task tracking across the
-            reserve&rsquo;s ranges.
-          </p>
-        </div>
-        <p className="text-xs text-white/40">Department of Forest, Environment &amp; Climate Change</p>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-10">
+      {/* Right panel */}
+      <div
+        className="flex-1 flex items-center justify-center p-4 lg:p-10"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(42,39,36,0.035) 1px, transparent 0)',
+          backgroundSize: '18px 18px',
+        }}
+      >
         <div className="w-full max-w-md">
-          <div className="card p-8">
-            <h2 className="text-lg font-semibold text-ptr-brown mb-6">Sign in to continue</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <div
+            className="bg-white rounded-xl border border-ptr-brown/15 p-9"
+            style={{ boxShadow: '0 1px 2px rgba(15,46,30,0.05), 0 8px 24px -8px rgba(15,46,30,0.10)' }}
+          >
+            <h2 className="text-lg font-bold text-ptr-brown tracking-tight">Secure Login</h2>
+            <p className="text-xs text-ptr-brown-light mt-1 mb-6">
+              Sign in with your registered credentials to continue.
+            </p>
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-ptr-brown mb-1.5">Email address</label>
+                <label className="block text-[13px] font-semibold text-ptr-brown mb-1.5">Email address</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   autoComplete="email"
-                  className="input-field"
+                  className="w-full px-3.5 py-3 border border-ptr-brown/25 rounded-md text-sm text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-ptr-brown mb-1.5">Password</label>
+                <label className="block text-[13px] font-semibold text-ptr-brown mb-1.5">Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -99,7 +159,7 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     autoComplete="current-password"
-                    className="input-field pr-10"
+                    className="w-full px-3.5 py-3 pr-10 border border-ptr-brown/25 rounded-md text-sm text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
                     required
                   />
                   <button
@@ -113,15 +173,34 @@ export default function Login() {
                 </div>
               </div>
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-md">
                   {error}
                 </div>
               )}
-              <button type="submit" disabled={loading} className="btn-primary w-full justify-center">
-                {loading ? 'Signing in…' : 'Sign in'}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-[52px] flex items-center justify-center bg-ptr-green text-white font-semibold text-sm tracking-wide rounded-md hover:bg-ptr-green-light disabled:opacity-60 transition-colors"
+              >
+                {loading ? 'Signing in…' : 'Sign In'}
               </button>
             </form>
+
+            <div className="mt-6 pt-5 border-t border-ptr-cream-dark flex gap-2.5">
+              <Lock className="w-3.5 h-3.5 text-ptr-brown-light/70 flex-shrink-0 mt-0.5" />
+              <p className="text-[11.5px] leading-relaxed text-ptr-brown-light/80">
+                <span className="font-semibold text-ptr-brown-light">Restricted Access.</span> This system is
+                intended for authorized personnel of the Government of Jharkhand only. All activities are monitored
+                and logged.
+              </p>
+            </div>
           </div>
+
+          <p className="text-center text-[11px] text-ptr-brown-light/70 mt-6 leading-relaxed tracking-wide">
+            Department of Forest,
+            <br />
+            Environment &amp; Climate Change
+          </p>
         </div>
       </div>
     </div>
