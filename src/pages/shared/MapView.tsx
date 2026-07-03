@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { AlertTriangle, ClipboardList, Map as MapIcon, Satellite, Mountain } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Map as MapIcon, Satellite, Mountain, LocateFixed } from 'lucide-react';
 import { useMapPoints } from '../../hooks/useMapPoints';
 import { formatDateTime } from '../../utils/formatters';
+import type { Coords } from '../../utils/geolocation';
 import type { IncidentSeverity } from '../../types';
 
 // Approximate center of Palamu Tiger Reserve, Jharkhand.
 const PTR_CENTER: [number, number] = [23.87, 84.19];
+const USER_LOCATION_ZOOM = 14;
 
 // Base-map choices, Google Maps-style (Street / Satellite / Terrain) but
 // backed by free, key-less tile providers — true Google Maps tiles require
@@ -64,7 +66,49 @@ export default function MapView() {
   const [showIncidents, setShowIncidents] = useState(true);
   const [showPatrols, setShowPatrols] = useState(true);
   const [layer, setLayer] = useState<LayerId>('street');
+  const [myLocation, setMyLocation] = useState<Coords | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
   const mapRef = useRef<LeafletMap | null>(null);
+  const hasCenteredOnUser = useRef(false);
+
+  const flyToUser = (coords: Coords, zoom = USER_LOCATION_ZOOM) => {
+    mapRef.current?.flyTo([coords.lat, coords.lng], zoom, { duration: 1.2 });
+  };
+
+  const locateMe = () => {
+    if (!('geolocation' in navigator)) { setLocationDenied(true); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMyLocation(coords);
+        setLocationDenied(false);
+        flyToUser(coords);
+      },
+      () => setLocationDenied(true),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30_000 },
+    );
+  };
+
+  // Open the map centered on the ranger's live location (falls back silently
+  // to the reserve-wide view if permission is denied/unavailable), then keep
+  // the blue "you are here" dot live-updating like Google Maps.
+  useEffect(() => {
+    if (!('geolocation' in navigator)) { setLocationDenied(true); return; }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMyLocation(coords);
+        setLocationDenied(false);
+        if (!hasCenteredOnUser.current) {
+          hasCenteredOnUser.current = true;
+          flyToUser(coords);
+        }
+      },
+      () => setLocationDenied(true),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   // Explicit teardown as a safety net: Leaflet's zoom-control panes use
   // z-index up to 1000 (higher than our own modals/dropdowns). If the map
@@ -120,6 +164,15 @@ export default function MapView() {
           })}
         </div>
 
+        {/* Locate me — re-centers on live GPS position, Google Maps-style */}
+        <button
+          onClick={locateMe}
+          title={locationDenied ? 'Location unavailable — check permissions' : 'Center on my location'}
+          className="absolute bottom-4 right-3 z-[1000] w-10 h-10 rounded-full bg-white shadow-md border border-ptr-cream-dark flex items-center justify-center hover:bg-ptr-cream transition-colors"
+        >
+          <LocateFixed className={`w-5 h-5 ${locationDenied ? 'text-ptr-brown-light/50' : 'text-ptr-green'}`} />
+        </button>
+
         <MapContainer ref={mapRef} center={PTR_CENTER} zoom={10} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             key={layer}
@@ -127,6 +180,25 @@ export default function MapView() {
             url={MAP_LAYERS[layer].url}
             maxZoom={MAP_LAYERS[layer].maxZoom}
           />
+
+          {myLocation && (
+            <>
+              {/* Soft accuracy halo */}
+              <CircleMarker
+                center={[myLocation.lat, myLocation.lng]}
+                radius={16}
+                pathOptions={{ color: '#2563EB', weight: 0, fillColor: '#2563EB', fillOpacity: 0.15 }}
+              />
+              {/* Solid "you are here" dot, Google Maps-style */}
+              <CircleMarker
+                center={[myLocation.lat, myLocation.lng]}
+                radius={7}
+                pathOptions={{ color: '#FFFFFF', weight: 2, fillColor: '#2563EB', fillOpacity: 1 }}
+              >
+                <Popup>Your location</Popup>
+              </CircleMarker>
+            </>
+          )}
 
           {showIncidents && incidents.map((incident) => (
             incident.lat !== undefined && incident.lng !== undefined && (
