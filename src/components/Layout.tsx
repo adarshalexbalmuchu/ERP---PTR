@@ -247,13 +247,13 @@ function GuardLayout() {
             </div>
           </div>
         </div>
-        {/* Greeting + date strip */}
+        {/* Logged-in-as + date strip — matches AdminLayout's institutional tone */}
         <div className="px-4 pb-3 border-t border-ptr-cream-dark bg-ptr-cream/40">
           <p className="text-xs font-semibold text-ptr-brown pt-2">
-            {greeting()}{currentUser ? `, ${currentUser.name.split(' ')[0]}` : ''}
+            {currentUser?.name}
+            {currentUser?.designation && <span className="font-normal text-ptr-brown-light"> &middot; {currentUser.designation}</span>}
           </p>
           <p className="text-xs text-ptr-brown-light">
-            {currentUser?.designation && `${currentUser.designation} · `}
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
