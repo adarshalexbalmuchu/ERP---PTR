@@ -119,10 +119,11 @@ export default function TaskDetailPage() {
   }
 
   const assignee = users.find((u) => u.id === task.assigneeId);
+  const coAssignees = task.coAssigneeIds.map((id) => users.find((u) => u.id === id)).filter((u): u is (typeof users)[number] => !!u);
   const range = ranges.find((r) => r.id === task.rangeId);
   const area = areas.find((a) => a.id === task.areaId);
   const overdue = isOverdue(task);
-  const isAssignee = currentUser?.id === task.assigneeId;
+  const isAssignee = currentUser?.id === task.assigneeId || task.coAssigneeIds.includes(currentUser?.id ?? '');
   const canManage = role === 'director' || role === 'range_officer';
 
   const assignableUsers = users.filter((u) => u.role === 'guard');
@@ -196,7 +197,11 @@ export default function TaskDetailPage() {
 
       {/* Meta */}
       <div className="card p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetaItem icon={<User className="w-4 h-4" />} label="Assignee" value={assignee?.name ?? '—'} />
+        <MetaItem
+          icon={<User className="w-4 h-4" />}
+          label={coAssignees.length > 0 ? 'Assignees' : 'Assignee'}
+          value={[assignee?.name ?? '—', ...coAssignees.map((u) => u.name)].join(', ')}
+        />
         <MetaItem
           icon={<Calendar className="w-4 h-4" />}
           label="Due Date"
@@ -440,6 +445,8 @@ export default function TaskDetailPage() {
           assignableUsers={assignableUsers}
           initialData={task}
           currentUserId={currentUser.id}
+          onUploadAttachment={(file) => uploadAttachment.mutate(file)}
+          onRemoveAttachment={(attId) => removeAttachment.mutate(attId)}
         />
       )}
 

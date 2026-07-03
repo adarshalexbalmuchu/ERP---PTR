@@ -113,7 +113,7 @@ export default function OfficerTaskList() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-ptr-brown-light">
-                    <span>{assignee?.name ?? '—'}</span>
+                    <span>{assignee?.name ?? '—'}{task.coAssigneeIds.length > 0 && ` +${task.coAssigneeIds.length}`}</span>
                     {area && <><span>·</span><span>{area.name}</span></>}
                     <span>·</span>
                     <span className={overdue ? 'text-red-600 font-medium' : ''}>{formatDate(task.dueDate)}</span>

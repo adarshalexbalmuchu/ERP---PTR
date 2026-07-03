@@ -69,6 +69,8 @@ export interface Task {
   title: string;
   description: string;
   assigneeId: string;
+  /** Additional collaborators beyond the primary assignee — same access as the assignee. */
+  coAssigneeIds: string[];
   createdById: string;
   rangeId: string;
   areaId?: string;

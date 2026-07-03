@@ -74,7 +74,7 @@ export default function GuardMyTasks() {
 
   const [tab, setTab] = useState<Tab>('active');
 
-  const myTasks = tasks.filter((t) => t.assigneeId === currentUser?.id);
+  const myTasks = tasks.filter((t) => t.assigneeId === currentUser?.id || t.coAssigneeIds.includes(currentUser?.id ?? ''));
 
   const filtered = myTasks.filter((t) => {
     if (tab === 'active') return t.status === 'NotStarted' || t.status === 'InProgress';

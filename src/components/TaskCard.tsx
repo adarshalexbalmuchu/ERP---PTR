@@ -32,7 +32,10 @@ export default function TaskCard({ task, users, showAssignee = false, onClick }:
             </h3>
           </div>
           {showAssignee && assignee && (
-            <p className="text-xs text-ptr-brown-light">{assignee.name}</p>
+            <p className="text-xs text-ptr-brown-light">
+              {assignee.name}
+              {task.coAssigneeIds.length > 0 && ` +${task.coAssigneeIds.length} more`}
+            </p>
           )}
         </div>
         <PriorityBadge priority={task.priority} size="sm" />

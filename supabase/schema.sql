@@ -138,6 +138,17 @@ create table if not exists notifications (
   created_at timestamptz not null default now()
 );
 
+-- Additional assignees beyond tasks.assignee_id (the "primary" assignee).
+-- A director/officer can add as many collaborators to a task as needed;
+-- everyone listed here gets the same guard-level read/update access to the
+-- task as the primary assignee (see RLS below).
+create table if not exists task_assignees (
+  task_id    uuid not null references tasks(id) on delete cascade,
+  user_id    uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (task_id, user_id)
+);
+
 -- One row per browser/device push subscription. endpoint is globally
 -- unique (it identifies the device's push channel), so re-subscribing the
 -- same device — even as a different user after a logout/login — updates
@@ -202,6 +213,7 @@ create index if not exists tasks_range_id_idx       on tasks(range_id);
 create index if not exists tasks_status_idx         on tasks(status);
 create index if not exists tasks_created_at_idx     on tasks(created_at desc);
 create index if not exists tasks_due_date_idx       on tasks(due_date);
+create index if not exists task_assignees_user_id_idx on task_assignees(user_id);
 create index if not exists audit_log_created_at_idx on audit_log(created_at desc);
 create index if not exists notifications_user_id_idx on notifications(user_id);
 create index if not exists notifications_read_idx   on notifications(read) where not read;
@@ -443,6 +455,7 @@ alter table tasks         enable row level security;
 alter table task_updates  enable row level security;
 alter table comments      enable row level security;
 alter table attachments   enable row level security;
+alter table task_assignees enable row level security;
 alter table notifications enable row level security;
 alter table daily_reports enable row level security;
 alter table incidents     enable row level security;
@@ -484,12 +497,18 @@ create policy "tasks_officer_write" on tasks
 
 create policy "tasks_guard_read" on tasks
   for select using (
-    (select get_my_role()) = 'guard' and assignee_id = (select auth.uid())
+    (select get_my_role()) = 'guard' and (
+      assignee_id = (select auth.uid())
+      or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+    )
   );
 
 create policy "tasks_guard_update" on tasks
   for update using (
-    (select get_my_role()) = 'guard' and assignee_id = (select auth.uid())
+    (select get_my_role()) = 'guard' and (
+      assignee_id = (select auth.uid())
+      or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+    )
   );
 
 -- task_updates
@@ -505,14 +524,24 @@ create policy "task_updates_officer" on task_updates
 create policy "task_updates_guard_read" on task_updates
   for select using (
     (select get_my_role()) = 'guard' and
-    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.assignee_id = (select auth.uid()))
+    exists (
+      select 1 from tasks where tasks.id = task_updates.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+      )
+    )
   );
 
 create policy "task_updates_guard_insert" on task_updates
   for insert with check (
     (select get_my_role()) = 'guard' and
     user_id = (select auth.uid()) and
-    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.assignee_id = (select auth.uid()))
+    exists (
+      select 1 from tasks where tasks.id = task_updates.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+      )
+    )
   );
 
 -- comments
@@ -528,14 +557,24 @@ create policy "comments_officer" on comments
 create policy "comments_guard_read" on comments
   for select using (
     (select get_my_role()) = 'guard' and
-    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.assignee_id = (select auth.uid()))
+    exists (
+      select 1 from tasks where tasks.id = comments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+      )
+    )
   );
 
 create policy "comments_guard_insert" on comments
   for insert with check (
     (select get_my_role()) = 'guard' and
     user_id = (select auth.uid()) and
-    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.assignee_id = (select auth.uid()))
+    exists (
+      select 1 from tasks where tasks.id = comments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+      )
+    )
   );
 
 -- attachments — same as comments
@@ -551,14 +590,49 @@ create policy "attachments_officer" on attachments
 create policy "attachments_guard_read" on attachments
   for select using (
     (select get_my_role()) = 'guard' and
-    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = (select auth.uid()))
+    exists (
+      select 1 from tasks where tasks.id = attachments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+      )
+    )
   );
 
 create policy "attachments_guard_insert" on attachments
   for insert with check (
     (select get_my_role()) = 'guard' and
     user_id = (select auth.uid()) and
-    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = (select auth.uid()))
+    exists (
+      select 1 from tasks where tasks.id = attachments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or exists (select 1 from task_assignees ta where ta.task_id = tasks.id and ta.user_id = (select auth.uid()))
+      )
+    )
+  );
+
+-- task_assignees: director full; officer full within their range's tasks;
+-- guard can read the assignee roster of any task they're part of (as
+-- primary or co-assignee), so the UI can show who else is working on it.
+create policy "task_assignees_director" on task_assignees
+  for all using ((select get_my_role()) = 'director')
+  with check ((select get_my_role()) = 'director');
+
+create policy "task_assignees_officer" on task_assignees
+  for all using (
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from tasks where tasks.id = task_assignees.task_id and tasks.range_id = (select get_my_range_id()))
+  )
+  with check (
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from tasks where tasks.id = task_assignees.task_id and tasks.range_id = (select get_my_range_id()))
+  );
+
+create policy "task_assignees_guard_read" on task_assignees
+  for select using (
+    (select get_my_role()) = 'guard' and (
+      exists (select 1 from tasks t where t.id = task_assignees.task_id and t.assignee_id = (select auth.uid()))
+      or exists (select 1 from task_assignees ta2 where ta2.task_id = task_assignees.task_id and ta2.user_id = (select auth.uid()))
+    )
   );
 
 -- notifications: everyone reads/updates/deletes only their own, but an

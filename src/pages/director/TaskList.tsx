@@ -116,7 +116,7 @@ export default function DirectorTaskList() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-ptr-brown-light">
-                    <span>{assignee?.name ?? '—'}</span>
+                    <span>{assignee?.name ?? '—'}{task.coAssigneeIds.length > 0 && ` +${task.coAssigneeIds.length}`}</span>
                     <span>·</span>
                     <span>{range?.name ?? '—'}</span>
                     <span>·</span>

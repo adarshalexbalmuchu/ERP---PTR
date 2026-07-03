@@ -45,7 +45,7 @@ export function useTask(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('tasks')
-        .select('*, task_updates(*), comments(*), attachments(*)')
+        .select('*, task_updates(*), comments(*), attachments(*), task_assignees(user_id)')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -93,8 +93,24 @@ export function useTask(id: string | undefined) {
       if (data.dueDate !== undefined) patch.due_date = data.dueDate;
       if (data.status !== undefined) patch.status = data.status;
       if (data.completionPercentage !== undefined) patch.completion_percentage = data.completionPercentage;
-      const { error } = await supabase.from('tasks').update(patch).eq('id', id);
-      if (error) throw error;
+      if (Object.keys(patch).length > 0) {
+        const { error } = await supabase.from('tasks').update(patch).eq('id', id);
+        if (error) throw error;
+      }
+
+      if (data.coAssigneeIds !== undefined) {
+        const { error: delErr } = await supabase.from('task_assignees').delete().eq('task_id', id);
+        if (delErr) throw delErr;
+        const assigneeId = data.assigneeId ?? task?.assigneeId;
+        const coAssigneeIds = [...new Set(data.coAssigneeIds)].filter((uid) => uid !== assigneeId);
+        if (coAssigneeIds.length > 0) {
+          const { error: insErr } = await supabase
+            .from('task_assignees')
+            .insert(coAssigneeIds.map((userId) => ({ task_id: id, user_id: userId })));
+          if (insErr) throw insErr;
+        }
+      }
+
       if (task && currentUser) await logTaskChanges(task, data, currentUser.id);
     },
     onSuccess: invalidate,
@@ -154,14 +170,16 @@ export function useTask(id: string | undefined) {
         .update({ status: 'Archived', archived_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
-      // Notify assignee
-      await supabase.from('notifications').insert({
-        user_id: task.assigneeId,
-        type: 'task_archived' as NotificationType,
-        title: 'Task Archived',
-        message: `"${task.title}" has been approved and archived`,
-        task_id: id,
-      });
+      // Notify every assignee (primary + co-assignees)
+      for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'task_archived' as NotificationType,
+          title: 'Task Archived',
+          message: `"${task.title}" has been approved and archived`,
+          task_id: id,
+        });
+      }
       await logTaskAction(task, currentUser.id, 'status', 'Archived (approved)');
     },
     onSuccess: invalidate,
@@ -186,13 +204,16 @@ export function useTask(id: string | undefined) {
       });
       if (commentErr) throw commentErr;
 
-      await supabase.from('notifications').insert({
-        user_id: task.assigneeId,
-        type: 'changes_requested' as NotificationType,
-        title: 'Changes Requested',
-        message: `Revisions needed for "${task.title}"`,
-        task_id: id,
-      });
+      // Notify every assignee (primary + co-assignees)
+      for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'changes_requested' as NotificationType,
+          title: 'Changes Requested',
+          message: `Revisions needed for "${task.title}"`,
+          task_id: id,
+        });
+      }
       await logTaskAction(task, currentUser.id, 'status', `Changes requested${note ? `: ${note}` : ''}`);
     },
     onSuccess: invalidate,

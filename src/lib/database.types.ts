@@ -206,6 +206,22 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      task_assignees: {
+        Row: {
+          task_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          task_id: string;
+          user_id: string;
+        };
+        Update: {
+          task_id?: string;
+          user_id?: string;
+        };
+        Relationships: Relationships;
+      };
       notifications: {
         Row: {
           id: string;

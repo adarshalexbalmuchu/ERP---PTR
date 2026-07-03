@@ -60,7 +60,7 @@ export default function OfficerDashboard() {
 
   // Chart: tasks per guard
   const guardChartData = myGuards.map((g) => {
-    const gt = myTasks.filter((t) => t.assigneeId === g.id);
+    const gt = myTasks.filter((t) => t.assigneeId === g.id || t.coAssigneeIds.includes(g.id));
     return {
       name: g.name.split(' ')[0],
       'Not Started': gt.filter((t) => t.status === 'NotStarted').length,
@@ -153,7 +153,7 @@ export default function OfficerDashboard() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-ptr-brown truncate">{t.title}</div>
-                      <div className="text-xs text-ptr-brown-light">{assignee?.name ?? '—'}</div>
+                      <div className="text-xs text-ptr-brown-light">{assignee?.name ?? '—'}{t.coAssigneeIds.length > 0 && ` +${t.coAssigneeIds.length}`}</div>
                     </div>
                     <PriorityBadge priority={t.priority} size="sm" />
                     <span className={`text-xs flex-shrink-0 ${overdue ? 'text-red-600 font-medium' : 'text-ptr-brown-light'}`}>
@@ -173,7 +173,7 @@ export default function OfficerDashboard() {
           <h2 className="text-sm font-semibold text-ptr-brown mb-4">Staff Overview</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {myGuards.map((g) => {
-              const gt = myTasks.filter((t) => t.assigneeId === g.id);
+              const gt = myTasks.filter((t) => t.assigneeId === g.id || t.coAssigneeIds.includes(g.id));
               const active = gt.filter((t) => t.status === 'InProgress').length;
               const ov = gt.filter(isOverdue).length;
               return (

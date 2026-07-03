@@ -313,6 +313,7 @@ export default function DirectorDashboard() {
                         </td>
                         <td className="px-2 py-2.5 text-xs text-ptr-brown-light whitespace-nowrap">
                           {users.find((u) => u.id === t.assigneeId)?.name ?? '—'}
+                          {t.coAssigneeIds.length > 0 && ` +${t.coAssigneeIds.length}`}
                         </td>
                         <td className="px-2 py-2.5"><PriorityBadge priority={t.priority} size="sm" /></td>
                         <td className="px-2 py-2.5"><StatusBadge status={t.status} size="sm" /></td>
