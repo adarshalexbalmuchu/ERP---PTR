@@ -28,6 +28,8 @@ interface PushPayload {
   title?: string;
   body?: string;
   url?: string;
+  type?: string;
+  priority?: string;
 }
 
 // Only ever navigate to a same-origin path. The send-push Edge Function
@@ -55,16 +57,30 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title ?? 'PTR Tiger Cell';
   const url = sanitizeNotificationUrl(payload.url);
+  // Critical/High priority tasks (and changes-requested, which always needs
+  // action) get a stronger vibration and stay on screen until dismissed
+  // instead of disappearing after a few seconds.
+  const isUrgent = payload.priority === 'Critical' || payload.priority === 'High' || payload.type === 'changes_requested';
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: payload.body ?? '',
-      icon: '/notification-icon.png',
-      badge: '/notification-icon.png',
-      data: { url },
-      tag: url, // a second notification for the same task replaces the first
-    }),
-  );
+  // TS's WebWorker lib types lag behind the real Notifications API spec —
+  // renotify/vibrate/actions are all valid, widely-supported options that
+  // just aren't in the shipped .d.ts. Building the object as a loosely
+  // typed variable (instead of an inline literal) sidesteps the excess
+  // property check without disabling type checking anywhere else.
+  const options: NotificationOptions & Record<string, unknown> = {
+    body: payload.body ?? '',
+    icon: '/notification-icon.png',
+    badge: '/notification-icon.png',
+    data: { url },
+    tag: url, // a second notification for the same task replaces the first
+    renotify: true, // ...but still re-alerts (sound/vibrate) instead of updating silently
+    requireInteraction: isUrgent,
+    vibrate: isUrgent ? [200, 100, 200, 100, 200] : [150, 75, 150],
+    timestamp: Date.now(),
+    actions: [{ action: 'view', title: 'View Task' }],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 // Focuses an already-open tab (navigating it to the task) instead of

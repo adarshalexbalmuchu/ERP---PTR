@@ -395,6 +395,7 @@ returns trigger language plpgsql security definer
 set search_path = '' as $$
 declare
   secret text;
+  task_priority text;
 begin
   begin
     select decrypted_secret into secret
@@ -409,6 +410,8 @@ begin
     return new;
   end if;
 
+  select priority::text into task_priority from public.tasks where id = new.task_id;
+
   begin
     perform net.http_post(
       url := 'https://hsaqgpuvdbyrineknwzf.supabase.co/functions/v1/send-push',
@@ -420,7 +423,9 @@ begin
         'user_id', new.user_id,
         'title', new.title,
         'message', new.message,
-        'task_id', new.task_id
+        'task_id', new.task_id,
+        'type', new.type,
+        'priority', task_priority
       )
     );
   exception when others then

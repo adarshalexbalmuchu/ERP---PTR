@@ -55,11 +55,13 @@ serve(async (req) => {
     const vapidSubject = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:ptr-tiger-cell@example.com';
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-    const { user_id, title, message, task_id } = await req.json() as {
+    const { user_id, title, message, task_id, type, priority } = await req.json() as {
       user_id: string;
       title: string;
       message: string;
       task_id: string | null;
+      type?: string | null;
+      priority?: string | null;
     };
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!user_id || typeof user_id !== 'string' || !UUID_RE.test(user_id)) {
@@ -83,6 +85,8 @@ serve(async (req) => {
       title,
       body: message,
       url: task_id ? `/tasks/${task_id}` : '/',
+      type: type ?? undefined,
+      priority: priority ?? undefined,
     });
 
     const results = await Promise.allSettled(

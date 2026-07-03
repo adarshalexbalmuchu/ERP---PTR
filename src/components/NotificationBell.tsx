@@ -1,10 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check, BellRing, X } from 'lucide-react';
+import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { formatRelative } from '../utils/formatters';
+import type { Notification } from '../types';
+
+const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; className: string }> = {
+  task_assigned: { icon: ClipboardList, className: 'bg-ptr-green/10 text-ptr-green' },
+  task_updated: { icon: RefreshCw, className: 'bg-ptr-brown/10 text-ptr-brown' },
+  task_completed: { icon: CheckCircle2, className: 'bg-ptr-green/10 text-ptr-green' },
+  changes_requested: { icon: AlertCircle, className: 'bg-amber-100 text-amber-700' },
+  task_archived: { icon: Archive, className: 'bg-ptr-brown/10 text-ptr-brown-light' },
+};
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -111,7 +120,9 @@ export default function NotificationBell() {
                 No notifications yet
               </div>
             ) : (
-              notifications.slice(0, 15).map((notif) => (
+              notifications.slice(0, 15).map((notif) => {
+                const { icon: NotifIcon, className: notifClassName } = NOTIF_STYLE[notif.type];
+                return (
                 <button
                   key={notif.id}
                   onClick={() => handleNotifClick(notif.id, notif.taskId)}
@@ -119,12 +130,15 @@ export default function NotificationBell() {
                     !notif.read ? 'bg-ptr-green/5' : ''
                   }`}
                 >
-                  <div className="flex items-start gap-2">
-                    {!notif.read && (
-                      <span className="w-2 h-2 rounded-full bg-ptr-green mt-1.5 flex-shrink-0" />
-                    )}
-                    <div className={`flex-1 ${notif.read ? 'pl-4' : ''}`}>
-                      <div className="text-xs font-semibold text-ptr-brown">{notif.title}</div>
+                  <div className="flex items-start gap-2.5">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${notifClassName}`}>
+                      <NotifIcon className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-xs font-semibold text-ptr-brown truncate">{notif.title}</div>
+                        {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-ptr-green flex-shrink-0" />}
+                      </div>
                       <div className="text-xs text-ptr-brown-light mt-0.5 line-clamp-2">
                         {notif.message}
                       </div>
@@ -134,7 +148,8 @@ export default function NotificationBell() {
                     </div>
                   </div>
                 </button>
-              ))
+                );
+              })
             )}
           </div>
         </div>
