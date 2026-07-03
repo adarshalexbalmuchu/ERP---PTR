@@ -22,11 +22,20 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
   const overdue = isOverdue(task);
   const pct = task.completionPercentage;
 
+  const accentColor = overdue
+    ? 'bg-red-500'
+    : task.priority === 'Critical' || task.priority === 'High'
+    ? 'bg-amber-500'
+    : task.status === 'Completed'
+    ? 'bg-ptr-green'
+    : 'bg-ptr-brown/30';
+
   return (
     <button
       onClick={onClick}
-      className="w-full card p-4 text-left hover:shadow-md transition-shadow flex items-start gap-3"
+      className="w-full card pl-5 p-4 text-left hover:shadow-md transition-shadow flex items-start gap-3 relative overflow-hidden"
     >
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor}`} />
       <div className="flex-1 min-w-0 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="font-medium text-sm text-ptr-brown leading-snug">{task.title}</div>
@@ -88,13 +97,14 @@ export default function GuardMyTasks() {
       {/* Summary strip */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Total', value: myTasks.length, color: 'bg-ptr-green/10 text-ptr-green' },
-          { label: 'Active', value: activeCount, color: 'bg-ptr-brown/5 text-ptr-brown' },
-          { label: 'Overdue', value: overdueCount, color: overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-ptr-brown/5 text-ptr-brown-light' },
+          { label: 'Total', value: myTasks.length, accent: 'bg-ptr-green', valueColor: 'text-ptr-brown' },
+          { label: 'Active', value: activeCount, accent: 'bg-ptr-brown/40', valueColor: 'text-ptr-brown' },
+          { label: 'Overdue', value: overdueCount, accent: overdueCount > 0 ? 'bg-red-500' : 'bg-ptr-brown/20', valueColor: overdueCount > 0 ? 'text-red-600' : 'text-ptr-brown-light' },
         ].map((m) => (
-          <div key={m.label} className={`rounded-2xl p-3 text-center ${m.color}`}>
-            <div className="text-2xl font-bold">{m.value}</div>
-            <div className="text-xs font-medium opacity-80">{m.label}</div>
+          <div key={m.label} className="card pl-4 p-3 relative overflow-hidden">
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${m.accent}`} />
+            <div className={`text-2xl font-bold tabular-nums tracking-tight ${m.valueColor}`}>{m.value}</div>
+            <div className="text-xs text-ptr-brown-light font-semibold uppercase tracking-wide mt-0.5">{m.label}</div>
           </div>
         ))}
       </div>

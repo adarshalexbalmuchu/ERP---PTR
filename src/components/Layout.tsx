@@ -219,30 +219,43 @@ function GuardLayout() {
   return (
     <div className="min-h-screen bg-ptr-cream flex flex-col">
       <GovStrip />
-      <header className="bg-white border-b border-ptr-cream-dark px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
+      <header className="bg-white border-b border-ptr-cream-dark sticky top-0 z-30">
+        {/* Brand + actions row */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img src={ptrLogo} alt="Palamu Tiger Reserve" className="w-full h-full object-contain p-0.5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-ptr-brown leading-tight">Palamu Tiger Reserve</div>
+              <div className="text-xs text-ptr-brown-light leading-tight">Tiger Cell &middot; Task Management</div>
+            </div>
           </div>
-          <div>
-            <div className="text-sm font-bold text-ptr-brown leading-none">PTR Tiger Cell</div>
-            <div className="text-xs text-ptr-brown-light leading-none">My Tasks</div>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
+              <div className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green flex-shrink-0">
+                {currentUser?.avatarInitials}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
+                title="Log out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
-          <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
-            <div className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green">
-              {currentUser?.avatarInitials}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
-              title="Log out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+        {/* Greeting + date strip */}
+        <div className="px-4 pb-3 border-t border-ptr-cream-dark bg-ptr-cream/40">
+          <p className="text-xs font-semibold text-ptr-brown pt-2">
+            {greeting()}{currentUser ? `, ${currentUser.name.split(' ')[0]}` : ''}
+          </p>
+          <p className="text-xs text-ptr-brown-light">
+            {currentUser?.designation && `${currentUser.designation} · `}
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
       </header>
       <main className="flex-1 pb-16">
