@@ -6,6 +6,7 @@ import useStore from '../store/useStore';
 import GovHeader from '../components/GovHeader';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 import ptrLogo from '../assets/ptr-logo.png';
+import tigerPortrait from '../assets/tiger-portrait.jpg';
 
 const GOV_FONT = "'IBM Plex Sans', 'Poppins', system-ui, sans-serif";
 
@@ -55,6 +56,19 @@ export default function Login() {
 
       {/* Brand panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] flex-col bg-ptr-green-dark text-white p-10 xl:p-14 flex-shrink-0 relative overflow-hidden">
+        {/* Zoomed tiger portrait, dark-green scrim baked directly into the
+            background so the letterhead/heading/footer text on top stays
+            fully legible without a separate opacity layer washing it out. */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: `linear-gradient(180deg, rgba(11,36,24,0.65) 0%, rgba(11,36,24,0.38) 42%, rgba(11,36,24,0.55) 65%, rgba(11,36,24,0.92) 100%), url(${tigerPortrait})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 42%',
+            backgroundRepeat: 'no-repeat',
+            filter: 'grayscale(0.2) saturate(0.85)',
+          }}
+        />
         {/* subtle vertical gradient */}
         <div
           className="absolute inset-0 pointer-events-none"
