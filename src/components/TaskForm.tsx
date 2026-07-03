@@ -1,16 +1,23 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import { X, Upload, Image, FileText, File as FileIcon } from 'lucide-react';
 import { useRanges } from '../hooks/useRanges';
+import { formatFileSize } from '../utils/formatters';
 import type { Task, User, TaskPriority, TaskCategory } from '../types';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>) => void;
+  onSave: (data: Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>, files: File[]) => void;
   assignableUsers: User[];
   initialData?: Task | null;
   currentUserId: string;
   defaultRangeId?: string;
+}
+
+function PendingFileIcon({ type }: { type: string }) {
+  if (type.startsWith('image/')) return <Image className="w-4 h-4" />;
+  if (type.includes('pdf')) return <FileText className="w-4 h-4" />;
+  return <FileIcon className="w-4 h-4" />;
 }
 
 const PRIORITIES: { value: TaskPriority; label: string }[] = [
@@ -49,6 +56,7 @@ export default function TaskForm({
   const [category, setCategory] = useState<TaskCategory>('Patrol');
   const [dueDate, setDueDate] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const filteredAreas = areas.filter((a) => a.rangeId === rangeId);
 
@@ -63,8 +71,20 @@ export default function TaskForm({
       setCategory(initialData?.category ?? 'Patrol');
       setDueDate(initialData?.dueDate ? initialData.dueDate.substring(0, 10) : '');
       setErrors({});
+      setPendingFiles([]);
     }
   }, [isOpen, initialData, defaultRangeId]);
+
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+      e.target.value = '';
+    }
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   if (!isOpen) return null;
 
@@ -96,7 +116,7 @@ export default function TaskForm({
       acknowledgedAt: initialData?.acknowledgedAt,
       completedAt: initialData?.completedAt,
       archivedAt: initialData?.archivedAt,
-    });
+    }, pendingFiles);
     onClose();
   };
 
@@ -232,6 +252,49 @@ export default function TaskForm({
             />
             {errors.dueDate && <p className="text-xs text-red-600 mt-1">{errors.dueDate}</p>}
           </div>
+
+          {!initialData && (
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+                Attachments <span className="text-ptr-brown-light font-normal">(optional — documents for the assignee to work from)</span>
+              </label>
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingFiles.map((file, i) => (
+                    <div
+                      key={`${file.name}-${i}`}
+                      className="flex items-center gap-2 bg-ptr-cream border border-ptr-cream-dark rounded-xl px-3 py-2"
+                    >
+                      <span className="text-ptr-brown-light"><PendingFileIcon type={file.type} /></span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-ptr-brown truncate max-w-[140px]">{file.name}</div>
+                        <div className="text-xs text-ptr-brown-light">{formatFileSize(file.size)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removePendingFile(i)}
+                        className="p-0.5 rounded-lg hover:bg-ptr-cream-dark text-ptr-brown-light hover:text-red-600 transition-colors flex-shrink-0"
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-ptr-cream-dark rounded-xl text-sm text-ptr-brown-light hover:bg-ptr-cream cursor-pointer transition-colors min-h-[44px]">
+                <Upload className="w-4 h-4" />
+                <span>Upload PDF, image, or Excel/Word document</span>
+                <input
+                  type="file"
+                  className="sr-only"
+                  accept="image/*,.pdf,.xlsx,.xls,.doc,.docx"
+                  multiple
+                  onChange={handleFileSelect}
+                />
+              </label>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-ptr-cream-dark">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>

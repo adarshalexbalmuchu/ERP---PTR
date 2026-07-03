@@ -9,6 +9,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -200,7 +201,17 @@ export default function OfficerDashboard() {
         <TaskForm
           isOpen={formOpen}
           onClose={() => setFormOpen(false)}
-          onSave={(data) => { createTask.mutate(data); setFormOpen(false); }}
+          onSave={async (data, files) => {
+            const row = await createTask.mutateAsync(data);
+            for (const file of files) {
+              try {
+                await uploadTaskAttachment(row.id, currentUser.id, file);
+              } catch (err) {
+                alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+              }
+            }
+            setFormOpen(false);
+          }}
           assignableUsers={myGuards}
           initialData={null}
           currentUserId={currentUser.id}

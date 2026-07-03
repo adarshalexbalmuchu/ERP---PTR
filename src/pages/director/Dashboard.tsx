@@ -25,6 +25,7 @@ import { useUsers } from '../../hooks/useUsers';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { supabase } from '../../lib/supabase';
 import { mapTask } from '../../lib/mappers';
+import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -369,7 +370,17 @@ export default function DirectorDashboard() {
         <TaskForm
           isOpen={formOpen}
           onClose={() => setFormOpen(false)}
-          onSave={(data) => { createTask.mutate(data); setFormOpen(false); }}
+          onSave={async (data, files) => {
+            const row = await createTask.mutateAsync(data);
+            for (const file of files) {
+              try {
+                await uploadTaskAttachment(row.id, currentUser.id, file);
+              } catch (err) {
+                alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+              }
+            }
+            setFormOpen(false);
+          }}
           assignableUsers={users.filter((u) => u.role === 'guard')}
           initialData={null}
           currentUserId={currentUser.id}
