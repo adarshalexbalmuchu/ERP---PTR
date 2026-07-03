@@ -6,7 +6,6 @@ import useStore from '../store/useStore';
 import GovHeader from '../components/GovHeader';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 import ptrLogo from '../assets/ptr-logo.png';
-import tigerPortrait from '../assets/tiger-portrait.jpg';
 
 const GOV_FONT = "'IBM Plex Sans', 'Poppins', system-ui, sans-serif";
 
@@ -56,29 +55,6 @@ export default function Login() {
 
       {/* Brand panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] flex-col bg-ptr-green-dark text-white p-10 xl:p-14 flex-shrink-0 relative overflow-hidden">
-        {/* Zoomed tiger portrait \u2014 capped at 45% opacity (its own layer,
-            separate from the tint below) so it reads as a faint backdrop,
-            never competing with the letterhead/heading/footer text. */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: `url(${tigerPortrait})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center 42%',
-            backgroundRepeat: 'no-repeat',
-            filter: 'grayscale(0.3) saturate(0.8)',
-            opacity: 0.45,
-          }}
-        />
-        {/* Green tint + scrim, layered on top of the photo (not baked into
-            it) so the panel reads as institutional green first, tiger
-            second \u2014 darker at the top/bottom where text sits. */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'linear-gradient(180deg, rgba(15,46,30,0.75) 0%, rgba(15,46,30,0.45) 42%, rgba(15,46,30,0.6) 65%, rgba(15,46,30,0.92) 100%)',
-          }}
-        />
         {/* subtle vertical gradient */}
         <div
           className="absolute inset-0 pointer-events-none"
