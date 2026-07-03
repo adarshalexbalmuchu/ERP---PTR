@@ -243,11 +243,28 @@ do $$ begin
   alter table audit_log add constraint audit_log_detail_len check (char_length(detail) <= 1000);
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  alter table notifications add constraint notifications_title_len check (char_length(title) <= 200);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table notifications add constraint notifications_message_len check (char_length(message) <= 1000);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table attachments add constraint attachments_name_len check (char_length(name) <= 300);
+exception when duplicate_object then null; end $$;
+
 -- ─────────────────────────────────────────────
 -- updated_at trigger
 -- ─────────────────────────────────────────────
+-- All functions pin search_path so a role that can create objects in a
+-- schema earlier on the path can't shadow a table/function these bodies
+-- reference (search-path hijacking). Especially critical for the two
+-- SECURITY DEFINER helpers below, which run with the owner's privileges.
 create or replace function set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = '' as $$
 begin
   new.updated_at = now();
   return new;
@@ -266,13 +283,15 @@ create trigger tasks_updated_at before update on tasks
 -- Helper: get current user's role / range
 -- ─────────────────────────────────────────────
 create or replace function get_my_role()
-returns user_role language sql security definer stable as $$
-  select role from profiles where id = auth.uid();
+returns user_role language sql security definer stable
+set search_path = '' as $$
+  select role from public.profiles where id = auth.uid();
 $$;
 
 create or replace function get_my_range_id()
-returns uuid language sql security definer stable as $$
-  select range_id from profiles where id = auth.uid();
+returns uuid language sql security definer stable
+set search_path = '' as $$
+  select range_id from public.profiles where id = auth.uid();
 $$;
 
 -- ─────────────────────────────────────────────
@@ -288,9 +307,10 @@ $$;
 -- direct API call — a full privilege escalation. Only a director may
 -- change role/range_id; everyone may still edit their own name/phone/etc.
 create or replace function enforce_profile_self_update()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = '' as $$
 begin
-  if auth.uid() = new.id and get_my_role() <> 'director' then
+  if auth.uid() = new.id and public.get_my_role() <> 'director' then
     if new.role is distinct from old.role or new.range_id is distinct from old.range_id then
       raise exception 'Only a director can change role or range assignment';
     end if;
@@ -311,9 +331,10 @@ create trigger profiles_self_update_guard
 -- A guard may only move status forward through the normal flow and touch
 -- the progress/acknowledgement fields the app's own mutations use.
 create or replace function enforce_guard_task_update()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = '' as $$
 begin
-  if get_my_role() = 'guard' then
+  if public.get_my_role() = 'guard' then
     if new.title is distinct from old.title
       or new.description is distinct from old.description
       or new.assignee_id is distinct from old.assignee_id
@@ -344,26 +365,55 @@ create trigger tasks_guard_update_guard
 -- a device notification shows up no matter which client code path wrote
 -- the row. The function itself has verify_jwt = false (see
 -- supabase/config.toml) and instead checks the x-webhook-secret header
--- against its own PUSH_WEBHOOK_SECRET env var — set the same value with:
---   supabase secrets set PUSH_WEBHOOK_SECRET=<a-random-string>
--- and put that string below in place of 'CHANGE_ME_PUSH_WEBHOOK_SECRET'.
+-- against its own PUSH_WEBHOOK_SECRET env var.
+--
+-- The shared secret is NOT stored in this file (a secret committed to git
+-- is not a secret). It lives in Supabase Vault; set the SAME value in both
+-- places:
+--   select vault.create_secret('<a-random-string>', 'push_webhook_secret');
+--   supabase secrets set PUSH_WEBHOOK_SECRET=<the-same-random-string>
+-- If the vault secret is absent, the trigger silently skips push delivery —
+-- it never blocks the notification insert itself.
+--
+-- SECURITY DEFINER (owner: postgres) so the vault read works and so
+-- ordinary clients don't need any direct grant on net.http_post.
 -- If this project is ever recreated, update the project ref in the URL too.
 create or replace function notify_push_on_notification_insert()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql security definer
+set search_path = '' as $$
+declare
+  secret text;
 begin
-  perform net.http_post(
-    url := 'https://hsaqgpuvdbyrineknwzf.supabase.co/functions/v1/send-push',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-webhook-secret', 'CHANGE_ME_PUSH_WEBHOOK_SECRET'
-    ),
-    body := jsonb_build_object(
-      'user_id', new.user_id,
-      'title', new.title,
-      'message', new.message,
-      'task_id', new.task_id
-    )
-  );
+  begin
+    select decrypted_secret into secret
+      from vault.decrypted_secrets
+     where name = 'push_webhook_secret'
+     limit 1;
+  exception when others then
+    secret := null; -- vault not installed / not readable
+  end;
+
+  if secret is null then
+    return new;
+  end if;
+
+  begin
+    perform net.http_post(
+      url := 'https://hsaqgpuvdbyrineknwzf.supabase.co/functions/v1/send-push',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-webhook-secret', secret
+      ),
+      body := jsonb_build_object(
+        'user_id', new.user_id,
+        'title', new.title,
+        'message', new.message,
+        'task_id', new.task_id
+      )
+    );
+  exception when others then
+    null; -- push delivery is best-effort; never fail the insert
+  end;
   return new;
 end;
 $$;
@@ -511,18 +561,27 @@ create policy "attachments_guard_insert" on attachments
     exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.assignee_id = (select auth.uid()))
   );
 
--- notifications: everyone reads/updates/deletes only their own, but ANY
+-- notifications: everyone reads/updates/deletes only their own, but an
 -- authenticated user can insert a notification for someone else — that's
 -- the entire point of the feature (task assignment, completion, archive,
 -- and changes-requested notifications are all written by someone other
 -- than the recipient). A single "for all using (user_id = auth.uid())"
 -- policy would implicitly reuse that USING clause as the INSERT check too,
 -- blocking every one of those inserts with a 403.
+--
+-- The insert IS scoped to tasks the sender can see (the subquery runs
+-- under the sender's own tasks RLS): every legitimate flow notifies about
+-- a task visible to the actor, and without this check any signed-in user
+-- could push arbitrary text to any other user's devices by picking a
+-- random task_id.
 create policy "notifications_read" on notifications
   for select using (user_id = (select auth.uid()));
 
 create policy "notifications_insert" on notifications
-  for insert with check ((select auth.uid()) is not null);
+  for insert with check (
+    (select auth.uid()) is not null
+    and exists (select 1 from tasks where tasks.id = notifications.task_id)
+  );
 
 create policy "notifications_update" on notifications
   for update using (user_id = (select auth.uid()));
@@ -576,9 +635,13 @@ create policy "audit_log_insert" on audit_log
 -- ─────────────────────────────────────────────
 -- Storage bucket for attachments
 -- ─────────────────────────────────────────────
-insert into storage.buckets (id, name, public)
-  values ('task-attachments', 'task-attachments', false)
-  on conflict do nothing;
+-- Private bucket with a hard server-side size cap (25 MB) — the app also
+-- checks before uploading, but only this stops a direct API call.
+insert into storage.buckets (id, name, public, file_size_limit)
+  values ('task-attachments', 'task-attachments', false, 26214400)
+  on conflict (id) do update set
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit;
 
 -- The public-schema policy DROP loop above only covers schemaname = 'public',
 -- so storage.objects policies need their own explicit drops to stay idempotent.
@@ -586,14 +649,45 @@ drop policy if exists "attachments_upload" on storage.objects;
 drop policy if exists "attachments_download" on storage.objects;
 drop policy if exists "attachments_delete" on storage.objects;
 
+-- Objects are stored under "<task-id>/<uuid>-<filename>" (see
+-- uploadAttachment in src/hooks/useTask.ts). The EXISTS subqueries below
+-- run under the caller's OWN tasks RLS, so storage access follows task
+-- visibility exactly: directors everywhere, officers within their range,
+-- guards only on tasks assigned to them. Without this scoping, any
+-- authenticated user could enumerate/download (or delete) every file in
+-- the bucket regardless of role.
 create policy "attachments_upload" on storage.objects
-  for insert with check (bucket_id = 'task-attachments' and (select auth.uid()) is not null);
+  for insert with check (
+    bucket_id = 'task-attachments'
+    and (select auth.uid()) is not null
+    and exists (
+      select 1 from public.tasks t
+      where t.id::text = (storage.foldername(name))[1]
+    )
+  );
 
 create policy "attachments_download" on storage.objects
-  for select using (bucket_id = 'task-attachments' and (select auth.uid()) is not null);
+  for select using (
+    bucket_id = 'task-attachments'
+    and (select auth.uid()) is not null
+    and exists (
+      select 1 from public.tasks t
+      where t.id::text = (storage.foldername(name))[1]
+    )
+  );
 
+-- Delete mirrors the attachments-table policies: management only (the app
+-- exposes attachment removal only to officers/directors; guards can't
+-- delete attachment rows either).
 create policy "attachments_delete" on storage.objects
-  for delete using (bucket_id = 'task-attachments' and (select auth.uid()) is not null);
+  for delete using (
+    bucket_id = 'task-attachments'
+    and (select public.get_my_role()) in ('director', 'range_officer')
+    and exists (
+      select 1 from public.tasks t
+      where t.id::text = (storage.foldername(name))[1]
+    )
+  );
 
 -- ─────────────────────────────────────────────
 -- Dashboard aggregate views

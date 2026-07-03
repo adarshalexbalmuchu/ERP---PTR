@@ -5,7 +5,24 @@ import webpush from 'https://esm.sh/web-push@3.6.7?target=deno';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+// Compare two secrets without early exit: hashing both first means the
+// byte-by-byte comparison always runs over equal-length digests, so
+// response timing can't be used to guess the secret one byte at a time.
+async function secretsMatch(provided: string, expected: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(provided)),
+    crypto.subtle.digest('SHA-256', enc.encode(expected)),
+  ]);
+  const av = new Uint8Array(a);
+  const bv = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < av.length; i++) diff |= av[i] ^ bv[i];
+  return diff === 0;
+}
 
 // Called by the notifications_push_trigger Postgres trigger (see
 // schema.sql) every time a row is inserted into `notifications` — not by
@@ -15,11 +32,21 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 405,
+    });
+  }
 
   try {
     const webhookSecret = Deno.env.get('PUSH_WEBHOOK_SECRET');
-    if (!webhookSecret || req.headers.get('x-webhook-secret') !== webhookSecret) {
-      throw new Error('Unauthorized');
+    const providedSecret = req.headers.get('x-webhook-secret');
+    if (!webhookSecret || !providedSecret || !(await secretsMatch(providedSecret, webhookSecret))) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      });
     }
 
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
@@ -34,7 +61,13 @@ serve(async (req) => {
       message: string;
       task_id: string | null;
     };
-    if (!user_id) throw new Error('user_id is required');
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!user_id || typeof user_id !== 'string' || !UUID_RE.test(user_id)) {
+      throw new Error('a valid user_id is required');
+    }
+    if (task_id != null && (typeof task_id !== 'string' || !UUID_RE.test(task_id))) {
+      throw new Error('task_id must be a UUID when present');
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

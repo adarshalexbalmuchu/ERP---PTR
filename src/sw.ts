@@ -30,6 +30,16 @@ interface PushPayload {
   url?: string;
 }
 
+// Only ever navigate to a same-origin path. The send-push Edge Function
+// builds relative "/tasks/<uuid>" URLs, but the push payload is still
+// external input to this worker — never let it steer a notification click
+// to another origin ("//evil.example" would otherwise parse as
+// protocol-relative).
+function sanitizeNotificationUrl(raw: string | undefined): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
 // Fired when the send-push Edge Function delivers a message — this is
 // what makes a notification show up on the device/OS even when the app
 // isn't open in a tab.
@@ -44,7 +54,7 @@ self.addEventListener('push', (event) => {
   }
 
   const title = payload.title ?? 'PTR Tiger Cell';
-  const url = payload.url ?? '/';
+  const url = sanitizeNotificationUrl(payload.url);
 
   event.waitUntil(
     self.registration.showNotification(title, {

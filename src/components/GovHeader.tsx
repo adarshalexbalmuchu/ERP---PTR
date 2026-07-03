@@ -35,7 +35,7 @@ export default function GovHeader({ compact = false }: Props) {
             Palamu Tiger Reserve
           </h1>
           <p className={`text-ptr-brown-light font-medium ${compact ? 'text-xs' : 'text-xs md:text-sm'}`}>
-            Tiger Cell &middot; Task Management System
+            Field Operations Management System
           </p>
         </div>
       </div>

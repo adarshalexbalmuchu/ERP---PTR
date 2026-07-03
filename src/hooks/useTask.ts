@@ -12,6 +12,11 @@ type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments'
 
 const ATTACHMENT_URL_TTL_SECONDS = 3600;
 
+// Must stay in sync with the bucket's file_size_limit in supabase/schema.sql
+// — that server-side cap is what actually enforces this; checking here just
+// gives a readable error instead of a storage 413.
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
 // attachments.url stores a bare storage path (the bucket is private); this
 // swaps in a time-limited signed URL before the task reaches the UI.
 async function resolveAttachmentUrls(task: Task): Promise<Task> {
@@ -240,6 +245,9 @@ export function useTask(id: string | undefined) {
   const uploadAttachment = useMutation({
     mutationFn: async (file: File) => {
       if (!id || !currentUser) throw new Error('Not authenticated');
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        throw new Error('File is too large — attachments are limited to 25 MB');
+      }
       const path = `${id}/${crypto.randomUUID()}-${file.name}`;
       const { error: uploadErr } = await supabase.storage
         .from('task-attachments')

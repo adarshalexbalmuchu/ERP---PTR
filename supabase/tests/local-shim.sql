@@ -36,8 +36,10 @@ $$;
 create table if not exists storage.buckets (
   id text primary key,
   name text not null,
-  public boolean not null default false
+  public boolean not null default false,
+  file_size_limit bigint
 );
+alter table storage.buckets add column if not exists file_size_limit bigint;
 create table if not exists storage.objects (
   id uuid primary key default gen_random_uuid(),
   bucket_id text references storage.buckets(id),
@@ -45,6 +47,28 @@ create table if not exists storage.objects (
   owner uuid
 );
 alter table storage.objects enable row level security;
+
+-- storage.foldername(): real Supabase Storage helper that splits an object
+-- key into its folder path segments (everything except the final filename).
+-- The task-scoped storage policies in schema.sql use it to read the task id
+-- out of "<task-id>/<uuid>-<filename>".
+create or replace function storage.foldername(name text)
+returns text[] language sql immutable as $$
+  select (string_to_array(name, '/'))[1 : array_length(string_to_array(name, '/'), 1) - 1]
+$$;
+
+-- vault.decrypted_secrets: real Supabase ships this as the supabase_vault
+-- extension (encrypted at rest, readable only by privileged roles). A plain
+-- table with a seeded test value is enough for the push trigger to find a
+-- secret and exercise the net.http_post path locally.
+create schema if not exists vault;
+create table if not exists vault.decrypted_secrets (
+  name text primary key,
+  decrypted_secret text
+);
+insert into vault.decrypted_secrets (name, decrypted_secret)
+  values ('push_webhook_secret', 'local-test-secret')
+  on conflict (name) do nothing;
 
 -- pg_net: real Supabase ships this as a background-worker extension that queues async
 -- HTTP requests. Not installable outside Supabase's Postgres image, so we stub the one

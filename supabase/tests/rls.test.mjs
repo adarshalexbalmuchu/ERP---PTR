@@ -168,7 +168,76 @@ async function run() {
     check("officer cannot read guard's own notifications", rows.length === 0, JSON.stringify(rows));
   });
 
-  // 12. Anonymous (unauthenticated) role cannot read tasks at all — RLS silently
+  // 12. A user cannot insert a notification about a task they can't see —
+  // without this check, any signed-in user could push arbitrary text to any
+  // other user's devices by picking a random task_id.
+  await asUser(U.guardBetla, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into notifications (user_id, type, title, message, task_id) values ($1, 'task_assigned', 'x', 'y', $2)`,
+        [U.officerKechki, T.kechki],
+      ),
+    );
+    check('guard cannot notify about a task outside their visibility', err !== null, err ?? 'no error raised');
+  });
+
+  // 13. …but a guard CAN still notify about their own task (the
+  // task-completed flow: guard writes a notification for their officer).
+  await asUser(U.guardBetla, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into notifications (user_id, type, title, message, task_id) values ($1, 'task_completed', 'x', 'y', $2)`,
+        [U.officerBetla, T.betla],
+      ),
+    );
+    check('guard can notify about their own task', err === null, err ?? '');
+  });
+
+  // 14–17. Storage objects follow task visibility. Objects live under
+  // "<task-id>/<file>"; seed one per range as superuser (bypasses RLS).
+  {
+    const client = new Client(CONN);
+    await client.connect();
+    await client.query(`delete from storage.objects where bucket_id = 'task-attachments'`);
+    await client.query(
+      `insert into storage.objects (bucket_id, name) values
+         ('task-attachments', $1 || '/seed-betla.pdf'),
+         ('task-attachments', $2 || '/seed-kechki.pdf')`,
+      [T.betla, T.kechki],
+    );
+    await client.end();
+  }
+
+  await asUser(U.guardBetla, async (c) => {
+    const { rows } = await c.query(`select name from storage.objects where bucket_id = 'task-attachments'`);
+    check(
+      'guard sees only storage objects for their own tasks',
+      rows.length === 1 && rows[0].name.startsWith(T.betla),
+      JSON.stringify(rows),
+    );
+  });
+
+  await asUser(U.guardBetla, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into storage.objects (bucket_id, name) values ('task-attachments', $1 || '/evil.pdf')`,
+        [T.kechki],
+      ),
+    );
+    check("guard cannot upload into another task's folder", err !== null, err ?? 'no error raised');
+  });
+
+  await asUser(U.guardBetla, async (c) => {
+    const res = await c.query(`delete from storage.objects where bucket_id = 'task-attachments'`);
+    check('guard cannot delete any storage object (management only)', res.rowCount === 0, `deleted ${res.rowCount}`);
+  });
+
+  await asUser(U.officerBetla, async (c) => {
+    const res = await c.query(`delete from storage.objects where bucket_id = 'task-attachments'`);
+    check('officer deletes only their own range\'s storage objects', res.rowCount === 1, `deleted ${res.rowCount}`);
+  });
+
+  // 18. Anonymous (unauthenticated) role cannot read tasks at all — RLS silently
   // filters to zero rows rather than throwing, since SELECT policies just gate
   // row visibility (no matching policy = no rows, no error).
   await asAnon(async (c) => {
