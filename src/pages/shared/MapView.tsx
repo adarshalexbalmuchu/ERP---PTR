@@ -2,13 +2,42 @@ import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { AlertTriangle, ClipboardList } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Map as MapIcon, Satellite, Mountain } from 'lucide-react';
 import { useMapPoints } from '../../hooks/useMapPoints';
 import { formatDateTime } from '../../utils/formatters';
 import type { IncidentSeverity } from '../../types';
 
 // Approximate center of Palamu Tiger Reserve, Jharkhand.
 const PTR_CENTER: [number, number] = [23.87, 84.19];
+
+// Base-map choices, Google Maps-style (Street / Satellite / Terrain) but
+// backed by free, key-less tile providers — true Google Maps tiles require
+// a billed Google Cloud API key, which this project intentionally avoids.
+type LayerId = 'street' | 'satellite' | 'terrain';
+
+const MAP_LAYERS: Record<LayerId, { label: string; icon: typeof MapIcon; url: string; attribution: string; maxZoom: number }> = {
+  street: {
+    label: 'Street',
+    icon: MapIcon,
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 20,
+  },
+  satellite: {
+    label: 'Satellite',
+    icon: Satellite,
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Imagery &copy; Esri &mdash; Esri, Maxar, Earthstar Geographics',
+    maxZoom: 19,
+  },
+  terrain: {
+    label: 'Terrain',
+    icon: Mountain,
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM &middot; Style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+    maxZoom: 17,
+  },
+};
 
 // A muted, earthy severity gradient (gray → bronze → rust → red) instead
 // of bright saturated hues — reads as escalating urgency without turning
@@ -34,6 +63,7 @@ export default function MapView() {
   const { incidents, patrolPoints, loading } = useMapPoints();
   const [showIncidents, setShowIncidents] = useState(true);
   const [showPatrols, setShowPatrols] = useState(true);
+  const [layer, setLayer] = useState<LayerId>('street');
   const mapRef = useRef<LeafletMap | null>(null);
 
   // Explicit teardown as a safety net: Leaflet's zoom-control panes use
@@ -68,11 +98,34 @@ export default function MapView() {
         </label>
       </div>
 
-      <div className="card overflow-hidden" style={{ height: '65vh', isolation: 'isolate' }}>
+      <div className="card overflow-hidden relative" style={{ height: '65vh', isolation: 'isolate' }}>
+        {/* Google Maps-style base-layer switcher */}
+        <div className="absolute top-3 right-3 z-[1000] bg-white rounded-xl shadow-md border border-ptr-cream-dark p-1 flex gap-0.5">
+          {(Object.keys(MAP_LAYERS) as LayerId[]).map((id) => {
+            const opt = MAP_LAYERS[id];
+            const Icon = opt.icon;
+            return (
+              <button
+                key={id}
+                onClick={() => setLayer(id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  layer === id ? 'bg-ptr-green text-white' : 'text-ptr-brown-light hover:bg-ptr-cream'
+                }`}
+                title={opt.label}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         <MapContainer ref={mapRef} center={PTR_CENTER} zoom={10} style={{ height: '100%', width: '100%' }}>
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            key={layer}
+            attribution={MAP_LAYERS[layer].attribution}
+            url={MAP_LAYERS[layer].url}
+            maxZoom={MAP_LAYERS[layer].maxZoom}
           />
 
           {showIncidents && incidents.map((incident) => (
