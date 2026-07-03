@@ -37,6 +37,7 @@ export function useMapPoints() {
         reportedBy: row.reported_by,
         incidentDate: row.incident_date,
         createdAt: row.created_at,
+        photos: [],
       }));
     },
   });

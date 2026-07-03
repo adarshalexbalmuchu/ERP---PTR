@@ -355,6 +355,34 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      incident_photos: {
+        Row: {
+          id: string;
+          incident_id: string;
+          uploaded_by: string;
+          path: string;
+          size: number;
+          mime_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          incident_id: string;
+          uploaded_by: string;
+          path: string;
+          size: number;
+          mime_type?: string;
+        };
+        Update: {
+          id?: string;
+          incident_id?: string;
+          uploaded_by?: string;
+          path?: string;
+          size?: number;
+          mime_type?: string;
+        };
+        Relationships: Relationships;
+      };
       audit_log: {
         Row: {
           id: string;
