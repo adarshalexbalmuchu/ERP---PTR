@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import webpush from 'https://esm.sh/web-push@3.6.7?target=deno';
+import webpush from 'npm:web-push@3.6.7';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,6 +108,20 @@ serve(async (req) => {
       JSON.stringify({
         sent: results.filter((r) => r.status === 'fulfilled').length,
         total: results.length,
+        // Surfaced for operational debugging only — this endpoint is never
+        // reachable without the shared webhook secret, so it's safe to
+        // include failure detail here (no stack traces, just status/message).
+        failures: results
+          .map((r, i) => ({ r, i }))
+          .filter(({ r }) => r.status === 'rejected')
+          .map(({ r, i }) => {
+            const reason = (r as PromiseRejectedResult).reason;
+            return {
+              endpoint: subs![i].endpoint.slice(0, 60),
+              statusCode: reason?.statusCode,
+              message: reason?.body ?? reason?.message ?? String(reason),
+            };
+          }),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     );
