@@ -12,11 +12,12 @@ import {
   Legend,
 } from 'recharts';
 import {
-  CheckCircle,
+  CheckCircle2,
   TrendingUp,
   Plus,
-  MapPin,
-  ChevronRight,
+  AlertTriangle,
+  ClipboardCheck,
+  Clock,
 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
@@ -24,6 +25,7 @@ import { useUsers } from '../../hooks/useUsers';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { supabase } from '../../lib/supabase';
 import { mapTask } from '../../lib/mappers';
+import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -32,48 +34,69 @@ import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 import type { Task } from '../../types';
 
-function MetricCard({
+// One cell of the unified Overview strip — large numeral, small semibold
+// label, muted context line. Hierarchy is carried by type, not color.
+function Metric({
   label,
   value,
-  accent,
   sub,
-  className = '',
+  valueClass = 'text-ptr-brown',
 }: {
   label: string;
   value: number | string;
-  accent: string;
-  sub?: string;
-  className?: string;
+  sub: string;
+  valueClass?: string;
 }) {
   return (
-    <div className={`card p-5 pl-6 relative overflow-hidden ${className}`}>
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accent}`} />
-      <div className="text-3xl font-bold text-ptr-brown tracking-tight tabular-nums">{value}</div>
-      <div className="text-xs text-ptr-brown-light font-semibold uppercase tracking-wide mt-1">{label}</div>
-      {sub && <div className="text-xs text-ptr-brown-light/70 mt-0.5">{sub}</div>}
+    <div className="px-5 py-4">
+      <div className={`text-2xl xl:text-3xl font-bold tracking-tight tabular-nums ${valueClass}`}>{value}</div>
+      <div className="text-[11px] text-ptr-brown font-semibold uppercase tracking-[0.06em] mt-1">{label}</div>
+      <div className="text-[11px] text-ptr-brown-light mt-0.5">{sub}</div>
     </div>
   );
 }
 
-function TaskRow({ task, assigneeName, onClick }: { task: Task; assigneeName: string; onClick: () => void }) {
-  const overdue = isOverdue(task);
+function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-ptr-cream transition-colors text-left"
-    >
-      <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium text-ptr-brown truncate">{task.title}</div>
-        <div className="text-xs text-ptr-brown-light">{assigneeName}</div>
-      </div>
-      <PriorityBadge priority={task.priority} size="sm" />
-      <StatusBadge status={task.status} size="sm" />
-      <span className={`text-xs flex-shrink-0 w-16 text-right ${overdue ? 'text-red-600 font-semibold' : 'text-ptr-brown-light'}`}>
-        {formatDate(task.dueDate)}
-      </span>
-      <ChevronRight className="w-3.5 h-3.5 text-ptr-brown-light/50 flex-shrink-0" />
-    </button>
+    <h2 className="text-xs font-bold text-ptr-brown uppercase tracking-[0.08em]">{children}</h2>
   );
+}
+
+// A single row in the Operational Alerts panel. Muted by default; the
+// count turns the row into an actionable item.
+function AlertRow({
+  icon,
+  label,
+  clearLabel,
+  count,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  clearLabel: string;
+  count: number;
+  onClick?: () => void;
+}) {
+  const active = count > 0;
+  const row = (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className={active ? 'text-signal-crimson' : 'text-ptr-brown-light/60'}>{icon}</span>
+      <span className={`flex-1 text-[13px] ${active ? 'text-ptr-brown font-medium' : 'text-ptr-brown-light'}`}>
+        {active ? label : clearLabel}
+      </span>
+      {active && (
+        <span className="text-[13px] font-bold tabular-nums text-signal-crimson">{count}</span>
+      )}
+    </div>
+  );
+  if (active && onClick) {
+    return (
+      <button onClick={onClick} className="w-full text-left hover:bg-ptr-cream transition-colors">
+        {row}
+      </button>
+    );
+  }
+  return row;
 }
 
 export default function DirectorDashboard() {
@@ -145,164 +168,202 @@ export default function DirectorDashboard() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Page header — official system heading, no greeting */}
+      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Director Dashboard</h1>
-          <p className="text-sm text-ptr-brown-light font-medium">Palamu Tiger Reserve &middot; All Ranges</p>
+          <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">
+            Field Operations Dashboard
+          </h1>
+          <p className="text-[13px] text-ptr-brown-light mt-1">
+            Palamu Tiger Reserve &middot; All Ranges &middot;{' '}
+            <span className="tabular-nums">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </span>
+          </p>
         </div>
-        <button onClick={() => setFormOpen(true)} className="btn-primary">
+        <button onClick={() => setFormOpen(true)} className="btn-primary flex-shrink-0">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">New Task</span>
         </button>
       </div>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-stretch">
-        <MetricCard
-          label="Total Tasks"
-          value={totalTasks}
-          accent="bg-ptr-green"
-        />
-        <MetricCard
-          label="Critical"
-          value={critical}
-          accent="bg-status-overdue"
-        />
-        <MetricCard
-          label="In Progress"
-          value={inProgress}
-          accent="bg-status-progress"
-        />
-        <MetricCard
-          label="Overdue"
-          value={overdueCount}
-          accent="bg-status-overdue"
-        />
-        <MetricCard
-          label="Completion Rate"
-          value={`${completionRate}%`}
-          accent="bg-status-completed"
-          sub={`${completed} completed`}
-          className="col-span-2 lg:col-span-1"
-        />
+      {/* Overview — one unified strip instead of five floating cards */}
+      <div className="card">
+        <div className="px-5 py-3 border-b border-ptr-cream-dark">
+          <SectionHeading>Overview</SectionHeading>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-ptr-cream-dark">
+          <Metric label="Total Tasks" value={totalTasks} sub="All ranges" />
+          <Metric label="Critical" value={critical} sub="Open, critical priority" valueClass={critical > 0 ? 'text-signal-crimson' : 'text-ptr-brown'} />
+          <Metric label="In Progress" value={inProgress} sub="Currently active" />
+          <Metric label="Overdue" value={overdueCount} sub="Past due date" valueClass={overdueCount > 0 ? 'text-signal-crimson' : 'text-ptr-brown'} />
+          <Metric label="Completion Rate" value={`${completionRate}%`} sub={`${completed} tasks completed`} valueClass="text-ptr-green" />
+        </div>
       </div>
 
-      {/* Range breakdown */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {rangeStats.map((range) => (
-          <button
-            key={range.rangeId}
-            onClick={() => navigate('/director/tasks')}
-            className="card p-4 text-left hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <MapPin className="w-4 h-4 text-ptr-green" />
-              <span className="text-sm font-bold text-ptr-brown">{range.rangeName}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-center mb-3">
-              <div>
-                <div className="text-lg font-bold text-status-progress tabular-nums">{range.inProgressCount}</div>
-                <div className="text-[10px] text-ptr-brown-light uppercase tracking-wide">Active</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-status-archived tabular-nums">{range.completed}</div>
-                <div className="text-[10px] text-ptr-brown-light uppercase tracking-wide">Done</div>
-              </div>
-              <div>
-                <div className={`text-lg font-bold tabular-nums ${range.overdue > 0 ? 'text-status-overdue' : 'text-ptr-brown-light'}`}>
-                  {range.overdue}
-                </div>
-                <div className="text-[10px] text-ptr-brown-light uppercase tracking-wide">Overdue</div>
-              </div>
-            </div>
-            <div className="h-2 bg-ptr-brown/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-ptr-green rounded-full min-w-[3px]"
-                style={{
-                  width: range.total > 0 ? `${Math.round((range.completed / range.total) * 100)}%` : '0%',
-                }}
-              />
-            </div>
-          </button>
-        ))}
+      {/* Range status — one container, one row per range */}
+      <div className="card">
+        <div className="px-5 py-3 border-b border-ptr-cream-dark">
+          <SectionHeading>Range Status</SectionHeading>
+        </div>
+        <div className="divide-y divide-ptr-cream-dark">
+          {rangeStats.map((range) => {
+            const pct = range.total > 0 ? Math.round((range.completed / range.total) * 100) : 0;
+            return (
+              <button
+                key={range.rangeId}
+                onClick={() => navigate('/director/tasks')}
+                className="w-full flex items-center gap-4 px-5 py-3 text-left hover:bg-ptr-cream transition-colors"
+              >
+                <span className="w-28 md:w-36 text-[13px] font-semibold text-ptr-brown truncate flex-shrink-0">
+                  {range.rangeName}
+                </span>
+                <span className="hidden sm:flex items-center gap-4 text-xs text-ptr-brown-light tabular-nums flex-shrink-0">
+                  <span><span className="font-semibold text-ptr-brown">{range.inProgressCount}</span> active</span>
+                  <span><span className="font-semibold text-ptr-brown">{range.completed}</span> completed</span>
+                  <span>
+                    <span className={`font-semibold ${range.overdue > 0 ? 'text-signal-crimson' : 'text-ptr-brown'}`}>
+                      {range.overdue}
+                    </span>{' '}
+                    overdue
+                  </span>
+                </span>
+                {/* thin, flat progress indicator */}
+                <span className="flex-1 h-1 bg-ptr-brown/10 overflow-hidden">
+                  <span className="block h-full bg-ptr-green" style={{ width: `${pct}%` }} />
+                </span>
+                <span className="w-10 text-right text-xs font-semibold text-ptr-brown tabular-nums flex-shrink-0">
+                  {pct}%
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Trend chart */}
-      <div className="card p-5">
-        <h2 className="text-sm font-bold text-ptr-brown mb-4 uppercase tracking-wide">Task Status Trend</h2>
-        {trendData.length < 2 ? (
-          <EmptyState
-            icon={<TrendingUp className="w-7 h-7" />}
-            title="Not enough history yet"
-            description="Generate a daily report from the Reports page each day to build a trend here."
-          />
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EFE7D6" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B6356' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#6B6356' }} allowDecimals={false} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #EFE7D6' }} />
-              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-              <Line type="monotone" dataKey="Not Started" stroke="#9CA3AF" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="In Progress" stroke="#8A7F5C" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="Completed" stroke="#1A4731" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="Overdue" stroke="#DC2626" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
+      {/* Trend chart — enterprise reporting style */}
+      <div className="card">
+        <div className="px-5 py-3 border-b border-ptr-cream-dark">
+          <SectionHeading>Task Status Trend</SectionHeading>
+        </div>
+        <div className="p-5">
+          {trendData.length < 2 ? (
+            <EmptyState
+              icon={<TrendingUp className="w-7 h-7" />}
+              title="Not enough history yet"
+              description="Generate a daily report from the Reports page each day to build a trend here."
+            />
+          ) : (
+            <ResponsiveContainer width="100%" height={176}>
+              <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+                <CartesianGrid stroke="#F3EEE2" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B6356' }} tickLine={false} axisLine={{ stroke: '#EFE7D6' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#6B6356' }} allowDecimals={false} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 4, border: '1px solid #EFE7D6', boxShadow: 'none', padding: '6px 10px' }} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconSize={10} />
+                <Line type="monotone" dataKey="Not Started" stroke="#9CA3AF" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="In Progress" stroke="#8A7F5C" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="Completed" stroke="#1A4731" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="Overdue" stroke="#9F1D1D" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
-      {/* Recent + Attention */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-ptr-brown uppercase tracking-wide">Recent Tasks</h2>
-            <button onClick={() => navigate('/director/tasks')} className="text-xs text-ptr-green font-semibold">
-              View all &rarr;
+      {/* Recent tasks table + Operational alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-ptr-cream-dark">
+            <SectionHeading>Recent Tasks</SectionHeading>
+            <button onClick={() => navigate('/director/tasks')} className="text-xs text-ptr-green font-semibold hover:underline">
+              View registry &rarr;
             </button>
           </div>
           {recentTasks.length === 0 ? (
             <EmptyState title="No tasks yet" description="Create a task to get started." />
           ) : (
-            <div className="space-y-1">
-              {recentTasks.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  assigneeName={users.find((u) => u.id === t.assigneeId)?.name ?? '—'}
-                  onClick={() => navigate(`/director/tasks/${t.id}`)}
-                />
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-ptr-cream-dark">
+                    <th className="pl-5 pr-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ptr-brown-light">Task</th>
+                    <th className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ptr-brown-light">Assigned To</th>
+                    <th className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ptr-brown-light">Priority</th>
+                    <th className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ptr-brown-light">Status</th>
+                    <th className="pl-2 pr-5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ptr-brown-light text-right">Due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ptr-cream-dark/60">
+                  {recentTasks.map((t) => {
+                    const overdue = isOverdue(t);
+                    return (
+                      <tr
+                        key={t.id}
+                        onClick={() => navigate(`/director/tasks/${t.id}`)}
+                        className="hover:bg-ptr-cream cursor-pointer transition-colors"
+                      >
+                        <td className="pl-5 pr-2 py-2.5 text-xs font-medium text-ptr-brown">
+                          <div className="truncate max-w-[150px]">{t.title}</div>
+                        </td>
+                        <td className="px-2 py-2.5 text-xs text-ptr-brown-light whitespace-nowrap">
+                          {users.find((u) => u.id === t.assigneeId)?.name ?? '—'}
+                          {t.coAssigneeIds.length > 0 && ` +${t.coAssigneeIds.length}`}
+                        </td>
+                        <td className="px-2 py-2.5"><PriorityBadge priority={t.priority} size="sm" /></td>
+                        <td className="px-2 py-2.5"><StatusBadge status={t.status} size="sm" /></td>
+                        <td className={`pl-2 pr-5 py-2.5 text-xs text-right whitespace-nowrap tabular-nums ${overdue ? 'text-signal-crimson font-semibold' : 'text-ptr-brown-light'}`}>
+                          {new Date(t.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
 
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-ptr-brown uppercase tracking-wide">
-              Requiring Attention {completedPendingReview.length > 0 && `(${completedPendingReview.length})`}
-            </h2>
+        {/* Operational alerts — always shows system state, never a large
+            empty card */}
+        <div className="card">
+          <div className="px-5 py-3 border-b border-ptr-cream-dark">
+            <SectionHeading>Operational Alerts</SectionHeading>
           </div>
-          {completedPendingReview.length === 0 ? (
-            <EmptyState
-              icon={<CheckCircle className="w-7 h-7" />}
-              title="All caught up"
-              description="Nothing is waiting on your review right now."
+          <div className="divide-y divide-ptr-cream-dark/60">
+            <AlertRow
+              icon={<ClipboardCheck className="w-4 h-4" />}
+              label="Completed tasks awaiting review"
+              clearLabel="No completed tasks awaiting review"
+              count={completedPendingReview.length}
+              onClick={() => navigate('/director/tasks')}
             />
-          ) : (
-            <div className="space-y-1">
-              {completedPendingReview.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  assigneeName={users.find((u) => u.id === t.assigneeId)?.name ?? '—'}
-                  onClick={() => navigate(`/director/tasks/${t.id}`)}
-                />
-              ))}
-            </div>
-          )}
+            <AlertRow
+              icon={<Clock className="w-4 h-4" />}
+              label="Tasks past their due date"
+              clearLabel="No overdue tasks"
+              count={overdueCount}
+              onClick={() => navigate('/director/tasks')}
+            />
+            <AlertRow
+              icon={<AlertTriangle className="w-4 h-4" />}
+              label="Open critical-priority tasks"
+              clearLabel="No open critical-priority tasks"
+              count={critical}
+              onClick={() => navigate('/director/tasks')}
+            />
+            {completedPendingReview.length === 0 && overdueCount === 0 && critical === 0 && (
+              <div className="flex items-center gap-3 px-4 py-3 text-[13px] text-ptr-brown-light">
+                <CheckCircle2 className="w-4 h-4 text-ptr-green/70" />
+                All operational checks clear
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -310,7 +371,17 @@ export default function DirectorDashboard() {
         <TaskForm
           isOpen={formOpen}
           onClose={() => setFormOpen(false)}
-          onSave={(data) => { createTask.mutate(data); setFormOpen(false); }}
+          onSave={async (data, files) => {
+            const row = await createTask.mutateAsync(data);
+            for (const file of files) {
+              try {
+                await uploadTaskAttachment(row.id, currentUser.id, file);
+              } catch (err) {
+                alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+              }
+            }
+            setFormOpen(false);
+          }}
           assignableUsers={users.filter((u) => u.role === 'guard')}
           initialData={null}
           currentUserId={currentUser.id}

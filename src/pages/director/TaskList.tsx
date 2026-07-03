@@ -5,6 +5,7 @@ import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
+import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -115,7 +116,7 @@ export default function DirectorTaskList() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-ptr-brown-light">
-                    <span>{assignee?.name ?? '—'}</span>
+                    <span>{assignee?.name ?? '—'}{task.coAssigneeIds.length > 0 && ` +${task.coAssigneeIds.length}`}</span>
                     <span>·</span>
                     <span>{range?.name ?? '—'}</span>
                     <span>·</span>
@@ -159,11 +160,18 @@ export default function DirectorTaskList() {
         <TaskForm
           isOpen={formOpen}
           onClose={() => { setFormOpen(false); setEditingTask(null); }}
-          onSave={(data) => {
+          onSave={async (data, files) => {
             if (editingTask) {
               updateTask.mutate({ id: editingTask.id, ...data });
             } else {
-              createTask.mutate(data);
+              const row = await createTask.mutateAsync(data);
+              for (const file of files) {
+                try {
+                  await uploadTaskAttachment(row.id, currentUser.id, file);
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+                }
+              }
             }
             setFormOpen(false);
             setEditingTask(null);

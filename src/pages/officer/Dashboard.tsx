@@ -9,6 +9,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
@@ -16,15 +17,16 @@ import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 
+// One cell of the unified Overview strip — large numeral, small semibold
+// label, muted context line. Hierarchy is carried by type, not color.
 function MetricCard({
-  label, value, accent, sub, className = '',
-}: { label: string; value: number | string; accent: string; sub?: string; className?: string }) {
+  label, value, sub, valueClass = 'text-ptr-brown',
+}: { label: string; value: number | string; sub?: string; valueClass?: string }) {
   return (
-    <div className={`card p-5 pl-6 relative overflow-hidden ${className}`}>
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accent}`} />
-      <div className="text-3xl font-bold text-ptr-brown tracking-tight tabular-nums">{value}</div>
-      <div className="text-xs text-ptr-brown-light font-semibold uppercase tracking-wide mt-1">{label}</div>
-      {sub && <div className="text-xs text-ptr-brown-light/70 mt-0.5">{sub}</div>}
+    <div className="px-5 py-4">
+      <div className={`text-2xl xl:text-3xl font-bold tracking-tight tabular-nums ${valueClass}`}>{value}</div>
+      <div className="text-[11px] text-ptr-brown font-semibold uppercase tracking-[0.06em] mt-1">{label}</div>
+      {sub && <div className="text-[11px] text-ptr-brown-light mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -58,7 +60,7 @@ export default function OfficerDashboard() {
 
   // Chart: tasks per guard
   const guardChartData = myGuards.map((g) => {
-    const gt = myTasks.filter((t) => t.assigneeId === g.id);
+    const gt = myTasks.filter((t) => t.assigneeId === g.id || t.coAssigneeIds.includes(g.id));
     return {
       name: g.name.split(' ')[0],
       'Not Started': gt.filter((t) => t.status === 'NotStarted').length,
@@ -78,49 +80,34 @@ export default function OfficerDashboard() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header — official system heading */}
+      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">{myRange?.name ?? 'Range'} Dashboard</h1>
-          <p className="text-sm text-ptr-brown-light">
-            {myGuards.length} staff · {myAreas.length} areas
+          <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">
+            Range Operations Dashboard
+          </h1>
+          <p className="text-[13px] text-ptr-brown-light mt-1">
+            {myRange?.name ?? 'Range'} &middot; {myGuards.length} staff &middot; {myAreas.length} areas
           </p>
         </div>
-        <button onClick={() => setFormOpen(true)} className="btn-primary">
+        <button onClick={() => setFormOpen(true)} className="btn-primary flex-shrink-0">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">New Task</span>
         </button>
       </div>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 items-stretch">
-        <MetricCard
-          label="Total Tasks"
-          value={totalTasks}
-          accent="bg-ptr-green"
-        />
-        <MetricCard
-          label="Critical"
-          value={critical}
-          accent="bg-status-overdue"
-        />
-        <MetricCard
-          label="In Progress"
-          value={inProgress}
-          accent="bg-status-progress"
-        />
-        <MetricCard
-          label="Overdue"
-          value={overdueCount}
-          accent="bg-status-overdue"
-        />
-        <MetricCard
-          label="Completion Rate"
-          value={`${completionRate}%`}
-          accent="bg-status-completed"
-          sub={`${completed} completed`}
-          className="col-span-2 lg:col-span-1"
-        />
+      {/* Overview — one unified strip instead of five floating cards */}
+      <div className="card">
+        <div className="px-5 py-3 border-b border-ptr-cream-dark">
+          <h2 className="text-xs font-bold text-ptr-brown uppercase tracking-[0.08em]">Overview</h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-ptr-cream-dark">
+          <MetricCard label="Total Tasks" value={totalTasks} sub="This range" />
+          <MetricCard label="Critical" value={critical} sub="Open, critical priority" valueClass={critical > 0 ? 'text-signal-crimson' : 'text-ptr-brown'} />
+          <MetricCard label="In Progress" value={inProgress} sub="Currently active" />
+          <MetricCard label="Overdue" value={overdueCount} sub="Past due date" valueClass={overdueCount > 0 ? 'text-signal-crimson' : 'text-ptr-brown'} />
+          <MetricCard label="Completion Rate" value={`${completionRate}%`} sub={`${completed} tasks completed`} valueClass="text-ptr-green" />
+        </div>
       </div>
 
       {/* Chart + Priority Tasks */}
@@ -166,7 +153,7 @@ export default function OfficerDashboard() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-ptr-brown truncate">{t.title}</div>
-                      <div className="text-xs text-ptr-brown-light">{assignee?.name ?? '—'}</div>
+                      <div className="text-xs text-ptr-brown-light">{assignee?.name ?? '—'}{t.coAssigneeIds.length > 0 && ` +${t.coAssigneeIds.length}`}</div>
                     </div>
                     <PriorityBadge priority={t.priority} size="sm" />
                     <span className={`text-xs flex-shrink-0 ${overdue ? 'text-red-600 font-medium' : 'text-ptr-brown-light'}`}>
@@ -186,7 +173,7 @@ export default function OfficerDashboard() {
           <h2 className="text-sm font-semibold text-ptr-brown mb-4">Staff Overview</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {myGuards.map((g) => {
-              const gt = myTasks.filter((t) => t.assigneeId === g.id);
+              const gt = myTasks.filter((t) => t.assigneeId === g.id || t.coAssigneeIds.includes(g.id));
               const active = gt.filter((t) => t.status === 'InProgress').length;
               const ov = gt.filter(isOverdue).length;
               return (
@@ -214,7 +201,17 @@ export default function OfficerDashboard() {
         <TaskForm
           isOpen={formOpen}
           onClose={() => setFormOpen(false)}
-          onSave={(data) => { createTask.mutate(data); setFormOpen(false); }}
+          onSave={async (data, files) => {
+            const row = await createTask.mutateAsync(data);
+            for (const file of files) {
+              try {
+                await uploadTaskAttachment(row.id, currentUser.id, file);
+              } catch (err) {
+                alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+              }
+            }
+            setFormOpen(false);
+          }}
           assignableUsers={myGuards}
           initialData={null}
           currentUserId={currentUser.id}

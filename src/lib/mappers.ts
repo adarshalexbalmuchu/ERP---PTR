@@ -64,6 +64,7 @@ export function mapTask(
     task_updates?: TaskUpdateRow[];
     comments?: CommentRow[];
     attachments?: AttachmentRow[];
+    task_assignees?: { user_id: string }[];
   },
 ): Task {
   return {
@@ -71,6 +72,7 @@ export function mapTask(
     title: row.title,
     description: row.description,
     assigneeId: row.assignee_id,
+    coAssigneeIds: (row.task_assignees ?? []).map((a) => a.user_id),
     createdById: row.created_by_id,
     rangeId: row.range_id,
     areaId: row.area_id ?? undefined,

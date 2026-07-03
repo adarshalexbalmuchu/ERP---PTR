@@ -17,7 +17,6 @@ import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 import GovStrip from './GovStrip';
 import Footer from './Footer';
-import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 import ptrLogo from '../assets/ptr-logo.png';
 
 type NavItem = { to: string; label: string; icon: React.ReactNode };
@@ -34,51 +33,53 @@ function Sidebar({
   const currentUser = useStore((s) => s.currentUser);
   return (
     <div className="h-full flex flex-col bg-ptr-green-dark">
-      <div className="px-4 py-4 border-b border-white/10 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src={jharkhandEmblem} alt="" className="w-8 h-8 flex-shrink-0" />
-            <span className="text-xs font-bold tracking-wide text-white/90 uppercase leading-tight">
-              Govt. of<br />Jharkhand
-            </span>
+      {/* The green GovStrip above already carries the Government of
+          Jharkhand identity — the sidebar header only needs the reserve. */}
+      <div className="px-4 py-4 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-white/95 border border-white/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-white leading-snug">Palamu Tiger Reserve</div>
+            <div className="text-[11px] text-white/50 uppercase tracking-[0.08em] leading-tight mt-0.5">
+              Field Operations
+            </div>
           </div>
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded-lg hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
+              className="p-1 rounded hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
             >
               <X className="w-5 h-5 text-white/70" />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full bg-white/95 border border-white/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-white leading-snug">Palamu Tiger Reserve</div>
-            <div className="text-xs text-white/50 leading-tight mt-0.5">Tiger Cell &middot; Task Mgmt</div>
-          </div>
-        </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-2 space-y-1.5 overflow-y-auto">
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to.split('/').length <= 2}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all min-h-[44px] ${
+              `relative flex items-center gap-3 pl-5 pr-4 py-2.5 rounded-sm text-sm transition-colors min-h-[44px] ${
                 isActive
-                  ? 'bg-white text-ptr-green-dark font-semibold shadow-sm'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  ? 'bg-white/[0.08] text-white font-semibold'
+                  : 'text-white/65 font-medium hover:bg-white/5 hover:text-white'
               }`
             }
             onClick={onClose}
           >
-            {item.icon}
-            <span>{item.label}</span>
+            {({ isActive }) => (
+              <>
+                {/* enterprise-style selected indicator: accent bar, not a pill */}
+                {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] bg-white/90" />}
+                {item.icon}
+                <span>{item.label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -103,13 +104,6 @@ function Sidebar({
       </div>
     </div>
   );
-}
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
 }
 
 function AdminLayout({ items }: { items: NavItem[] }) {
@@ -169,25 +163,38 @@ function AdminLayout({ items }: { items: NavItem[] }) {
             <NotificationBell />
           </header>
 
-          {/* Desktop top bar */}
-          <div className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
-            <div>
-              <p className="text-sm font-bold text-ptr-brown leading-tight">
-                {greeting()}{currentUser ? `, ${currentUser.name.split(' ')[0]}` : ''}
-              </p>
-              <p className="text-xs text-ptr-brown-light leading-tight mt-0.5">
-                {new Date().toLocaleDateString('en-IN', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </p>
+          {/* Desktop top bar — operational context, no consumer greeting */}
+          <div className="hidden md:flex relative items-center justify-between px-6 py-2.5 bg-white border-b border-ptr-cream-dark flex-shrink-0 min-h-[56px]">
+            <p className="text-xs text-ptr-brown-light tabular-nums">
+              {new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+            <span className="absolute left-1/2 -translate-x-1/2 text-xs font-bold uppercase tracking-[0.14em] text-ptr-brown hidden lg:inline">
+              Field Operations Management System
+            </span>
+            <div className="flex items-center gap-4">
+              <div className="text-right leading-tight border-r border-ptr-cream-dark pr-4">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-ptr-brown-light/80">Logged in as</p>
+                <p className="text-xs font-semibold text-ptr-brown">
+                  {currentUser?.name}
+                  <span className="font-normal text-ptr-brown-light"> &middot; {currentUser?.designation}</span>
+                </p>
+              </div>
+              <NotificationBell />
             </div>
-            <NotificationBell />
           </div>
 
-          <main className="flex-1 overflow-y-auto flex flex-col">
+          <main
+            className="flex-1 overflow-y-auto flex flex-col"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(42,39,36,0.03) 1px, transparent 0)',
+              backgroundSize: '18px 18px',
+            }}
+          >
             <div className="flex-1">
               <Outlet />
             </div>
@@ -212,30 +219,43 @@ function GuardLayout() {
   return (
     <div className="min-h-screen bg-ptr-cream flex flex-col">
       <GovStrip />
-      <header className="bg-white border-b border-ptr-cream-dark px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img src={ptrLogo} alt="" className="w-full h-full object-contain" />
+      <header className="bg-white border-b border-ptr-cream-dark sticky top-0 z-30">
+        {/* Brand + actions row */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img src={ptrLogo} alt="Palamu Tiger Reserve" className="w-full h-full object-contain p-0.5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-ptr-brown leading-tight">Palamu Tiger Reserve</div>
+              <div className="text-xs text-ptr-brown-light leading-tight">Tiger Cell &middot; Task Management</div>
+            </div>
           </div>
-          <div>
-            <div className="text-sm font-bold text-ptr-brown leading-none">PTR Tiger Cell</div>
-            <div className="text-xs text-ptr-brown-light leading-none">My Tasks</div>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
+              <div className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green flex-shrink-0">
+                {currentUser?.avatarInitials}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
+                title="Log out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
-          <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
-            <div className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green">
-              {currentUser?.avatarInitials}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
-              title="Log out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+        {/* Logged-in-as + date strip — matches AdminLayout's institutional tone */}
+        <div className="px-4 pb-3 border-t border-ptr-cream-dark bg-ptr-cream/40">
+          <p className="text-xs font-semibold text-ptr-brown pt-2">
+            {currentUser?.name}
+            {currentUser?.designation && <span className="font-normal text-ptr-brown-light"> &middot; {currentUser.designation}</span>}
+          </p>
+          <p className="text-xs text-ptr-brown-light">
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
       </header>
       <main className="flex-1 pb-16">
@@ -287,24 +307,24 @@ export default function Layout() {
 
   if (currentUser?.role === 'director') {
     const items: NavItem[] = [
-      { to: '/director', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/director/tasks', label: 'All Tasks', icon: <ClipboardList className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/director/reports', label: 'Reports', icon: <FileText className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/director/incidents', label: 'Incidents', icon: <AlertTriangle className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/director/map', label: 'Field Map', icon: <MapIcon className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/director/audit', label: 'Audit Log', icon: <History className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/director/users', label: 'Users', icon: <Users className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/director', label: 'Dashboard', icon: <LayoutDashboard className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/director/tasks', label: 'Task Registry', icon: <ClipboardList className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/director/reports', label: 'Reports', icon: <FileText className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/director/incidents', label: 'Incident Reports', icon: <AlertTriangle className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/director/map', label: 'Range Map', icon: <MapIcon className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/director/audit', label: 'System Audit', icon: <History className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/director/users', label: 'Personnel', icon: <Users className="w-[18px] h-[18px] flex-shrink-0" /> },
     ];
     return <AdminLayout items={items} />;
   }
 
   if (currentUser?.role === 'range_officer') {
     const items: NavItem[] = [
-      { to: '/officer', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/officer/tasks', label: 'Range Tasks', icon: <ClipboardList className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/officer/incidents', label: 'Incidents', icon: <AlertTriangle className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/officer/map', label: 'Field Map', icon: <MapIcon className="w-5 h-5 flex-shrink-0" /> },
-      { to: '/officer/audit', label: 'Audit Log', icon: <History className="w-5 h-5 flex-shrink-0" /> },
+      { to: '/officer', label: 'Dashboard', icon: <LayoutDashboard className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/officer/tasks', label: 'Task Registry', icon: <ClipboardList className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/officer/incidents', label: 'Incident Reports', icon: <AlertTriangle className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/officer/map', label: 'Range Map', icon: <MapIcon className="w-[18px] h-[18px] flex-shrink-0" /> },
+      { to: '/officer/audit', label: 'System Audit', icon: <History className="w-[18px] h-[18px] flex-shrink-0" /> },
     ];
     return <AdminLayout items={items} />;
   }

@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { Database, NotificationType } from '../lib/database.types';
-import { mapTask, mapComment, mapTaskUpdate, mapAttachment } from '../lib/mappers';
+import { mapTask, mapComment, mapTaskUpdate } from '../lib/mappers';
+import { uploadTaskAttachment } from '../lib/attachments';
 import { getCurrentPosition } from '../utils/geolocation';
 import { logTaskAction, logTaskChanges, logTaskDeletion } from '../lib/audit';
 import useStore from '../store/useStore';
@@ -11,11 +12,6 @@ import type { Task } from '../types';
 type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>;
 
 const ATTACHMENT_URL_TTL_SECONDS = 3600;
-
-// Must stay in sync with the bucket's file_size_limit in supabase/schema.sql
-// — that server-side cap is what actually enforces this; checking here just
-// gives a readable error instead of a storage 413.
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 // attachments.url stores a bare storage path (the bucket is private); this
 // swaps in a time-limited signed URL before the task reaches the UI.
@@ -49,7 +45,7 @@ export function useTask(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('tasks')
-        .select('*, task_updates(*), comments(*), attachments(*)')
+        .select('*, task_updates(*), comments(*), attachments(*), task_assignees(user_id)')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -97,8 +93,24 @@ export function useTask(id: string | undefined) {
       if (data.dueDate !== undefined) patch.due_date = data.dueDate;
       if (data.status !== undefined) patch.status = data.status;
       if (data.completionPercentage !== undefined) patch.completion_percentage = data.completionPercentage;
-      const { error } = await supabase.from('tasks').update(patch).eq('id', id);
-      if (error) throw error;
+      if (Object.keys(patch).length > 0) {
+        const { error } = await supabase.from('tasks').update(patch).eq('id', id);
+        if (error) throw error;
+      }
+
+      if (data.coAssigneeIds !== undefined) {
+        const { error: delErr } = await supabase.from('task_assignees').delete().eq('task_id', id);
+        if (delErr) throw delErr;
+        const assigneeId = data.assigneeId ?? task?.assigneeId;
+        const coAssigneeIds = [...new Set(data.coAssigneeIds)].filter((uid) => uid !== assigneeId);
+        if (coAssigneeIds.length > 0) {
+          const { error: insErr } = await supabase
+            .from('task_assignees')
+            .insert(coAssigneeIds.map((userId) => ({ task_id: id, user_id: userId })));
+          if (insErr) throw insErr;
+        }
+      }
+
       if (task && currentUser) await logTaskChanges(task, data, currentUser.id);
     },
     onSuccess: invalidate,
@@ -158,14 +170,16 @@ export function useTask(id: string | undefined) {
         .update({ status: 'Archived', archived_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
-      // Notify assignee
-      await supabase.from('notifications').insert({
-        user_id: task.assigneeId,
-        type: 'task_archived' as NotificationType,
-        title: 'Task Archived',
-        message: `"${task.title}" has been approved and archived`,
-        task_id: id,
-      });
+      // Notify every assignee (primary + co-assignees)
+      for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'task_archived' as NotificationType,
+          title: 'Task Archived',
+          message: `"${task.title}" has been approved and archived`,
+          task_id: id,
+        });
+      }
       await logTaskAction(task, currentUser.id, 'status', 'Archived (approved)');
     },
     onSuccess: invalidate,
@@ -190,13 +204,16 @@ export function useTask(id: string | undefined) {
       });
       if (commentErr) throw commentErr;
 
-      await supabase.from('notifications').insert({
-        user_id: task.assigneeId,
-        type: 'changes_requested' as NotificationType,
-        title: 'Changes Requested',
-        message: `Revisions needed for "${task.title}"`,
-        task_id: id,
-      });
+      // Notify every assignee (primary + co-assignees)
+      for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'changes_requested' as NotificationType,
+          title: 'Changes Requested',
+          message: `Revisions needed for "${task.title}"`,
+          task_id: id,
+        });
+      }
       await logTaskAction(task, currentUser.id, 'status', `Changes requested${note ? `: ${note}` : ''}`);
     },
     onSuccess: invalidate,
@@ -245,31 +262,7 @@ export function useTask(id: string | undefined) {
   const uploadAttachment = useMutation({
     mutationFn: async (file: File) => {
       if (!id || !currentUser) throw new Error('Not authenticated');
-      if (file.size > MAX_ATTACHMENT_BYTES) {
-        throw new Error('File is too large — attachments are limited to 25 MB');
-      }
-      const path = `${id}/${crypto.randomUUID()}-${file.name}`;
-      const { error: uploadErr } = await supabase.storage
-        .from('task-attachments')
-        .upload(path, file);
-      if (uploadErr) throw uploadErr;
-
-      // Store the bare storage path — the bucket is private, so viewing
-      // requires a signed URL generated on demand (see resolveAttachmentUrls).
-      const { data, error } = await supabase
-        .from('attachments')
-        .insert({
-          task_id: id,
-          user_id: currentUser.id,
-          name: file.name,
-          url: path,
-          size: file.size,
-          mime_type: file.type,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return mapAttachment(data);
+      await uploadTaskAttachment(id, currentUser.id, file);
     },
     onSuccess: invalidate,
   });
