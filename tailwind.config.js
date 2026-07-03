@@ -25,10 +25,17 @@ export default {
           archived: '#9CA3AF',
           overdue: '#DC2626',
         },
+        // Muted signal colors for large dashboard numerals — quieter than
+        // the status palette, per the institutional/enterprise direction.
+        signal: {
+          crimson: '#9F1D1D',
+          slate: '#47566B',
+        },
       },
       fontFamily: {
-        // Poppins — matches the typeface used on digitalindia.gov.in.
-        sans: ['Poppins', 'system-ui', 'sans-serif'],
+        // IBM Plex Sans — institutional/administrative feel (IBM Carbon,
+        // GDS-adjacent). Poppins kept as fallback during font load.
+        sans: ['IBM Plex Sans', 'Poppins', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         sm: '0.1875rem',
