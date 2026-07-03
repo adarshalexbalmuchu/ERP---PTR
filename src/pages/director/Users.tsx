@@ -62,7 +62,14 @@ function UserFormModal({
     const errs: Partial<UserFormData> = {};
     if (!form.name.trim()) errs.name = 'Name is required';
     if (!initial && !form.email.trim()) errs.email = 'Email is required';
-    if (!initial && !form.password.trim()) errs.password = 'Password is required';
+    if (!initial) {
+      // Must stay in sync with the create-user Edge Function, which
+      // enforces the same rule server-side.
+      if (!form.password.trim()) errs.password = 'Password is required';
+      else if (form.password.length < 10) errs.password = 'Password must be at least 10 characters';
+      else if (!/[a-zA-Z]/.test(form.password) || !/[0-9]/.test(form.password))
+        errs.password = 'Password must contain both letters and numbers';
+    }
     if (!form.designation.trim()) errs.designation = 'Designation is required';
     if (form.role !== 'director' && !form.rangeId) errs.rangeId = 'Range is required for this role';
     setErrors(errs);
@@ -112,7 +119,7 @@ function UserFormModal({
                 value={form.password}
                 onChange={(e) => set('password', e.target.value)}
                 className={`input-field ${errors.password ? 'input-error' : ''}`}
-                placeholder="Minimum 8 characters"
+                placeholder="Minimum 10 characters, letters and numbers"
               />
               {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
             </div>
