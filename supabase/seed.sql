@@ -30,12 +30,14 @@ on conflict do nothing;
 -- OR use the create-user Edge Function
 -- OR run this block ONLY if using the Supabase CLI with local dev
 -- ─────────────────────────────────────────────
--- Passwords (all): PTR@2025!
+-- Choose a strong unique password per user when creating them. Never
+-- commit a real password (even a "demo" one) to this file — anything in
+-- git history must be assumed public.
 
 -- To create via SQL (local dev only — service role bypasses auth):
 -- DO $$ BEGIN
 --   PERFORM auth.create_user(
---     '{"email":"director@ptr.gov.in","password":"PTR@2025!","email_confirm":true}'::jsonb
+--     '{"email":"director@ptr.gov.in","password":"<choose-a-strong-password>","email_confirm":true}'::jsonb
 --   );
 -- END $$;
 
