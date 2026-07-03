@@ -153,7 +153,7 @@ export function useTask(id: string | undefined) {
           user_id: task.createdById,
           type: 'task_completed' as NotificationType,
           title: 'Task Completed',
-          message: `${currentUser.name} marked "${task.title}" as done`,
+          message: `${currentUser.name} marked "${task.title}" as done · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
           task_id: id,
         });
       }
@@ -176,7 +176,7 @@ export function useTask(id: string | undefined) {
           user_id: userId,
           type: 'task_archived' as NotificationType,
           title: 'Task Archived',
-          message: `"${task.title}" has been approved and archived`,
+          message: `${currentUser.name} approved and archived "${task.title}"`,
           task_id: id,
         });
       }
@@ -204,13 +204,15 @@ export function useTask(id: string | undefined) {
       });
       if (commentErr) throw commentErr;
 
-      // Notify every assignee (primary + co-assignees)
+      // Notify every assignee (primary + co-assignees) — include the actual
+      // revision note so the push/bell alone tells them what to fix, without
+      // needing to open the task first.
       for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
         await supabase.from('notifications').insert({
           user_id: userId,
           type: 'changes_requested' as NotificationType,
-          title: 'Changes Requested',
-          message: `Revisions needed for "${task.title}"`,
+          title: `Changes Requested by ${currentUser.name}`,
+          message: note ? `"${task.title}": ${note}` : `Please revise "${task.title}" and resubmit.`,
           task_id: id,
         });
       }

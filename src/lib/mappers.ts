@@ -1,5 +1,5 @@
 import type { Database } from './database.types';
-import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, AuditLogEntry } from '../types';
+import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry } from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TaskRow = Database['public']['Tables']['tasks']['Row'];
@@ -8,6 +8,7 @@ type CommentRow = Database['public']['Tables']['comments']['Row'];
 type AttachmentRow = Database['public']['Tables']['attachments']['Row'];
 type NotificationRow = Database['public']['Tables']['notifications']['Row'];
 type IncidentRow = Database['public']['Tables']['incidents']['Row'];
+type IncidentPhotoRow = Database['public']['Tables']['incident_photos']['Row'];
 type AuditLogRow = Database['public']['Tables']['audit_log']['Row'];
 
 export function mapProfile(row: ProfileRow): User {
@@ -104,7 +105,19 @@ export function mapNotification(row: NotificationRow): Notification {
   };
 }
 
-export function mapIncident(row: IncidentRow): Incident {
+export function mapIncidentPhoto(row: IncidentPhotoRow): IncidentPhoto {
+  // row.path stores the bare storage path; resolveIncidentPhotoUrls() in
+  // useIncidents.ts replaces url with a time-limited signed URL.
+  return {
+    id: row.id,
+    path: row.path,
+    url: row.path,
+    size: row.size,
+    type: row.mime_type,
+  };
+}
+
+export function mapIncident(row: IncidentRow & { incident_photos?: IncidentPhotoRow[] }): Incident {
   return {
     id: row.id,
     type: row.type,
@@ -117,6 +130,7 @@ export function mapIncident(row: IncidentRow): Incident {
     reportedBy: row.reported_by,
     incidentDate: row.incident_date,
     createdAt: row.created_at,
+    photos: (row.incident_photos ?? []).map(mapIncidentPhoto),
   };
 }
 

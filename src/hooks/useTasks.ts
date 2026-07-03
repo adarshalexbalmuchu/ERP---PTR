@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask } from '../lib/mappers';
 import { logTaskChanges, logTaskDeletion } from '../lib/audit';
+import { formatDate } from '../utils/formatters';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
 
@@ -93,8 +94,8 @@ export function useTasks() {
         await insertNotification(
           userId,
           'task_assigned',
-          'New Task Assigned',
-          `You have been assigned: ${data.title}`,
+          `New Task: ${data.priority} Priority`,
+          `${currentUser.name} assigned you "${data.title}" · Due ${formatDate(data.dueDate)}`,
           row.id,
         );
       }

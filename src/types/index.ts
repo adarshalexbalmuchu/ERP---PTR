@@ -134,6 +134,14 @@ export type IncidentType =
 
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
+export interface IncidentPhoto {
+  id: string;
+  path: string;
+  url: string;
+  size: number;
+  type: string;
+}
+
 export interface Incident {
   id: string;
   type: IncidentType;
@@ -146,6 +154,7 @@ export interface Incident {
   reportedBy: string;
   incidentDate: string;
   createdAt: string;
+  photos: IncidentPhoto[];
 }
 
 export interface AuditLogEntry {

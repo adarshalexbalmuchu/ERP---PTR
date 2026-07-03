@@ -191,6 +191,19 @@ create table if not exists incidents (
   created_at    timestamptz not null default now()
 );
 
+-- Photos attached to an incident report. Compressed client-side before
+-- upload (see src/lib/incidentPhotos.ts) — this table only ever stores the
+-- already-optimized file, same as attachments does for tasks.
+create table if not exists incident_photos (
+  id          uuid primary key default uuid_generate_v4(),
+  incident_id uuid not null references incidents(id) on delete cascade,
+  uploaded_by uuid not null references profiles(id) on delete restrict,
+  path        text not null,
+  size        bigint not null default 0,
+  mime_type   text not null default 'image/jpeg',
+  created_at  timestamptz not null default now()
+);
+
 -- Accountability log for significant task changes (reassignment, status
 -- transitions, deletion). range_id/task_title are denormalized so entries
 -- stay meaningful and range-scoped even after the source task is deleted.
@@ -223,6 +236,7 @@ create index if not exists comments_task_id_idx     on comments(task_id);
 create index if not exists incidents_range_id_idx   on incidents(range_id);
 create index if not exists incidents_type_idx       on incidents(type);
 create index if not exists incidents_date_idx       on incidents(incident_date);
+create index if not exists incident_photos_incident_id_idx on incident_photos(incident_id);
 create index if not exists audit_log_range_id_idx   on audit_log(range_id);
 create index if not exists audit_log_task_id_idx    on audit_log(task_id);
 
@@ -395,6 +409,7 @@ returns trigger language plpgsql security definer
 set search_path = '' as $$
 declare
   secret text;
+  task_priority text;
 begin
   begin
     select decrypted_secret into secret
@@ -409,6 +424,8 @@ begin
     return new;
   end if;
 
+  select priority::text into task_priority from public.tasks where id = new.task_id;
+
   begin
     perform net.http_post(
       url := 'https://hsaqgpuvdbyrineknwzf.supabase.co/functions/v1/send-push',
@@ -420,7 +437,9 @@ begin
         'user_id', new.user_id,
         'title', new.title,
         'message', new.message,
-        'task_id', new.task_id
+        'task_id', new.task_id,
+        'type', new.type,
+        'priority', task_priority
       )
     );
   exception when others then
@@ -459,6 +478,7 @@ alter table task_assignees enable row level security;
 alter table notifications enable row level security;
 alter table daily_reports enable row level security;
 alter table incidents     enable row level security;
+alter table incident_photos enable row level security;
 alter table audit_log     enable row level security;
 alter table push_subscriptions enable row level security;
 
@@ -693,6 +713,32 @@ create policy "incidents_guard_read" on incidents
 create policy "incidents_guard_insert" on incidents
   for insert with check ((select get_my_role()) = 'guard' and reported_by = (select auth.uid()));
 
+-- incident_photos: same shape as incidents itself. Guards can only attach
+-- photos to incidents THEY reported (not any incident in their range) and
+-- can't delete photos once uploaded — matching that guards can't edit or
+-- delete their incident reports either. Deletion is management-only.
+create policy "incident_photos_director" on incident_photos
+  for all using ((select get_my_role()) = 'director');
+
+create policy "incident_photos_officer" on incident_photos
+  for all using (
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.range_id = (select get_my_range_id()))
+  );
+
+create policy "incident_photos_guard_read" on incident_photos
+  for select using (
+    (select get_my_role()) = 'guard' and
+    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.range_id = (select get_my_range_id()))
+  );
+
+create policy "incident_photos_guard_insert" on incident_photos
+  for insert with check (
+    (select get_my_role()) = 'guard' and
+    uploaded_by = (select auth.uid()) and
+    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.reported_by = (select auth.uid()))
+  );
+
 -- audit_log: management-only read (director all, officer their range);
 -- insert is open to any authenticated user but only as themselves, since
 -- guards also trigger logged actions (starting/completing their own tasks)
@@ -760,6 +806,57 @@ create policy "attachments_delete" on storage.objects
     and exists (
       select 1 from public.tasks t
       where t.id::text = (storage.foldername(name))[1]
+    )
+  );
+
+-- ─────────────────────────────────────────────
+-- Storage bucket for incident photos
+-- ─────────────────────────────────────────────
+-- Private bucket, 5 MB hard cap — photos are compressed client-side before
+-- upload (see src/lib/incidentPhotos.ts), so anything still near this size
+-- likely bypassed compression rather than being a legitimately large photo.
+insert into storage.buckets (id, name, public, file_size_limit)
+  values ('incident-photos', 'incident-photos', false, 5242880)
+  on conflict (id) do update set
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "incident_photos_upload" on storage.objects;
+drop policy if exists "incident_photos_download" on storage.objects;
+drop policy if exists "incident_photos_object_delete" on storage.objects;
+
+-- Objects are stored under "<incident-id>/<uuid>.jpg" (see
+-- uploadIncidentPhoto in src/lib/incidentPhotos.ts). Same technique as
+-- task-attachments: the EXISTS subquery runs under the caller's own
+-- incidents RLS, so upload/download follow incident visibility exactly.
+create policy "incident_photos_upload" on storage.objects
+  for insert with check (
+    bucket_id = 'incident-photos'
+    and (select auth.uid()) is not null
+    and exists (
+      select 1 from public.incidents i
+      where i.id::text = (storage.foldername(name))[1]
+    )
+  );
+
+create policy "incident_photos_download" on storage.objects
+  for select using (
+    bucket_id = 'incident-photos'
+    and (select auth.uid()) is not null
+    and exists (
+      select 1 from public.incidents i
+      where i.id::text = (storage.foldername(name))[1]
+    )
+  );
+
+-- Delete is management-only, same as the incident_photos table policy.
+create policy "incident_photos_object_delete" on storage.objects
+  for delete using (
+    bucket_id = 'incident-photos'
+    and (select public.get_my_role()) in ('director', 'range_officer')
+    and exists (
+      select 1 from public.incidents i
+      where i.id::text = (storage.foldername(name))[1]
     )
   );
 

@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import { AlertTriangle, Plus, X, MapPin, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo, type ChangeEvent, type FormEvent } from 'react';
+import { AlertTriangle, Plus, X, MapPin, Trash2, Camera, ImagePlus } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useIncidents } from '../../hooks/useIncidents';
 import { useRanges } from '../../hooks/useRanges';
 import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDateTime } from '../../utils/formatters';
+import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
 import type { IncidentType, IncidentSeverity } from '../../types';
 
 const TYPE_LABELS: Record<IncidentType, string> = {
@@ -41,23 +42,45 @@ function ReportForm({
   const [rangeId, setRangeId] = useState(defaultRangeId);
   const [areaId, setAreaId] = useState('');
   const [error, setError] = useState('');
+  const [photos, setPhotos] = useState<File[]>([]);
+
+  // Recomputed only when the file list itself changes (not on every
+  // keystroke elsewhere in the form), and revoked on cleanup so preview
+  // blobs don't pile up while the modal is open.
+  const photoPreviews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
+  useEffect(() => {
+    return () => photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [photoPreviews]);
 
   const filteredAreas = areas.filter((a) => a.rangeId === rangeId);
 
   if (!isOpen) return null;
+
+  const addPhotos = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const incoming = Array.from(e.target.files);
+      setPhotos((prev) => [...prev, ...incoming].slice(0, MAX_INCIDENT_PHOTOS));
+      e.target.value = '';
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!description.trim()) { setError('Description is required'); return; }
     if (!rangeId) { setError('Please select a range'); return; }
     reportIncident.mutate(
-      { type, severity, description: description.trim(), rangeId, areaId: areaId || undefined },
+      { type, severity, description: description.trim(), rangeId, areaId: areaId || undefined, files: photos },
       {
         onSuccess: () => {
           setDescription('');
           setAreaId('');
           setSeverity('Medium');
           setType('wildlife_sighting');
+          setPhotos([]);
           onClose();
         },
         onError: (err) => setError(err.message),
@@ -124,6 +147,44 @@ function ReportForm({
             <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
             Your location will be captured automatically if permitted.
           </p>
+
+          <div>
+            <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+              Photos <span className="text-ptr-brown-light font-normal">(optional, up to {MAX_INCIDENT_PHOTOS})</span>
+            </label>
+            {photos.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {photos.map((file, i) => (
+                  <div key={`${file.name}-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-ptr-cream-dark flex-shrink-0">
+                    <img src={photoPreviews[i]} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                      aria-label={`Remove photo ${i + 1}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {photos.length < MAX_INCIDENT_PHOTOS && (
+              <div className="flex gap-2">
+                <label className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-ptr-cream-dark rounded-xl text-sm text-ptr-brown-light hover:bg-ptr-cream cursor-pointer transition-colors min-h-[44px]">
+                  <Camera className="w-4 h-4" />
+                  <span>Take Photo</span>
+                  <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={addPhotos} />
+                </label>
+                <label className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-ptr-cream-dark rounded-xl text-sm text-ptr-brown-light hover:bg-ptr-cream cursor-pointer transition-colors min-h-[44px]">
+                  <ImagePlus className="w-4 h-4" />
+                  <span>Gallery</span>
+                  <input type="file" accept="image/*" multiple className="sr-only" onChange={addPhotos} />
+                </label>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 pt-2 border-t border-ptr-cream-dark">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={reportIncident.isPending} className="btn-primary">
@@ -138,7 +199,7 @@ function ReportForm({
 
 export default function IncidentLog() {
   const currentUser = useStore((s) => s.currentUser);
-  const { incidents, isLoading, deleteIncident } = useIncidents();
+  const { incidents, isLoading, deleteIncident, removePhoto } = useIncidents();
   const { ranges, areas } = useRanges();
   const [formOpen, setFormOpen] = useState(false);
   const [filterType, setFilterType] = useState('');
@@ -215,6 +276,26 @@ export default function IncidentLog() {
                   </div>
                 </div>
                 <p className="text-sm text-ptr-brown">{incident.description}</p>
+                {incident.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {incident.photos.map((photo) => (
+                      <div key={photo.id} className="relative w-16 h-16 rounded-xl overflow-hidden border border-ptr-cream-dark flex-shrink-0 group">
+                        <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                          <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                        </a>
+                        {canManage && (
+                          <button
+                            onClick={() => { if (confirm('Remove this photo?')) removePhoto.mutate(photo.id); }}
+                            className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white items-center justify-center hover:bg-red-600 transition-colors hidden group-hover:flex"
+                            aria-label="Remove photo"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 flex-wrap text-xs text-ptr-brown-light">
                   <span>{range?.name ?? '—'}</span>
                   {area && <><span>·</span><span>{area.name}</span></>}
