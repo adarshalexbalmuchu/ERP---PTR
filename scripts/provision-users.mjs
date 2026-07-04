@@ -172,6 +172,41 @@ const ROSTER = [
     role: 'guard', ranges: [K], designation: 'Forest Guard — Madgari West' },
   { name: 'Sanjay Toppo', hindi: 'संजय टोप्पो', email: 'sanjay.toppo@ptr.in',
     role: 'guard', ranges: [K], designation: 'Forest Guard — Hesatu North, Saruat, Hesatu South' },
+
+  // ——— Research Team ———
+  // Not field/beat staff — org-wide specialists, not tied to a range
+  // (ranges: [] leaves profiles.range_id null). App role is 'guard', which
+  // grants access to only their own assigned tasks; the "Research Team —"
+  // designation prefix is how they're distinguished in the Personnel UI
+  // (reuses the existing role tiers instead of adding new ones, so no RLS
+  // policy changes were needed — see the "Office" note below for why).
+  { name: 'Tapas Karmakar', email: 'tapas.karmakar@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Field Biologist' },
+  { name: 'Om Prakash Choudhry', email: 'om.choudhry@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Watershed & Livelihood Manager' },
+  { name: 'Manish Bakshi', email: 'manish.bakshi@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Tech Head' },
+  { name: 'Vivek Tiwari', email: 'vivek.tiwari@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Tourism Officer' },
+  { name: 'Dr. Sunil Kumar', email: 'sunil.kumar@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Veterinary Doctor' },
+  { name: 'Sanjeev', email: 'sanjeev@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Digital Team (Photography)' },
+  { name: 'Rahul Kumar', email: 'rahul.kumar@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Videography' },
+  { name: 'Abhay Kumar', email: 'abhay.kumar@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Grassland Expert' },
+  { name: 'Mayank Kumar', email: 'mayank.kumar@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — IT Department' },
+  { name: 'Avi Mohan Kumar Shukla', email: 'avi.shukla@ptr.in',
+    role: 'guard', ranges: [], designation: 'Research Team — Tech Fellow (AI Devices)' },
+
+  // ——— Office (Range Office) ———
+  // No specific person given yet. When you have one, add them here with
+  // role: 'range_officer' and ranges: [B, CE, CW, K] (all four — this
+  // reuses the existing officer_ranges mechanism, same as Ajay Kumar
+  // Toppo above, to give org-wide task visibility without any new RLS).
+  // designation: 'Range Office — <their title>'.
 ];
 
 // <Firstname>@PTR<4 digits> — ≥10 chars with letters+numbers, satisfying

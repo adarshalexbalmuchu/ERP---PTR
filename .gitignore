@@ -34,3 +34,4 @@ supabase/.temp
 
 # Generated login credentials (scripts/provision-users.mjs output) - never commit real passwords
 user-credentials-*.csv
+reset-credentials-*.csv
