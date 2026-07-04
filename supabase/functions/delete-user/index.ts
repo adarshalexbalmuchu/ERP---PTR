@@ -117,6 +117,53 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Every table below references profiles(id) ON DELETE RESTRICT, so the
+    // deleteUser() call further down fails with an opaque FK error if this
+    // user still owns any rows. Check proactively and return a clear,
+    // actionable message instead of a generic 500.
+    const ownedTables: Array<{ table: string; column: string; label: string }> = [
+      { table: 'task_updates', column: 'user_id', label: 'task update' },
+      { table: 'comments', column: 'user_id', label: 'comment' },
+      { table: 'attachments', column: 'user_id', label: 'attachment' },
+      { table: 'incident_photos', column: 'uploaded_by', label: 'incident photo' },
+      { table: 'incidents', column: 'reported_by', label: 'incident' },
+      { table: 'daily_reports', column: 'generated_by', label: 'report' },
+      { table: 'audit_log', column: 'actor_id', label: 'audit log entry' },
+    ];
+
+    const [taskResult, ...ownedResults] = await Promise.all([
+      admin
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .or(`assignee_id.eq.${userId},created_by_id.eq.${userId}`),
+      ...ownedTables.map(({ table, column }) =>
+        admin.from(table).select('id', { count: 'exact', head: true }).eq(column, userId)
+      ),
+    ]);
+
+    const blockers: string[] = [];
+    if (taskResult.error) throw taskResult.error;
+    if ((taskResult.count ?? 0) > 0) {
+      const n = taskResult.count!;
+      blockers.push(`${n} task${n === 1 ? '' : 's'}`);
+    }
+    ownedResults.forEach((result, i) => {
+      if (result.error) throw result.error;
+      const n = result.count ?? 0;
+      if (n > 0) blockers.push(`${n} ${ownedTables[i].label}${n === 1 ? '' : 's'}`);
+    });
+
+    if (blockers.length > 0) {
+      const list = blockers.length === 1
+        ? blockers[0]
+        : `${blockers.slice(0, -1).join(', ')} and ${blockers[blockers.length - 1]}`;
+      return jsonResponse(
+        req,
+        { error: `This user still has ${list} — delete or reassign them first.` },
+        409,
+      );
+    }
+
     // Profile row is deleted automatically via CASCADE from auth.users
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) throw error;
