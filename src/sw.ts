@@ -14,9 +14,14 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 // Supabase API responses are cached separately at runtime (GET only —
 // Workbox never caches mutating requests) so a guard can still see their
-// last-loaded tasks with no signal.
+// last-loaded tasks with no signal. Matching on origin, not just the
+// pathname, so a request to any OTHER host whose path happens to start
+// with /rest/v1/ can never poison or read this cache. The cacheName must
+// stay in sync with SW_API_CACHE_NAME in src/contexts/AuthContext.tsx,
+// which deletes this cache on sign-out.
+const SUPABASE_ORIGIN = new URL(import.meta.env.VITE_SUPABASE_URL as string).origin;
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/rest/v1/'),
+  ({ url }) => url.origin === SUPABASE_ORIGIN && url.pathname.startsWith('/rest/v1/'),
   new NetworkFirst({
     cacheName: 'ptr-api-cache',
     networkTimeoutSeconds: 5,

@@ -147,15 +147,17 @@ export function useTask(id: string | undefined) {
         .update({ status: 'Completed', completed_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
-      // Notify creator/officers
+      // Notify creator/officers (best-effort — the completion itself
+      // already succeeded, so log rather than fail the mutation).
       if (task.createdById !== currentUser.id) {
-        await supabase.from('notifications').insert({
+        const { error: notifyErr } = await supabase.from('notifications').insert({
           user_id: task.createdById,
           type: 'task_completed' as NotificationType,
           title: 'Task Completed',
           message: `${currentUser.name} marked "${task.title}" as done · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
           task_id: id,
         });
+        if (notifyErr) console.error('notification insert failed', notifyErr);
       }
       await logTaskAction(task, currentUser.id, 'status', 'Marked as done');
     },
@@ -170,15 +172,21 @@ export function useTask(id: string | undefined) {
         .update({ status: 'Archived', archived_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
-      // Notify every assignee (primary + co-assignees)
-      for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
-        await supabase.from('notifications').insert({
-          user_id: userId,
-          type: 'task_archived' as NotificationType,
-          title: 'Task Archived',
-          message: `${currentUser.name} approved and archived "${task.title}"`,
-          task_id: id,
-        });
+      // Notify every assignee (primary + co-assignees, deduped, minus the
+      // actor) in one batched insert instead of a round-trip per person.
+      const archiveRecipients = [...new Set([task.assigneeId, ...task.coAssigneeIds])]
+        .filter((userId) => userId !== currentUser.id);
+      if (archiveRecipients.length > 0) {
+        const { error: notifyErr } = await supabase.from('notifications').insert(
+          archiveRecipients.map((userId) => ({
+            user_id: userId,
+            type: 'task_archived' as NotificationType,
+            title: 'Task Archived',
+            message: `${currentUser.name} approved and archived "${task.title}"`,
+            task_id: id,
+          })),
+        );
+        if (notifyErr) console.error('notification insert failed', notifyErr);
       }
       await logTaskAction(task, currentUser.id, 'status', 'Archived (approved)');
     },
@@ -204,17 +212,22 @@ export function useTask(id: string | undefined) {
       });
       if (commentErr) throw commentErr;
 
-      // Notify every assignee (primary + co-assignees) — include the actual
-      // revision note so the push/bell alone tells them what to fix, without
-      // needing to open the task first.
-      for (const userId of [task.assigneeId, ...task.coAssigneeIds]) {
-        await supabase.from('notifications').insert({
-          user_id: userId,
-          type: 'changes_requested' as NotificationType,
-          title: `Changes Requested by ${currentUser.name}`,
-          message: note ? `"${task.title}": ${note}` : `Please revise "${task.title}" and resubmit.`,
-          task_id: id,
-        });
+      // Notify every assignee (primary + co-assignees, deduped, minus the
+      // actor) — include the actual revision note so the push/bell alone
+      // tells them what to fix, without needing to open the task first.
+      const reviseRecipients = [...new Set([task.assigneeId, ...task.coAssigneeIds])]
+        .filter((userId) => userId !== currentUser.id);
+      if (reviseRecipients.length > 0) {
+        const { error: notifyErr } = await supabase.from('notifications').insert(
+          reviseRecipients.map((userId) => ({
+            user_id: userId,
+            type: 'changes_requested' as NotificationType,
+            title: `Changes Requested by ${currentUser.name}`,
+            message: note ? `"${task.title}": ${note}` : `Please revise "${task.title}" and resubmit.`,
+            task_id: id,
+          })),
+        );
+        if (notifyErr) console.error('notification insert failed', notifyErr);
       }
       await logTaskAction(task, currentUser.id, 'status', `Changes requested${note ? `: ${note}` : ''}`);
     },
@@ -254,8 +267,14 @@ export function useTask(id: string | undefined) {
         .select()
         .single();
       if (error) throw error;
-      // Also update the task completion_percentage
-      await supabase.from('tasks').update({ completion_percentage: progressPercentage }).eq('id', id);
+      // Also update the task completion_percentage — surfacing the error
+      // matters here: silently dropping it would leave the task card's
+      // progress out of sync with the update the guard just logged.
+      const { error: progressErr } = await supabase
+        .from('tasks')
+        .update({ completion_percentage: progressPercentage })
+        .eq('id', id);
+      if (progressErr) throw progressErr;
       return mapTaskUpdate(data);
     },
     onSuccess: invalidate,
