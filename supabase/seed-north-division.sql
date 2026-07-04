@@ -21,6 +21,9 @@ on conflict (name) do nothing;
 -- Beats as areas (11 beats)
 -- Matched on (range_id, name), looked up by range NAME so this works even
 -- if a range row pre-exists with a different UUID.
+-- Barwadih, Morwai & Mandal belong to Chhipadohar EASTERN Range — the
+-- Western range covers only the Lat beat (verified against
+-- "Posting of FG (N).pdf" directly).
 -- ─────────────────────────────────────────────
 insert into areas (range_id, name)
 select r.id, b.beat
@@ -28,11 +31,11 @@ from (values
   ('Betla Range',            'Betla Beat'),
   ('Betla Range',            'Kila Beat'),
   ('Chhipadohar East Range', 'Chhipadohar Beat'),
-  ('Chhipadohar East Range', 'Ked Beat'),
+  ('Chhipadohar East Range', 'Ker Beat'),
   ('Chhipadohar East Range', 'Amwatikar Beat'),
-  ('Chhipadohar West Range', 'Barwadih Beat'),
-  ('Chhipadohar West Range', 'Morwai Beat'),
-  ('Chhipadohar West Range', 'Mandal Beat'),
+  ('Chhipadohar East Range', 'Barwadih Beat'),
+  ('Chhipadohar East Range', 'Morwai Beat'),
+  ('Chhipadohar East Range', 'Mandal Beat'),
   ('Chhipadohar West Range', 'Lat Beat'),
   ('Kutku Range',            'Kutku Beat'),
   ('Kutku Range',            'Madgari Beat')

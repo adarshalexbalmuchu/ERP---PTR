@@ -54,10 +54,15 @@ const RANGE_IDS = {
   [K]: '00000000-0000-0000-0000-000000000006',
 };
 
+// NOTE: Barwadih, Morwai & Mandal beats belong to Chhipadohar EASTERN
+// Range — the Western range covers only the Lat beat. This was corrected
+// after cross-checking against "Posting of FG (N).pdf" directly; an
+// earlier working draft had these three beats grouped under Western.
 const BEATS = [
   [B, 'Betla Beat'], [B, 'Kila Beat'],
-  [CE, 'Chhipadohar Beat'], [CE, 'Ked Beat'], [CE, 'Amwatikar Beat'],
-  [CW, 'Barwadih Beat'], [CW, 'Morwai Beat'], [CW, 'Mandal Beat'], [CW, 'Lat Beat'],
+  [CE, 'Chhipadohar Beat'], [CE, 'Ker Beat'], [CE, 'Amwatikar Beat'],
+  [CE, 'Barwadih Beat'], [CE, 'Morwai Beat'], [CE, 'Mandal Beat'],
+  [CW, 'Lat Beat'],
   [K, 'Kutku Beat'], [K, 'Madgari Beat'],
 ];
 
@@ -71,35 +76,38 @@ const ROSTER = [
   { name: 'Umesh Kumar Dubey', hindi: 'उमेश कुमार दूबे', email: 'umesh.dubey@ptr.in',
     role: 'range_officer', ranges: [B], designation: 'Range Officer — Betla' },
   { name: 'Ajay Kumar Toppo', hindi: 'अजय कुमार टोप्पो', email: 'ajay.toppo@ptr.in',
-    role: 'range_officer', ranges: [CW, CE, K],
+    role: 'range_officer', ranges: [CE, CW, K],
     designation: 'Range Officer — Chhipadohar East, Chhipadohar West & Kutku' },
 
   // ——— Foresters / Beat In-charge (वनपाल) ———
+  // App role is 'guard' for all of these — only Umesh Kumar Dubey and Ajay
+  // Kumar Toppo (above) hold the range_officer app role. `designation`
+  // keeps their real-world post title unchanged.
   { name: 'Santosh Kumar Singh', hindi: 'संतोष कुमार सिंह (A)', email: 'santosh.singh@ptr.in',
-    role: 'range_officer', ranges: [B], designation: 'Forester — Betla Beat In-charge' },
+    role: 'guard', ranges: [B], designation: 'Forester — Betla Beat In-charge' },
   { name: 'Nandlal Sahu', hindi: 'नन्दलाल साहु', email: 'nandlal.sahu@ptr.in',
-    role: 'range_officer', ranges: [B], designation: 'Forester — Kila Beat In-charge' },
+    role: 'guard', ranges: [B], designation: 'Forester — Kila Beat In-charge' },
   { name: 'Naveen Kumar Prasad', hindi: 'नवीन कुमार प्रसाद', email: 'naveen.prasad@ptr.in',
-    role: 'range_officer', ranges: [CE], designation: 'Forester — Chhipadohar Beat In-charge' },
+    role: 'guard', ranges: [CE], designation: 'Forester — Chhipadohar Beat In-charge' },
   { name: 'Ram Kumar', hindi: 'राम कुमार', email: 'ram.kumar@ptr.in',
-    role: 'range_officer', ranges: [CE], designation: 'Forester — Ked Beat In-charge' },
+    role: 'guard', ranges: [CE], designation: 'Forester — Ker Beat In-charge' },
   { name: 'Shashank Shekhar Pandey', hindi: 'शशांक शेखर पाण्डेय', email: 'shashank.pandey@ptr.in',
-    role: 'range_officer', ranges: [CE], designation: 'Forester — Amwatikar Beat In-charge' },
+    role: 'guard', ranges: [CE], designation: 'Forester — Amwatikar Beat In-charge' },
   { name: 'Shravan Kumar Gupta', hindi: 'श्रवण कुमार गुप्ता', email: 'shravan.gupta@ptr.in',
-    role: 'range_officer', ranges: [CW],
-    designation: 'Forester — Barwadih Beat In-charge (also Mandal, Mandal Naka, Morwai Kala Dakshini Pt-2)' },
+    role: 'guard', ranges: [CE],
+    designation: 'Forester — Barwadih Beat In-charge (also Mandal Naka, Morwai Kala South Part-2)' },
   { name: 'Rajnish Kumar Singh', hindi: 'रजनीश कुमार सिंह', email: 'rajnish.singh@ptr.in',
-    role: 'range_officer', ranges: [CW],
-    designation: 'Forester — Morwai Beat In-charge (also Saidup-7, Morwai Kala Dakshini Pt-1)' },
+    role: 'guard', ranges: [CE],
+    designation: 'Forester — Morwai Beat In-charge (also Saidup Comp. 7, Morwai Kala South Part-1)' },
   { name: 'Akhilesh Kumar', hindi: 'अखिलेश कुमार', email: 'akhilesh.kumar@ptr.in',
-    role: 'range_officer', ranges: [CW],
-    designation: 'Forester — Mandal Beat In-charge (also Saidup-9, Saidup-10, Tataha)' },
+    role: 'guard', ranges: [CE],
+    designation: 'Forester — Mandal Beat In-charge (also Saidup Comp. 9, Saidup Comp. 10, Tataha)' },
   { name: 'Mukesh Oraon', hindi: 'मुकेश उराँव', email: 'mukesh.oraon@ptr.in',
-    role: 'range_officer', ranges: [CW],
+    role: 'guard', ranges: [CW],
     designation: 'Forester — Lat Beat In-charge (also Tanwai, Karamdih)' },
   { name: 'Deepak Kumar', hindi: 'दीपक कुमार', email: 'deepak.kumar@ptr.in',
-    role: 'range_officer', ranges: [K],
-    designation: 'Forester — Kutku & Madgari Beats In-charge (also Tumera, Turer, Madgari Purvi)' },
+    role: 'guard', ranges: [K],
+    designation: 'Forester — Kutku & Madgari Beats In-charge (also Tumera, Turer, Madgari East)' },
 
   // ——— Forest Guards (वनरक्षी) — Betla ———
   { name: 'Devendra Kumar Dev', hindi: 'देवेन्द्र कुमार देव', email: 'devendra.dev@ptr.in',
@@ -107,50 +115,50 @@ const ROSTER = [
   { name: 'Dheeraj Kumar Ram', hindi: 'धीरज कुमार राम', email: 'dheeraj.ram@ptr.in',
     role: 'guard', ranges: [B], designation: 'Forest Guard — Kutmu' },
   { name: 'Praveen Kumar', hindi: 'प्रवीण कुमार', email: 'praveen.kumar@ptr.in',
-    role: 'guard', ranges: [B], designation: 'Forest Guard — Madhuchuan' },
+    role: 'guard', ranges: [B], designation: 'Forest Guard — Madhuchua' },
   { name: 'Abhishek Kumar', hindi: 'अभिषेक कुमार', email: 'abhishek.kumar@ptr.in',
     role: 'guard', ranges: [B], designation: 'Forest Guard — Baheratand' },
   { name: 'Santosh Kumar Singh II', hindi: 'संतोष कुमार सिंह II', email: 'santosh.singh2@ptr.in',
     role: 'guard', ranges: [B], designation: 'Forest Guard — Kasba' },
   { name: 'Devpal Bhagat', hindi: 'देवपाल भगत', email: 'devpal.bhagat@ptr.in',
-    role: 'guard', ranges: [B], designation: 'Forest Guard — Betla Naka, Betla Uttari' },
+    role: 'guard', ranges: [B], designation: 'Forest Guard — Betla Naka, Betla North' },
   { name: 'Gulshan Surin', hindi: 'गुलशन सुरीन', email: 'gulshan.surin@ptr.in',
     role: 'guard', ranges: [B], designation: 'Forest Guard — Rabdi' },
   { name: 'Subhash Kumar', hindi: 'सुभाष कुमार', email: 'subhash.kumar@ptr.in',
-    role: 'guard', ranges: [B], designation: 'Forest Guard — Gadi' },
+    role: 'guard', ranges: [B], designation: 'Forest Guard — Gari' },
 
   // ——— Forest Guards — Chhipadohar East ———
   { name: 'Rahul Kumar Das', hindi: 'राहुल कुमार दास', email: 'rahul.das@ptr.in',
     role: 'guard', ranges: [CE],
-    designation: 'Forest Guard — Chhipadohar, Saidup-3, Saidup-5, Chhipadohar Naka-1 & 2, Labhar Naka' },
+    designation: 'Forest Guard — Chhipadohar, Saidup Comp. 3, Saidup Comp. 5, Chhipadohar Naka-1 & 2, Labhar Naka' },
   { name: 'Satyanarayan Oraon', hindi: 'सत्यनारायण उरांव', email: 'satyanarayan.oraon@ptr.in',
     role: 'guard', ranges: [CE],
-    designation: 'Forest Guard — Saidup-4, Lat Purvi, Chugru Dakshini, Ambatikar, Hatta, Kumandih-3' },
+    designation: 'Forest Guard — Saidup Comp. 4, Lat East, Chugru South, Amwatikar, Hatta, Kumandih Comp. 3' },
   { name: 'Dilip Kumar', hindi: 'दिलीप कुमार', email: 'dilip.kumar@ptr.in',
     role: 'guard', ranges: [CE],
-    designation: 'Forest Guard — Saidup-1, Chugru Uttari, Hehegara, Saidup KRF' },
+    designation: 'Forest Guard — Saidup Comp. 1, Chugru North, Hehegada, Saidup K.R.F.' },
   { name: 'Baijnath Ravidas', hindi: 'बैजनाथ रविदास', email: 'baijnath.ravidas@ptr.in',
-    role: 'guard', ranges: [CE], designation: 'Forest Guard — Kumandih-1, 2 & 4' },
-
-  // ——— Forest Guards — Chhipadohar West ———
-  { name: 'Sameer Kachhap', hindi: 'समीर कच्छप', email: 'sameer.kachhap@ptr.in',
-    role: 'guard', ranges: [CW],
-    designation: 'Forest Guard — Barwadih, Morwai Dakshini Pt-1, Morwai Uttari Pt-2' },
+    role: 'guard', ranges: [CE], designation: 'Forest Guard — Kumandih Comp. 1, 2 & 4' },
   { name: 'Avinash Ekka', hindi: 'अविनाश एक्का', email: 'avinash.ekka@ptr.in',
-    role: 'guard', ranges: [CW], designation: 'Forest Guard — Ukamad, Barichattan' },
+    role: 'guard', ranges: [CE], designation: 'Forest Guard — Ukamar, Barichattan' },
+  { name: 'Sameer Kachhap', hindi: 'समीर कच्छप', email: 'sameer.kachhap@ptr.in',
+    role: 'guard', ranges: [CE],
+    designation: 'Forest Guard — Barwadih, Morwai South Part-1, Morwai North Part-2' },
   { name: 'Amritlal Khakha', hindi: 'अमृतलाल खाखा', email: 'amritlal.khakha@ptr.in',
-    role: 'guard', ranges: [CW], designation: 'Forest Guard — Sindhorwa' },
+    role: 'guard', ranges: [CE], designation: 'Forest Guard — Sindhorva' },
   { name: 'Md Imran Ahmad', hindi: 'मो० ईमरान अहमद', email: 'imran.ahmad@ptr.in',
-    role: 'guard', ranges: [CW], designation: 'Forest Guard — Saidup-6' },
+    role: 'guard', ranges: [CE], designation: 'Forest Guard — Saidup Comp. 6' },
   { name: 'Abhishek Ekka', hindi: 'अभिषेक एक्का', email: 'abhishek.ekka@ptr.in',
-    role: 'guard', ranges: [CW], designation: 'Forest Guard — Morwai Khurd, Sindhorwa Dakshini' },
+    role: 'guard', ranges: [CE], designation: 'Forest Guard — Morwai Khurd, Sindhorva South' },
+
+  // ——— Forest Guards — Chhipadohar West (Lat Beat only) ———
   { name: 'Mukesh Yadav', hindi: 'मुकेश यादव', email: 'mukesh.yadav@ptr.in',
-    role: 'guard', ranges: [CW], designation: 'Forest Guard — Lat Paschimi Pt-1 & 2, Lat Naka' },
+    role: 'guard', ranges: [CW], designation: 'Forest Guard — Lat West Part-1, Lat West Part-2, Lat Naka' },
 
   // ——— Forest Guards — Kutku ———
-  // Sameer Tigga also covers Barwadih Naka in Chhipadohar West; primary
-  // posting kept as Kutku (guard access to tasks is by assignment, not
-  // range, so cross-range task assignment still works).
+  // Sameer Tigga also covers Barwadih Naka in Chhipadohar West (Lat Beat);
+  // primary posting kept as Kutku (guard access to tasks is by assignment,
+  // not range, so cross-range task assignment still works).
   { name: 'Sameer Tigga', hindi: 'समीर तिग्गा', email: 'sameer.tigga@ptr.in',
     role: 'guard', ranges: [K],
     designation: 'Forest Guard — Kutku, Khurra (also Barwadih Naka, Chhipadohar West)' },
@@ -161,9 +169,9 @@ const ROSTER = [
   { name: 'Umesh Oraon', hindi: 'उमेश उरांव', email: 'umesh.oraon@ptr.in',
     role: 'guard', ranges: [K], designation: 'Forest Guard — Korwadih, Madgari Sadar' },
   { name: 'Neeraj Singh', hindi: 'नीरज सिंह', email: 'neeraj.singh@ptr.in',
-    role: 'guard', ranges: [K], designation: 'Forest Guard — Madgari Paschimi' },
+    role: 'guard', ranges: [K], designation: 'Forest Guard — Madgari West' },
   { name: 'Sanjay Toppo', hindi: 'संजय टोप्पो', email: 'sanjay.toppo@ptr.in',
-    role: 'guard', ranges: [K], designation: 'Forest Guard — Hesatu Uttari, Saruat, Hesatu Dakshini' },
+    role: 'guard', ranges: [K], designation: 'Forest Guard — Hesatu North, Saruat, Hesatu South' },
 ];
 
 // <Firstname>@PTR<4 digits> — ≥10 chars with letters+numbers, satisfying
