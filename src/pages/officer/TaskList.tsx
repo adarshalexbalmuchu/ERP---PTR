@@ -5,6 +5,7 @@ import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
+import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
@@ -19,7 +20,7 @@ export default function OfficerTaskList() {
   const currentUser = useStore((s) => s.currentUser);
   const { tasks, createTask, updateTask } = useTasks();
   const { users } = useUsers();
-  const { areas } = useRanges();
+  const { ranges, areas } = useRanges();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -28,7 +29,7 @@ export default function OfficerTaskList() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterArea, setFilterArea] = useState('');
 
-  const myRangeId = currentUser?.rangeId ?? '';
+  const { activeRangeId: myRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
   const myTasks = tasks.filter((t) => t.rangeId === myRangeId);
   const myGuards = users.filter((u) => u.role === 'guard' && u.rangeId === myRangeId);
   const myAreas = areas.filter((a) => a.rangeId === myRangeId);
@@ -53,10 +54,25 @@ export default function OfficerTaskList() {
           <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Range Tasks</h1>
           <p className="text-sm text-ptr-brown-light">{myTasks.length} tasks in your range</p>
         </div>
-        <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">New Task</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isMultiRange && (
+            <select
+              value={myRangeId}
+              onChange={(e) => setActiveRangeId(e.target.value)}
+              className="input-field select-field !w-auto text-sm"
+              aria-label="Switch range"
+            >
+              {rangeIds.map((id) => {
+                const r = ranges.find((rr) => rr.id === id);
+                return <option key={id} value={id}>{r?.name ?? 'Range'}</option>;
+              })}
+            </select>
+          )}
+          <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Task</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

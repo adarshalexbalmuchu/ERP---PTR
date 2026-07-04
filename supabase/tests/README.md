@@ -90,6 +90,36 @@ suspect a new RLS policy with an unwrapped `auth.uid()` / helper-function
 call, or multiple permissive policies on the same table defeating index
 pushdown (see the comment above the RLS section in `schema.sql`).
 
+## Baseline (as of the 2026-07-04 multi-range / recursion fix)
+
+Two corrections to how the numbers above should be read:
+
+1. **The 890 TPS figure was flattered by a seed bug.** `seed-bulk.sql`'s
+   `order by random() limit 1` pickers were uncorrelated subqueries, which
+   Postgres hoists into a once-per-statement InitPlan — every one of the
+   50k tasks landed in ONE random range on ONE guard. When that range
+   wasn't the benchmarked officer's, the officer read returned ~0 rows.
+   The pickers are now correlated (`md5(i || id)`), tasks genuinely spread
+   across 6 ranges / 42 guards.
+2. **The task_assignees co-assignee policies had made every task read fail
+   outright** ("infinite recursion detected in policy", 42P17): policies on
+   `tasks` referenced `task_assignees` and vice versa, and the rewriter
+   expands that cycle forever. Fixed by routing the tasks→task_assignees
+   direction through the SECURITY DEFINER `is_task_assignee()` helper,
+   which is opaque to the rewriter.
+
+Honest numbers on the fixed seed (officer's range holds ~8.3k of 50k tasks):
+
+| Query | Result |
+|---|---|
+| Officer-scoped task list (returns ~8.3k rows) | ~17ms |
+| pgbench, 20 clients, 15s, realistic read/write mix | 167 TPS, 119ms avg latency, 0 failed — read-dominated: 70% of transactions each return the full ~8.3k-row range list |
+
+Multi-range officers (`officer_ranges` + `get_my_range_ids()`, policies use
+`range_id = any((select get_my_range_ids())::uuid[])`) keep the one-time
+InitPlan shape — verified via `explain analyze` that no per-row helper
+re-evaluation happens.
+
 ## Applying fixes found here to production
 
 This only tests `schema.sql` locally. A fix proven here (e.g. the RLS

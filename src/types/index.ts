@@ -32,6 +32,10 @@ export interface User {
   avatarInitials: string;
   designation: string;
   rangeId?: string;
+  /** Every range this user holds: rangeId plus any officer_ranges rows.
+      Only populated for the signed-in user (AuthContext); an officer with
+      more than one entry gets a range switcher in their pages. */
+  rangeIds?: string[];
 }
 
 export interface Comment {
@@ -170,10 +174,14 @@ export interface AuditLogEntry {
 
 export interface AppState {
   currentUser: User | null;
+  /** Range a multi-range officer is currently working in.
+      null = fall back to their first range. */
+  activeRangeId: string | null;
 }
 
 export interface AppActions {
   setCurrentUser: (user: User | null) => void;
+  setActiveRangeId: (rangeId: string | null) => void;
   logout: () => void;
 }
 

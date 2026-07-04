@@ -222,6 +222,22 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      officer_ranges: {
+        Row: {
+          user_id: string;
+          range_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          range_id: string;
+        };
+        Update: {
+          user_id?: string;
+          range_id?: string;
+        };
+        Relationships: Relationships;
+      };
       notifications: {
         Row: {
           id: string;
