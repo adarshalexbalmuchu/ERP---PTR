@@ -2,18 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Legend,
-} from 'recharts';
-import {
   CheckCircle2,
-  TrendingUp,
   Plus,
   AlertTriangle,
   ClipboardCheck,
@@ -27,7 +16,6 @@ import { supabase } from '../../lib/supabase';
 import { mapTask } from '../../lib/mappers';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
-import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
 import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
@@ -119,28 +107,6 @@ export default function DirectorDashboard() {
   const completionRate = totalTasks > 0
     ? Math.round((((stats?.completedCount ?? 0) + (stats?.archivedCount ?? 0)) / totalTasks) * 100)
     : 0;
-
-  // Real 7-day trend from the daily_reports history (generated from the
-  // Reports page) rather than fabricated data — shows a graceful message
-  // instead of a chart if there isn't enough history yet.
-  const { data: trendData = [] } = useQuery({
-    queryKey: ['dashboard-trend'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('daily_reports')
-        .select('report_date, completed_count, in_progress_count, not_started_count, overdue_count')
-        .order('report_date', { ascending: true })
-        .limit(7);
-      if (error) throw error;
-      return data.map((r) => ({
-        date: formatDate(r.report_date),
-        Completed: r.completed_count,
-        'In Progress': r.in_progress_count,
-        'Not Started': r.not_started_count,
-        Overdue: r.overdue_count,
-      }));
-    },
-  });
 
   // Only the handful of rows these lists actually display — not the full
   // task table.
@@ -243,36 +209,6 @@ export default function DirectorDashboard() {
               </button>
             );
           })}
-        </div>
-      </div>
-
-      {/* Trend chart — enterprise reporting style */}
-      <div className="card">
-        <div className="px-5 py-3 border-b border-ptr-cream-dark">
-          <SectionHeading>Task Status Trend</SectionHeading>
-        </div>
-        <div className="p-5">
-          {trendData.length < 2 ? (
-            <EmptyState
-              icon={<TrendingUp className="w-7 h-7" />}
-              title="Not enough history yet"
-              description="Generate a daily report from the Reports page each day to build a trend here."
-            />
-          ) : (
-            <ResponsiveContainer width="100%" height={176}>
-              <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                <CartesianGrid stroke="#F3EEE2" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B6356' }} tickLine={false} axisLine={{ stroke: '#EFE7D6' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#6B6356' }} allowDecimals={false} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 4, border: '1px solid #EFE7D6', boxShadow: 'none', padding: '6px 10px' }} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconSize={10} />
-                <Line type="monotone" dataKey="Not Started" stroke="#9CA3AF" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="In Progress" stroke="#8A7F5C" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="Completed" stroke="#1A4731" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="Overdue" stroke="#9F1D1D" strokeWidth={2.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
         </div>
       </div>
 
