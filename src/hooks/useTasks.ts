@@ -10,20 +10,21 @@ import type { Task } from '../types';
 
 type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>;
 
-async function insertNotification(
-  userId: string,
+// One batched insert instead of a round-trip per recipient. Best-effort:
+// the task mutation the user cares about has already succeeded by the time
+// notifications are written, so a failure here is logged, not thrown.
+async function insertNotifications(
+  userIds: string[],
   type: NotificationType,
   title: string,
   message: string,
   taskId: string,
 ) {
-  await supabase.from('notifications').insert({
-    user_id: userId,
-    type,
-    title,
-    message,
-    task_id: taskId,
-  });
+  if (userIds.length === 0) return;
+  const { error } = await supabase.from('notifications').insert(
+    userIds.map((userId) => ({ user_id: userId, type, title, message, task_id: taskId })),
+  );
+  if (error) console.error('notification insert failed', error);
 }
 
 export function useTasks() {
@@ -89,16 +90,13 @@ export function useTasks() {
 
       // Notify every assignee (primary + co-assignees) except whoever created it.
       const allAssigneeIds = [...new Set([data.assigneeId, ...coAssigneeIds])];
-      for (const userId of allAssigneeIds) {
-        if (userId === currentUser.id) continue;
-        await insertNotification(
-          userId,
-          'task_assigned',
-          `New Task: ${data.priority} Priority`,
-          `${currentUser.name} assigned you "${data.title}" · Due ${formatDate(data.dueDate)}`,
-          row.id,
-        );
-      }
+      await insertNotifications(
+        allAssigneeIds.filter((userId) => userId !== currentUser.id),
+        'task_assigned',
+        `New Task: ${data.priority} Priority`,
+        `${currentUser.name} assigned you "${data.title}" · Due ${formatDate(data.dueDate)}`,
+        row.id,
+      );
       return row;
     },
     onSuccess: () => {

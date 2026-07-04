@@ -7,17 +7,26 @@ import type { Database } from '../lib/database.types';
 
 // Must match the `key` passed to createSyncStoragePersister in queryClient.ts.
 const QUERY_CACHE_STORAGE_KEY = 'ptr-query-cache';
+// Must match the runtime cacheName in src/sw.ts.
+const SW_API_CACHE_NAME = 'ptr-api-cache';
 
-// Clears both the in-memory query cache and its localStorage persistence so
-// a signed-out session's task/incident/user data can't linger for the next
-// person to use a shared device, and a subsequent login can't briefly
-// rehydrate the previous user's stale cached data.
+// Clears the in-memory query cache, its localStorage persistence, AND the
+// service worker's runtime API cache so a signed-out session's
+// task/incident/user data can't linger for the next person to use a shared
+// device, and a subsequent login can't briefly rehydrate the previous
+// user's stale cached data.
 function clearPersistedCache() {
   queryClient.clear();
   try {
     window.localStorage.removeItem(QUERY_CACHE_STORAGE_KEY);
   } catch {
     // localStorage unavailable (private browsing etc.) — nothing to clear.
+  }
+  if ('caches' in window) {
+    // Best-effort and async — the Supabase REST responses cached for
+    // offline use are scoped to whoever was signed in when they were
+    // fetched, so they must not survive into the next user's session.
+    void window.caches.delete(SW_API_CACHE_NAME).catch(() => {});
   }
 }
 

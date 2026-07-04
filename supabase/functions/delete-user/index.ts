@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // JWT-authenticated endpoint, so a wildcard origin is not itself an auth
 // bypass (no cookies are involved) — but set ALLOWED_ORIGIN to the app's
@@ -20,7 +19,7 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -109,8 +108,9 @@ serve(async (req) => {
 
     return jsonResponse({ success: true }, 200);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error';
-    console.error('delete-user failed:', message);
-    return jsonResponse({ error: message }, 400);
+    // Never echo internal error detail (DB constraint names, stack info)
+    // back to the caller — full detail goes to the function logs only.
+    console.error('delete-user failed:', err instanceof Error ? err.message : err);
+    return jsonResponse({ error: 'Internal error — check the function logs' }, 500);
   }
 });

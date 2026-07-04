@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // JWT-authenticated endpoint, so a wildcard origin is not itself an auth
 // bypass (no cookies are involved) — but set ALLOWED_ORIGIN to the app's
@@ -69,7 +68,7 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -134,7 +133,11 @@ serve(async (req) => {
       email_confirm: true,
     });
 
-    if (createErr || !user) throw createErr ?? new Error('Failed to create auth user');
+    // Auth errors (duplicate email, rejected password, …) are user-facing
+    // by design — surface them so the director knows what to correct.
+    // Anything else falls through to the generic 500 below.
+    if (createErr) throw new ValidationError(createErr.message);
+    if (!user) throw new Error('Failed to create auth user');
 
     // Insert profile row
     const { error: insertErr } = await admin.from('profiles').insert({
@@ -159,8 +162,9 @@ serve(async (req) => {
     if (err instanceof ValidationError) {
       return jsonResponse({ error: err.message }, 400);
     }
-    const message = err instanceof Error ? err.message : 'Internal error';
-    console.error('create-user failed:', message);
-    return jsonResponse({ error: message }, 400);
+    // Never echo internal error detail (DB constraint names, stack info)
+    // back to the caller — full detail goes to the function logs only.
+    console.error('create-user failed:', err instanceof Error ? err.message : err);
+    return jsonResponse({ error: 'Internal error — check the function logs' }, 500);
   }
 });
