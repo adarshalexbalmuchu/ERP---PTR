@@ -21,6 +21,7 @@ const TaskDetailPage = lazy(() => import('./pages/shared/TaskDetailPage'));
 const IncidentLog = lazy(() => import('./pages/shared/IncidentLog'));
 const MapView = lazy(() => import('./pages/shared/MapView'));
 const AuditLog = lazy(() => import('./pages/shared/AuditLog'));
+const Profile = lazy(() => import('./pages/shared/Profile'));
 const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
 
 function roleHome(role: string): string {
@@ -128,6 +129,7 @@ export default function App() {
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />
               <Route path="audit" element={<AuditLog />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
 
             {/* Range Officer */}
@@ -145,6 +147,7 @@ export default function App() {
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />
               <Route path="audit" element={<AuditLog />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
 
             {/* Guard */}
@@ -160,6 +163,7 @@ export default function App() {
               <Route path="tasks/:id" element={<TaskDetailPage />} />
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
