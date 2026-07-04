@@ -73,6 +73,18 @@ create table if not exists profiles (
   updated_at      timestamptz not null default now()
 );
 
+-- Extra ranges for officers who hold charge of MORE than one range (e.g. a
+-- Range Officer in charge of Chhipadohar East + West + Kutku). A user's
+-- effective range set is profiles.range_id UNION these rows — see
+-- get_my_range_ids(). Single-range users need no rows here; guards keep
+-- using profiles.range_id alone.
+create table if not exists officer_ranges (
+  user_id    uuid not null references profiles(id) on delete cascade,
+  range_id   uuid not null references ranges(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, range_id)
+);
+
 create table if not exists tasks (
   id                    uuid primary key default uuid_generate_v4(),
   title                 text not null,
@@ -320,19 +332,37 @@ set search_path = '' as $$
   select range_id from public.profiles where id = auth.uid();
 $$;
 
--- Whether the current user is the primary assignee or a co-assignee of a
--- task. SECURITY DEFINER so it queries tasks/task_assignees as the owning
--- role (bypassing RLS) instead of as the calling user — the tasks and
--- task_assignees SELECT policies both need this check on each other's
--- table, and evaluating it as a normal (RLS-checked) subquery would
--- recurse infinitely (stack depth exceeded -> 500 from PostgREST).
-create or replace function is_task_participant(p_task_id uuid)
+-- All ranges the current user holds: profiles.range_id plus any extra
+-- officer_ranges rows. Returns an ARRAY (not a set) so RLS policies can use
+-- `range_id = any ((select get_my_range_ids())::uuid[])` — the wrapping (select ...)
+-- becomes a one-time InitPlan and `= any(<array>)` stays index-driven,
+-- preserving the RLS performance fix documented above the policy section.
+create or replace function get_my_range_ids()
+returns uuid[] language sql security definer stable
+set search_path = '' as $$
+  select coalesce(array_agg(range_id), '{}'::uuid[]) from (
+    select range_id from public.profiles
+      where id = auth.uid() and range_id is not null
+    union
+    select range_id from public.officer_ranges where user_id = auth.uid()
+  ) r;
+$$;
+
+-- Is the current user a co-assignee of this task? SECURITY DEFINER is
+-- load-bearing here, not just a convenience: policies on tasks need to
+-- consult task_assignees, and policies on task_assignees need to consult
+-- tasks. If either side referenced the other table DIRECTLY, the rewriter
+-- would expand RLS policies in a loop and every guard task query would fail
+-- with "infinite recursion detected in policy" (42P17). Routing one
+-- direction through an owner-privileged function keeps it opaque to the
+-- rewriter and breaks the cycle. Cost is unchanged vs the correlated EXISTS
+-- it replaces: one primary-key probe per row checked.
+create or replace function is_task_assignee(t_id uuid)
 returns boolean language sql security definer stable
 set search_path = '' as $$
   select exists (
-    select 1 from public.tasks t where t.id = p_task_id and t.assignee_id = auth.uid()
-  ) or exists (
-    select 1 from public.task_assignees ta where ta.task_id = p_task_id and ta.user_id = auth.uid()
+    select 1 from public.task_assignees
+    where task_id = t_id and user_id = auth.uid()
   );
 $$;
 
@@ -497,6 +527,7 @@ alter table incidents     enable row level security;
 alter table incident_photos enable row level security;
 alter table audit_log     enable row level security;
 alter table push_subscriptions enable row level security;
+alter table officer_ranges enable row level security;
 
 -- Drop all policies before recreating (idempotent)
 do $$ declare r record; begin
@@ -523,22 +554,28 @@ create policy "tasks_director" on tasks
 
 create policy "tasks_officer_read" on tasks
   for select using (
-    (select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id())
+    (select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[])
   );
 
 create policy "tasks_officer_write" on tasks
   for all using (
-    (select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id())
+    (select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[])
   );
 
 create policy "tasks_guard_read" on tasks
   for select using (
-    (select get_my_role()) = 'guard' and public.is_task_participant(tasks.id)
+    (select get_my_role()) = 'guard' and (
+      assignee_id = (select auth.uid())
+      or is_task_assignee(tasks.id)
+    )
   );
 
 create policy "tasks_guard_update" on tasks
   for update using (
-    (select get_my_role()) = 'guard' and public.is_task_participant(tasks.id)
+    (select get_my_role()) = 'guard' and (
+      assignee_id = (select auth.uid())
+      or is_task_assignee(tasks.id)
+    )
   );
 
 -- task_updates
@@ -548,19 +585,30 @@ create policy "task_updates_director" on task_updates
 create policy "task_updates_officer" on task_updates
   for all using (
     (select get_my_role()) = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.range_id = (select get_my_range_id()))
+    exists (select 1 from tasks where tasks.id = task_updates.task_id and tasks.range_id = any ((select get_my_range_ids())::uuid[]))
   );
 
 create policy "task_updates_guard_read" on task_updates
   for select using (
-    (select get_my_role()) = 'guard' and public.is_task_participant(task_updates.task_id)
+    (select get_my_role()) = 'guard' and
+    exists (
+      select 1 from tasks where tasks.id = task_updates.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or is_task_assignee(tasks.id)
+      )
+    )
   );
 
 create policy "task_updates_guard_insert" on task_updates
   for insert with check (
     (select get_my_role()) = 'guard' and
     user_id = (select auth.uid()) and
-    public.is_task_participant(task_updates.task_id)
+    exists (
+      select 1 from tasks where tasks.id = task_updates.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or is_task_assignee(tasks.id)
+      )
+    )
   );
 
 -- comments
@@ -570,19 +618,30 @@ create policy "comments_director" on comments
 create policy "comments_officer" on comments
   for all using (
     (select get_my_role()) = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.range_id = (select get_my_range_id()))
+    exists (select 1 from tasks where tasks.id = comments.task_id and tasks.range_id = any ((select get_my_range_ids())::uuid[]))
   );
 
 create policy "comments_guard_read" on comments
   for select using (
-    (select get_my_role()) = 'guard' and public.is_task_participant(comments.task_id)
+    (select get_my_role()) = 'guard' and
+    exists (
+      select 1 from tasks where tasks.id = comments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or is_task_assignee(tasks.id)
+      )
+    )
   );
 
 create policy "comments_guard_insert" on comments
   for insert with check (
     (select get_my_role()) = 'guard' and
     user_id = (select auth.uid()) and
-    public.is_task_participant(comments.task_id)
+    exists (
+      select 1 from tasks where tasks.id = comments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or is_task_assignee(tasks.id)
+      )
+    )
   );
 
 -- attachments — same as comments
@@ -592,19 +651,30 @@ create policy "attachments_director" on attachments
 create policy "attachments_officer" on attachments
   for all using (
     (select get_my_role()) = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.range_id = (select get_my_range_id()))
+    exists (select 1 from tasks where tasks.id = attachments.task_id and tasks.range_id = any ((select get_my_range_ids())::uuid[]))
   );
 
 create policy "attachments_guard_read" on attachments
   for select using (
-    (select get_my_role()) = 'guard' and public.is_task_participant(attachments.task_id)
+    (select get_my_role()) = 'guard' and
+    exists (
+      select 1 from tasks where tasks.id = attachments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or is_task_assignee(tasks.id)
+      )
+    )
   );
 
 create policy "attachments_guard_insert" on attachments
   for insert with check (
     (select get_my_role()) = 'guard' and
     user_id = (select auth.uid()) and
-    public.is_task_participant(attachments.task_id)
+    exists (
+      select 1 from tasks where tasks.id = attachments.task_id and (
+        tasks.assignee_id = (select auth.uid())
+        or is_task_assignee(tasks.id)
+      )
+    )
   );
 
 -- task_assignees: director full; officer full within their range's tasks;
@@ -617,16 +687,19 @@ create policy "task_assignees_director" on task_assignees
 create policy "task_assignees_officer" on task_assignees
   for all using (
     (select get_my_role()) = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = task_assignees.task_id and tasks.range_id = (select get_my_range_id()))
+    exists (select 1 from tasks where tasks.id = task_assignees.task_id and tasks.range_id = any ((select get_my_range_ids())::uuid[]))
   )
   with check (
     (select get_my_role()) = 'range_officer' and
-    exists (select 1 from tasks where tasks.id = task_assignees.task_id and tasks.range_id = (select get_my_range_id()))
+    exists (select 1 from tasks where tasks.id = task_assignees.task_id and tasks.range_id = any ((select get_my_range_ids())::uuid[]))
   );
 
 create policy "task_assignees_guard_read" on task_assignees
   for select using (
-    (select get_my_role()) = 'guard' and public.is_task_participant(task_assignees.task_id)
+    (select get_my_role()) = 'guard' and (
+      exists (select 1 from tasks t where t.id = task_assignees.task_id and t.assignee_id = (select auth.uid()))
+      or is_task_assignee(task_assignees.task_id)
+    )
   );
 
 -- notifications: everyone reads/updates/deletes only their own, but an
@@ -661,6 +734,16 @@ create policy "notifications_delete" on notifications
 -- currently signed in on it. "for all" is safe here (unlike notifications)
 -- because a user only ever writes their OWN row — there's no cross-user
 -- insert case to worry about.
+-- officer_ranges: a user must be able to read their OWN extra ranges (the
+-- app loads them at login to drive the officer range switcher); directors
+-- read and manage everyone's. get_my_range_ids() itself is SECURITY
+-- DEFINER, so RLS here never blocks policy evaluation on other tables.
+create policy "officer_ranges_own_read" on officer_ranges
+  for select using (user_id = (select auth.uid()));
+
+create policy "officer_ranges_director" on officer_ranges
+  for all using ((select get_my_role()) = 'director');
+
 create policy "push_subscriptions_own" on push_subscriptions
   for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
@@ -679,7 +762,7 @@ create policy "incidents_director" on incidents
   for all using ((select get_my_role()) = 'director');
 
 create policy "incidents_officer" on incidents
-  for all using ((select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id()));
+  for all using ((select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[]));
 
 create policy "incidents_guard_read" on incidents
   for select using ((select get_my_role()) = 'guard' and range_id = (select get_my_range_id()));
@@ -721,7 +804,7 @@ create policy "audit_log_director_read" on audit_log
   for select using ((select get_my_role()) = 'director');
 
 create policy "audit_log_officer_read" on audit_log
-  for select using ((select get_my_role()) = 'range_officer' and range_id = (select get_my_range_id()));
+  for select using ((select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[]));
 
 create policy "audit_log_insert" on audit_log
   for insert with check (actor_id = (select auth.uid()));

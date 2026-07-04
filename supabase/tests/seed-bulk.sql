@@ -25,14 +25,19 @@ select
   (select id from ranges order by id offset (rn % (select count(*) from ranges)) limit 1)
 from (select id, email, row_number() over () as rn from auth.users where email like 'bulkuser%') u;
 
--- 50,000 tasks spread over the last 3 years, assigned to guards, various statuses
+-- 50,000 tasks spread over the last 3 years, assigned to guards, various
+-- statuses. The picker subqueries MUST reference `i` (md5(i || id)) —
+-- an uncorrelated `order by random() limit 1` is hoisted into an InitPlan
+-- and evaluated ONCE for the whole insert, silently dumping all 50k tasks
+-- into a single range on a single guard, which invalidates every officer/
+-- guard-scoped benchmark run against this seed.
 insert into tasks (id, title, assignee_id, created_by_id, range_id, status, priority, due_date, completion_percentage, created_at)
 select
   gen_random_uuid(),
   'Bulk task ' || i,
-  (select id from profiles where role = 'guard' order by random() limit 1),
-  (select id from profiles where role in ('range_officer','director') order by random() limit 1),
-  (select id from ranges order by random() limit 1),
+  (select id from profiles where role = 'guard' order by md5(i::text || id::text) limit 1),
+  (select id from profiles where role in ('range_officer','director') order by md5(i::text || id::text) limit 1),
+  (select id from ranges order by md5(i::text || id::text) limit 1),
   (array['NotStarted','InProgress','Completed','Archived']::task_status[])[1 + floor(random()*4)],
   (array['Critical','High','Medium','Low']::task_priority[])[1 + floor(random()*4)],
   current_date - (random()*1095)::int + (random()*30)::int,

@@ -31,3 +31,6 @@ dev-dist
 
 # Supabase CLI local state
 supabase/.temp
+
+# Generated login credentials (scripts/provision-users.mjs output) - never commit real passwords
+user-credentials-*.csv

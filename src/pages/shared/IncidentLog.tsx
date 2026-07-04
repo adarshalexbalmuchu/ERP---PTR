@@ -3,6 +3,7 @@ import { AlertTriangle, Plus, X, MapPin, Trash2, Camera, ImagePlus } from 'lucid
 import useStore from '../../store/useStore';
 import { useIncidents } from '../../hooks/useIncidents';
 import { useRanges } from '../../hooks/useRanges';
+import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDateTime } from '../../utils/formatters';
@@ -27,13 +28,20 @@ function ReportForm({
   onClose,
   defaultRangeId,
   lockRange,
+  allowedRangeIds,
 }: {
   isOpen: boolean;
   onClose: () => void;
   defaultRangeId: string;
   lockRange: boolean;
+  /** When set, the range picker only offers these ranges (a multi-range
+      officer reports within their own ranges; directors see all). */
+  allowedRangeIds?: string[];
 }) {
   const { ranges, areas } = useRanges();
+  const selectableRanges = allowedRangeIds?.length
+    ? ranges.filter((r) => allowedRangeIds.includes(r.id))
+    : ranges;
   const { reportIncident } = useIncidents();
 
   const [type, setType] = useState<IncidentType>('wildlife_sighting');
@@ -120,7 +128,7 @@ function ReportForm({
                 disabled={lockRange}
               >
                 <option value="">Select range</option>
-                {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {selectableRanges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </div>
             <div>
@@ -205,7 +213,11 @@ export default function IncidentLog() {
   const [filterType, setFilterType] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
 
-  const lockRange = currentUser?.role !== 'director';
+  const { activeRangeId, rangeIds, isMultiRange } = useOfficerRanges();
+  // Directors pick any range; multi-range officers pick among THEIR ranges
+  // (select stays enabled, options limited below); everyone else is locked
+  // to their single range.
+  const lockRange = currentUser?.role !== 'director' && !isMultiRange;
   const canManage = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
 
   const handleDelete = (id: string) => {
@@ -324,8 +336,9 @@ export default function IncidentLog() {
         <ReportForm
           isOpen={formOpen}
           onClose={() => setFormOpen(false)}
-          defaultRangeId={lockRange ? (currentUser.rangeId ?? '') : ''}
-          lockRange={lockRange && !!currentUser.rangeId}
+          defaultRangeId={currentUser.role === 'director' ? '' : activeRangeId}
+          lockRange={lockRange && !!activeRangeId}
+          allowedRangeIds={currentUser.role === 'director' ? undefined : rangeIds}
         />
       )}
     </div>
