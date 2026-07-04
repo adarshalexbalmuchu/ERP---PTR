@@ -8,7 +8,7 @@ import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
-import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
@@ -37,25 +37,27 @@ export default function OfficerDashboard() {
   const { tasks, createTask } = useTasks();
   const { users } = useUsers();
   const { ranges, areas } = useRanges();
-  const { stats } = useDashboardStats();
+  const { activeRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
 
   const [formOpen, setFormOpen] = useState(false);
 
-  const myRange = ranges.find((r) => r.id === currentUser?.rangeId);
-  const myTasks = tasks.filter((t) => t.rangeId === currentUser?.rangeId);
-  const myGuards = users.filter((u) => u.role === 'guard' && u.rangeId === currentUser?.rangeId);
-  const myAreas = areas.filter((a) => a.rangeId === currentUser?.rangeId);
+  const myRange = ranges.find((r) => r.id === activeRangeId);
+  const myTasks = tasks.filter((t) => t.rangeId === activeRangeId);
+  const myGuards = users.filter((u) => u.role === 'guard' && u.rangeId === activeRangeId);
+  const myAreas = areas.filter((a) => a.rangeId === activeRangeId);
 
-  // Top metrics come from the RLS-scoped task_dashboard_stats view (already
-  // limited to this officer's range by Postgres RLS) instead of recomputing
-  // from the full task list on every render.
-  const totalTasks = stats?.totalTasks ?? 0;
-  const critical = stats?.criticalCount ?? 0;
-  const inProgress = stats?.inProgressCount ?? 0;
-  const overdueCount = stats?.overdueCount ?? 0;
-  const completed = stats?.completedCount ?? 0;
+  // Metrics are computed from the already-fetched task list, scoped to the
+  // ACTIVE range — for an officer holding several ranges, the RLS-scoped
+  // task_dashboard_stats view would blend all their ranges together, which
+  // is exactly what the range switcher exists to avoid.
+  const totalTasks = myTasks.length;
+  const critical = myTasks.filter((t) => t.priority === 'Critical' && t.status !== 'Archived').length;
+  const inProgress = myTasks.filter((t) => t.status === 'InProgress').length;
+  const overdueCount = myTasks.filter(isOverdue).length;
+  const completed = myTasks.filter((t) => t.status === 'Completed').length;
+  const archived = myTasks.filter((t) => t.status === 'Archived').length;
   const completionRate = totalTasks > 0
-    ? Math.round((((stats?.completedCount ?? 0) + (stats?.archivedCount ?? 0)) / totalTasks) * 100)
+    ? Math.round(((completed + archived) / totalTasks) * 100)
     : 0;
 
   // Chart: tasks per guard
@@ -90,10 +92,25 @@ export default function OfficerDashboard() {
             {myRange?.name ?? 'Range'} &middot; {myGuards.length} staff &middot; {myAreas.length} areas
           </p>
         </div>
-        <button onClick={() => setFormOpen(true)} className="btn-primary flex-shrink-0">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">New Task</span>
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isMultiRange && (
+            <select
+              value={activeRangeId}
+              onChange={(e) => setActiveRangeId(e.target.value)}
+              className="input-field select-field !w-auto text-sm"
+              aria-label="Switch range"
+            >
+              {rangeIds.map((id) => {
+                const r = ranges.find((rr) => rr.id === id);
+                return <option key={id} value={id}>{r?.name ?? 'Range'}</option>;
+              })}
+            </select>
+          )}
+          <button onClick={() => setFormOpen(true)} className="btn-primary flex-shrink-0">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Task</span>
+          </button>
+        </div>
       </div>
 
       {/* Overview — one unified strip instead of five floating cards */}
@@ -215,7 +232,7 @@ export default function OfficerDashboard() {
           assignableUsers={myGuards}
           initialData={null}
           currentUserId={currentUser.id}
-          defaultRangeId={currentUser.rangeId}
+          defaultRangeId={activeRangeId}
         />
       )}
     </div>

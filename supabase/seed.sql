@@ -3,26 +3,11 @@
 -- Creates auth users via Supabase Auth and matching profile rows
 
 -- ─────────────────────────────────────────────
--- Ranges
+-- Ranges & areas
+-- The real PTR North Division ranges/beats live in seed-north-division.sql
+-- (Betla, Chhipadohar East, Chhipadohar West, Kutku) — run that file
+-- instead of inserting placeholder ranges here.
 -- ─────────────────────────────────────────────
-insert into ranges (id, name) values
-  ('00000000-0000-0000-0000-000000000001', 'Betla Range'),
-  ('00000000-0000-0000-0000-000000000002', 'Latehar Range'),
-  ('00000000-0000-0000-0000-000000000003', 'Kechki Range')
-on conflict do nothing;
-
--- ─────────────────────────────────────────────
--- Areas
--- ─────────────────────────────────────────────
-insert into areas (id, range_id, name) values
-  ('00000000-0000-0000-0001-000000000001', '00000000-0000-0000-0000-000000000001', 'Betla Core'),
-  ('00000000-0000-0000-0001-000000000002', '00000000-0000-0000-0000-000000000001', 'Betla Buffer'),
-  ('00000000-0000-0000-0001-000000000003', '00000000-0000-0000-0000-000000000002', 'Latehar North'),
-  ('00000000-0000-0000-0001-000000000004', '00000000-0000-0000-0000-000000000002', 'Latehar South'),
-  ('00000000-0000-0000-0001-000000000005', '00000000-0000-0000-0000-000000000003', 'Kechki East'),
-  ('00000000-0000-0000-0001-000000000006', '00000000-0000-0000-0000-000000000003', 'Kechki West'),
-  ('00000000-0000-0000-0001-000000000007', '00000000-0000-0000-0000-000000000003', 'Kechki South')
-on conflict do nothing;
 
 -- ─────────────────────────────────────────────
 -- Demo users

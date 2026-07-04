@@ -7,11 +7,14 @@ import type { Database } from '../lib/database.types';
 
 // Must match the `key` passed to createSyncStoragePersister in queryClient.ts.
 const QUERY_CACHE_STORAGE_KEY = 'ptr-query-cache';
+// Must match the runtime cacheName in src/sw.ts.
+const SW_API_CACHE_NAME = 'ptr-api-cache';
 
-// Clears both the in-memory query cache and its localStorage persistence so
-// a signed-out session's task/incident/user data can't linger for the next
-// person to use a shared device, and a subsequent login can't briefly
-// rehydrate the previous user's stale cached data.
+// Clears the in-memory query cache, its localStorage persistence, AND the
+// service worker's runtime API cache so a signed-out session's
+// task/incident/user data can't linger for the next person to use a shared
+// device, and a subsequent login can't briefly rehydrate the previous
+// user's stale cached data.
 function clearPersistedCache() {
   queryClient.clear();
   try {
@@ -19,11 +22,28 @@ function clearPersistedCache() {
   } catch {
     // localStorage unavailable (private browsing etc.) — nothing to clear.
   }
+  if ('caches' in window) {
+    // Best-effort and async — the Supabase REST responses cached for
+    // offline use are scoped to whoever was signed in when they were
+    // fetched, so they must not survive into the next user's session.
+    void window.caches.delete(SW_API_CACHE_NAME).catch(() => {});
+  }
 }
 
-type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type ProfileRow = Database['public']['Tables']['profiles']['Row'] & {
+  officer_ranges?: { range_id: string }[];
+};
+
+// The signed-in user's profile plus their full range set (profiles.range_id
+// UNION officer_ranges) — officers in charge of several ranges get all of
+// them here, which drives the range switcher in the officer pages.
+const PROFILE_SELECT = '*, officer_ranges(range_id)';
 
 function mapProfile(row: ProfileRow): User {
+  const rangeIds = [...new Set([
+    ...(row.range_id ? [row.range_id] : []),
+    ...(row.officer_ranges ?? []).map((r) => r.range_id),
+  ])];
   return {
     id: row.id,
     name: row.name,
@@ -33,6 +53,7 @@ function mapProfile(row: ProfileRow): User {
     avatarInitials: row.avatar_initials,
     designation: row.designation,
     rangeId: row.range_id ?? undefined,
+    rangeIds,
   };
 }
 
@@ -55,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const { data } = await supabase
           .from('profiles')
-          .select('*')
+          .select(PROFILE_SELECT)
           .eq('id', session.user.id)
           .single();
         if (data) setCurrentUser(mapProfile(data));
@@ -67,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' && session?.user) {
         const { data } = await supabase
           .from('profiles')
-          .select('*')
+          .select(PROFILE_SELECT)
           .eq('id', session.user.id)
           .single();
         if (data) setCurrentUser(mapProfile(data));

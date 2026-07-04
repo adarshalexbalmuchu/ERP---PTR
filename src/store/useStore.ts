@@ -8,8 +8,10 @@ const useStore = create<Store>()(
   persist(
     (set) => ({
       currentUser: null,
+      activeRangeId: null,
       setCurrentUser: (user) => set({ currentUser: user }),
-      logout: () => set({ currentUser: null }),
+      setActiveRangeId: (rangeId) => set({ activeRangeId: rangeId }),
+      logout: () => set({ currentUser: null, activeRangeId: null }),
     }),
     {
       name: 'ptr-store-v2',

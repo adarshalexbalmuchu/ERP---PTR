@@ -31,6 +31,14 @@ create or replace function auth.uid() returns uuid
     select nullif(current_setting('app.uid', true), '')::uuid
 $$;
 
+-- Real Supabase grants the API roles access to auth.uid() — every RLS
+-- policy and any non-SECURITY-DEFINER trigger that calls it as the
+-- invoking role depends on this. Without it, only code paths that reach
+-- auth.uid() through owner-privileged helper functions work locally,
+-- which silently diverges from production.
+grant usage on schema auth to anon, authenticated, service_role;
+grant execute on function auth.uid() to anon, authenticated, service_role;
+
 -- storage.buckets / storage.objects: minimal stand-ins so the storage policies in
 -- schema.sql (which reference storage.objects) have a table to attach to.
 create table if not exists storage.buckets (
