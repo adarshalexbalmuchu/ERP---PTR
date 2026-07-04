@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Map as MapIcon,
   History,
+  UserCircle,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -85,15 +86,25 @@ function Sidebar({
       </nav>
 
       <div className="p-3 border-t border-white/10 space-y-1">
-        <div className="flex items-center gap-3 px-3 py-2">
+        {/* Identity block doubles as the entry to My Profile (phone/password) */}
+        <NavLink
+          to={currentUser?.role === 'director' ? '/director/profile' : '/officer/profile'}
+          onClick={onClose}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2 rounded-sm transition-colors ${
+              isActive ? 'bg-white/[0.08]' : 'hover:bg-white/5'
+            }`
+          }
+          title="My Profile"
+        >
           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
             {currentUser?.avatarInitials}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-white truncate">{currentUser?.name}</div>
-            <div className="text-xs text-white/50 truncate">{currentUser?.designation}</div>
+            <div className="text-xs text-white/50 truncate">My Profile · {currentUser?.designation}</div>
           </div>
-        </div>
+        </NavLink>
         <button
           onClick={onLogout}
           className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium w-full text-left min-h-[44px] text-red-300 hover:bg-red-500/10 hover:text-red-200 transition-colors"
@@ -234,9 +245,13 @@ function GuardLayout() {
           <div className="flex items-center gap-2">
             <NotificationBell />
             <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
-              <div className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green flex-shrink-0">
+              <NavLink
+                to="/guard/profile"
+                className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green flex-shrink-0"
+                title="My Profile"
+              >
                 {currentUser?.avatarInitials}
-              </div>
+              </NavLink>
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
@@ -296,6 +311,17 @@ function GuardLayout() {
         >
           <MapIcon className="w-5 h-5" />
           Map
+        </NavLink>
+        <NavLink
+          to="/guard/profile"
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+              isActive ? 'text-ptr-green' : 'text-ptr-brown-light'
+            }`
+          }
+        >
+          <UserCircle className="w-5 h-5" />
+          Profile
         </NavLink>
       </nav>
     </div>

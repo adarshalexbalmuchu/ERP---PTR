@@ -376,8 +376,10 @@ $$;
 
 -- Without this, profiles_self_update (id = auth.uid()) lets ANY user set
 -- their own role to 'director' or move themselves to another range via a
--- direct API call — a full privilege escalation. Only a director may
--- change role/range_id; everyone may still edit their own name/phone/etc.
+-- direct API call — a full privilege escalation. Policy decision (matches
+-- the Profile page in the app): a non-director may self-edit ONLY their
+-- phone number. Name, email, designation, initials, role, and range are
+-- service-record fields maintained by the director's office.
 create or replace function enforce_profile_self_update()
 returns trigger language plpgsql
 set search_path = '' as $$
@@ -385,6 +387,14 @@ begin
   if auth.uid() = new.id and public.get_my_role() <> 'director' then
     if new.role is distinct from old.role or new.range_id is distinct from old.range_id then
       raise exception 'Only a director can change role or range assignment';
+    end if;
+    if new.name is distinct from old.name
+      or new.email is distinct from old.email
+      or new.designation is distinct from old.designation
+      or new.avatar_initials is distinct from old.avatar_initials
+      or new.created_at is distinct from old.created_at
+    then
+      raise exception 'Only your phone number can be changed here — other details are managed by the director''s office';
     end if;
   end if;
   return new;
