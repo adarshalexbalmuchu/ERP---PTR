@@ -210,12 +210,12 @@ export default function DirectorReports() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">Daily Reports</h1>
-          <p className="text-sm text-ptr-brown-light">Generate and review daily task reports</p>
+          <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">Daily Reports</h1>
+          <p className="text-[13px] text-ptr-brown-light mt-1">Generate and review daily task reports</p>
         </div>
-        <button onClick={() => generateMutation.mutate()} disabled={generating} className="btn-primary">
+        <button onClick={() => generateMutation.mutate()} disabled={generating} className="btn-primary flex-shrink-0">
           <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline">{generating ? 'Generating…' : 'Generate Report'}</span>
         </button>

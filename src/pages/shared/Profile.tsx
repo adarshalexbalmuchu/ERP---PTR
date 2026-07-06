@@ -122,9 +122,9 @@ export default function Profile() {
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">My Profile</h1>
-        <p className="text-sm text-ptr-brown-light">Manage your contact number and password</p>
+      <div className="border-b border-ptr-brown/10 pb-4">
+        <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">My Profile</h1>
+        <p className="text-[13px] text-ptr-brown-light mt-1">Manage your contact number and password</p>
       </div>
 
       {/* Identity — read-only. Service record details are managed centrally. */}
