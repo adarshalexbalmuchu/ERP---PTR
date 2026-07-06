@@ -4,7 +4,7 @@ export type UserRole = 'director' | 'range_officer' | 'guard' | 'range_office' |
 export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
-export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived';
+export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'sos_alert';
 export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'poaching_sign' | 'wildlife_sighting' | 'other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -235,6 +235,28 @@ export interface Database {
         Update: {
           user_id?: string;
           range_id?: string;
+        };
+        Relationships: Relationships;
+      };
+      live_locations: {
+        Row: {
+          user_id: string;
+          task_id: string;
+          lat: number;
+          lng: number;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          task_id: string;
+          lat: number;
+          lng: number;
+        };
+        Update: {
+          user_id?: string;
+          task_id?: string;
+          lat?: number;
+          lng?: number;
         };
         Relationships: Relationships;
       };

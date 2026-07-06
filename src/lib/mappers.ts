@@ -1,5 +1,5 @@
 import type { Database } from './database.types';
-import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry } from '../types';
+import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry, LiveLocation } from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TaskRow = Database['public']['Tables']['tasks']['Row'];
@@ -131,6 +131,27 @@ export function mapIncident(row: IncidentRow & { incident_photos?: IncidentPhoto
     incidentDate: row.incident_date,
     createdAt: row.created_at,
     photos: (row.incident_photos ?? []).map(mapIncidentPhoto),
+  };
+}
+
+type LiveLocationRow = Database['public']['Tables']['live_locations']['Row'];
+
+export function mapLiveLocation(
+  row: LiveLocationRow & {
+    profiles: { name: string; avatar_initials: string; designation: string } | null;
+    tasks: { title: string } | null;
+  },
+): LiveLocation {
+  return {
+    userId: row.user_id,
+    userName: row.profiles?.name ?? 'Unknown',
+    avatarInitials: row.profiles?.avatar_initials ?? '',
+    designation: row.profiles?.designation ?? '',
+    taskId: row.task_id,
+    taskTitle: row.tasks?.title ?? 'Untitled task',
+    lat: row.lat,
+    lng: row.lng,
+    updatedAt: row.updated_at,
   };
 }
 
