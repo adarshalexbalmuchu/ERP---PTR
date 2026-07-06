@@ -18,6 +18,13 @@ const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; cl
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // The panel is position:fixed and pinned to the viewport's right edge (not
+  // the bell's), so on a narrow phone it can't run off the left of the
+  // screen the way a bell-anchored `absolute right-0` panel does. Only `top`
+  // needs measuring, since the header height differs between the guard and
+  // admin layouts this component is shared by.
+  const [panelTop, setPanelTop] = useState(0);
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
   const { notifications, markRead, markAllRead } = useNotifications();
@@ -45,6 +52,19 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Re-measure where the panel should drop from whenever it opens, and keep
+  // it in sync if the viewport resizes while open.
+  useEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPanelTop(rect.bottom + 8);
+    };
+    reposition();
+    window.addEventListener('resize', reposition);
+    return () => window.removeEventListener('resize', reposition);
+  }, [open]);
+
   const handleNotifClick = (notifId: string, taskId: string) => {
     markRead.mutate(notifId);
     setOpen(false);
@@ -55,6 +75,7 @@ export default function NotificationBell() {
   return (
     <div className="relative" ref={ref}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
         className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
@@ -68,7 +89,10 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-ptr-cream-dark z-50 overflow-hidden animate-slide-down">
+        <div
+          className="fixed right-2 w-80 max-w-[calc(100vw-1rem)] bg-white rounded-2xl shadow-xl border border-ptr-cream-dark z-50 overflow-hidden animate-slide-down"
+          style={{ top: panelTop }}
+        >
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-ptr-cream-dark">
             <h3 className="text-sm font-semibold text-ptr-brown">Notifications</h3>
             <div className="flex items-center gap-3 flex-shrink-0">
