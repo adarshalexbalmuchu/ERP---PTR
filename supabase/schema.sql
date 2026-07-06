@@ -43,8 +43,10 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived');
+  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived', 'sos_alert');
 exception when duplicate_object then null; end $$;
+
+alter type notification_type add value if not exists 'sos_alert';
 
 do $$ begin
   create type incident_type as enum ('human_attack', 'livestock_attack', 'crop_damage', 'property_damage', 'poaching_sign', 'wildlife_sighting', 'other');
@@ -172,6 +174,21 @@ create table if not exists task_assignees (
   user_id    uuid not null references profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (task_id, user_id)
+);
+
+-- Current live location of a field-role user, ONE row per user (upserted,
+-- not a history log) while they hold an active patrol task. This is a
+-- disclosed feature: the app shows the field user a persistent on-screen
+-- indicator whenever this is being written (see useLocationSharing in
+-- src/hooks/useLiveLocation.ts) — there is no hidden/background variant.
+-- Visible only to the director and to range officers of the task's range
+-- (see RLS below); never to other guards.
+create table if not exists live_locations (
+  user_id    uuid primary key references profiles(id) on delete cascade,
+  task_id    uuid not null references tasks(id) on delete cascade,
+  lat        double precision not null,
+  lng        double precision not null,
+  updated_at timestamptz not null default now()
 );
 
 -- One row per browser/device push subscription. endpoint is globally
@@ -328,6 +345,10 @@ create trigger profiles_updated_at before update on profiles
 
 drop trigger if exists tasks_updated_at on tasks;
 create trigger tasks_updated_at before update on tasks
+  for each row execute function set_updated_at();
+
+drop trigger if exists live_locations_updated_at on live_locations;
+create trigger live_locations_updated_at before update on live_locations
   for each row execute function set_updated_at();
 
 -- ─────────────────────────────────────────────
@@ -561,6 +582,7 @@ alter table incident_photos enable row level security;
 alter table audit_log     enable row level security;
 alter table push_subscriptions enable row level security;
 alter table officer_ranges enable row level security;
+alter table live_locations enable row level security;
 
 -- Drop all policies before recreating (idempotent)
 do $$ declare r record; begin
@@ -779,6 +801,24 @@ create policy "officer_ranges_director" on officer_ranges
 
 create policy "push_subscriptions_own" on push_subscriptions
   for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+-- live_locations: a field-role user manages only their own row (the app
+-- writes it only while an on-screen "sharing" indicator is visible to
+-- them — see useLocationSharing). Director sees everyone; a range officer
+-- sees only rows whose task falls in one of their ranges. No policy grants
+-- guard-to-guard visibility.
+create policy "live_locations_self" on live_locations
+  for all using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+create policy "live_locations_director_read" on live_locations
+  for select using ((select get_my_role()) = 'director');
+
+create policy "live_locations_officer_read" on live_locations
+  for select using (
+    (select get_my_role()) = 'range_officer' and
+    exists (select 1 from tasks t where t.id = live_locations.task_id and t.range_id = any ((select get_my_range_ids())::uuid[]))
+  );
 
 -- daily_reports: director full, others read-only
 create policy "daily_reports_director" on daily_reports

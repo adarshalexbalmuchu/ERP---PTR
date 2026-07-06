@@ -201,12 +201,40 @@ const ROSTER = [
   { name: 'Avi Mohan Kumar Shukla', email: 'avi.shukla@ptr.in',
     role: 'guard', ranges: [], designation: 'Research Team — Tech Fellow (AI Devices)' },
 
-  // ——— Office (Range Office) ———
-  // No specific person given yet. When you have one, add them here with
-  // role: 'range_officer' and ranges: [B, CE, CW, K] (all four — this
-  // reuses the existing officer_ranges mechanism, same as Ajay Kumar
-  // Toppo above, to give org-wide task visibility without any new RLS).
-  // designation: 'Range Office — <their title>'.
+  // ——— Range Office ———
+  // Section staff at the range office — same guard-level access as Tiger
+  // Cell (see is_field_role() in schema.sql), just a different personnel
+  // label. Section staff aren't tied to a single range (ranges: [], same
+  // as Research Team); the three Computer Operators posted at a specific
+  // range office get that range as primary. Vir Singh's and Upendra
+  // Kumar's ranges are placeholders (TBD) — fix from Director → Users
+  // once confirmed.
+  { name: 'Prashant Bhaskar', email: 'prashant.bhaskar@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Account Section' },
+  { name: 'Sunny Kumar', email: 'sunny.kumar@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Court Section' },
+  { name: 'Sidhinath Jha', email: 'sidhinath.jha@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Wildlife Section' },
+  { name: 'Samir Lakra', email: 'samir.lakra@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Wildlife Section' },
+  { name: 'Nandji Singh', email: 'nandji.singh@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — HR Section' },
+  { name: 'Jainidhi Dubey', email: 'jainidhi.dubey@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Bill Section' },
+  { name: 'Navnit Kisan', email: 'navnit.kisan@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Dispatch Section' },
+  { name: 'Shahin Khan', email: 'shahin.khan@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Computer Operator (Office)' },
+  // Placeholder range — confirm and fix from Director -> Users.
+  { name: 'Upendra Kumar', email: 'upendra.kumar@ptr.in',
+    role: 'range_office', ranges: [], designation: 'Range Office — Computer Operator (range TBD)' },
+  { name: 'Prakash Kumar', email: 'prakash.kumar@ptr.in',
+    role: 'range_office', ranges: [B], designation: 'Range Office — Computer Operator, Betla' },
+  { name: 'Om Prakash Singh', email: 'om.singh@ptr.in',
+    role: 'range_office', ranges: [CE], designation: 'Range Office — Computer Operator, Barwadih' },
+  // Placeholder range (East vs West unconfirmed) — fix from Director -> Users.
+  { name: 'Vir Singh', email: 'vir.singh@ptr.in',
+    role: 'range_office', ranges: [CE], designation: 'Range Office — Computer Operator, Chhipadohar (range TBD)' },
 ];
 
 // <Firstname>@PTR<4 digits> — ≥10 chars with letters+numbers, satisfying

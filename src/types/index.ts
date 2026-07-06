@@ -109,7 +109,8 @@ export interface Notification {
     | 'task_updated'
     | 'task_completed'
     | 'changes_requested'
-    | 'task_archived';
+    | 'task_archived'
+    | 'sos_alert';
   title: string;
   message: string;
   taskId: string;
@@ -168,6 +169,20 @@ export interface Incident {
   incidentDate: string;
   createdAt: string;
   photos: IncidentPhoto[];
+}
+
+// Current live location of a field-role user on an active patrol task —
+// see useLocationSharing/useLiveLocations in src/hooks/useLiveLocation.ts.
+export interface LiveLocation {
+  userId: string;
+  userName: string;
+  avatarInitials: string;
+  designation: string;
+  taskId: string;
+  taskTitle: string;
+  lat: number;
+  lng: number;
+  updatedAt: string;
 }
 
 export interface AuditLogEntry {

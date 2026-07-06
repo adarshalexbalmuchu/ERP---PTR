@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, RefreshCw } from 'lucide-react';
+import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, RefreshCw, Siren } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -13,6 +13,7 @@ const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; cl
   task_completed: { icon: CheckCircle2, className: 'bg-ptr-green/10 text-ptr-green' },
   changes_requested: { icon: AlertCircle, className: 'bg-amber-100 text-amber-700' },
   task_archived: { icon: Archive, className: 'bg-ptr-brown/10 text-ptr-brown-light' },
+  sos_alert: { icon: Siren, className: 'bg-red-100 text-red-700' },
 };
 
 export default function NotificationBell() {

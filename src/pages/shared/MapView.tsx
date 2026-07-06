@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { AlertTriangle, ClipboardList, Map as MapIcon, Satellite, Mountain, LocateFixed } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Map as MapIcon, Satellite, Mountain, LocateFixed, RadioTower } from 'lucide-react';
 import { useMapPoints } from '../../hooks/useMapPoints';
-import { formatDateTime } from '../../utils/formatters';
+import { useLiveLocations, STALE_AFTER_MS } from '../../hooks/useLiveLocation';
+import useStore from '../../store/useStore';
+import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
 import type { IncidentSeverity } from '../../types';
 
@@ -62,9 +64,13 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function MapView() {
+  const currentUser = useStore((s) => s.currentUser);
+  const canSeeLiveLocations = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
   const { incidents, patrolPoints, loading } = useMapPoints();
+  const { locations: liveLocations } = useLiveLocations();
   const [showIncidents, setShowIncidents] = useState(true);
   const [showPatrols, setShowPatrols] = useState(true);
+  const [showLive, setShowLive] = useState(true);
   const [layer, setLayer] = useState<LayerId>('street');
   const [myLocation, setMyLocation] = useState<Coords | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -140,6 +146,13 @@ export default function MapView() {
           <ClipboardList className="w-4 h-4 text-ptr-green" />
           Patrol updates ({patrolPoints.length})
         </label>
+        {canSeeLiveLocations && (
+          <label className="flex items-center gap-2 text-sm text-ptr-brown cursor-pointer select-none">
+            <input type="checkbox" checked={showLive} onChange={(e) => setShowLive(e.target.checked)} className="accent-blue-600" />
+            <RadioTower className="w-4 h-4 text-blue-600" />
+            Staff on patrol ({liveLocations.length})
+          </label>
+        )}
       </div>
 
       <div className="card overflow-hidden relative" style={{ height: '65vh', isolation: 'isolate' }}>
@@ -240,6 +253,35 @@ export default function MapView() {
               </Popup>
             </CircleMarker>
           ))}
+
+          {showLive && liveLocations.map((loc) => {
+            const isStale = Date.now() - new Date(loc.updatedAt).getTime() > STALE_AFTER_MS;
+            return (
+              <CircleMarker
+                key={loc.userId}
+                center={[loc.lat, loc.lng]}
+                radius={8}
+                pathOptions={{
+                  color: '#2563EB',
+                  weight: 2,
+                  fillColor: '#2563EB',
+                  fillOpacity: isStale ? 0.3 : 0.85,
+                }}
+              >
+                <Popup>
+                  <div className="text-xs space-y-1">
+                    <div className="font-semibold">{loc.userName}</div>
+                    <div className="text-ptr-brown-light">{loc.designation}</div>
+                    <div>{loc.taskTitle}</div>
+                    <div className="text-ptr-brown-light">
+                      {isStale ? 'Last known location · ' : 'Live · '}
+                      {formatRelative(loc.updatedAt)}
+                    </div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
         </MapContainer>
       </div>
     </div>
