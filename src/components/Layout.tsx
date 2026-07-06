@@ -229,6 +229,7 @@ function GuardLayout() {
   const { isSharing } = useLocationSharing();
   const { trigger: triggerSOS, canTrigger: canTriggerSOS } = useSOS();
   const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
+  const [showLocationDetail, setShowLocationDetail] = useState(false);
 
   const handleLogout = async () => {
     await logoutFromSupabase();
@@ -296,10 +297,20 @@ function GuardLayout() {
             {currentUser?.designation && <span className="font-normal text-ptr-brown-light"> &middot; {currentUser.designation}</span>}
           </p>
           {isSharing && (
-            <p className="flex items-center gap-1.5 text-xs text-ptr-green font-medium mt-1">
-              <RadioTower className="w-3 h-3" />
-              Location sharing active — visible to your Director &amp; Range Officer
-            </p>
+            <div className="mt-1">
+              <button
+                onClick={() => setShowLocationDetail((v) => !v)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ptr-green/10 text-ptr-green text-[11px] font-medium"
+              >
+                <RadioTower className="w-2.5 h-2.5" />
+                Sharing location
+              </button>
+              {showLocationDetail && (
+                <p className="text-xs text-ptr-brown-light mt-1">
+                  Visible to your Director &amp; Range Officer while this task is active.
+                </p>
+              )}
+            </div>
           )}
           <p className="text-xs text-ptr-brown-light">
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
