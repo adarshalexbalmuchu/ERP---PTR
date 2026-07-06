@@ -23,6 +23,13 @@ exception when duplicate_object then null; end $$;
 alter type user_role add value if not exists 'range_office';
 alter type user_role add value if not exists 'tiger_cell';
 
+-- Postgres runs this whole pasted script as one implicit transaction, and a
+-- newly-added enum value can't be referenced until that transaction commits
+-- ("unsafe use of new value of enum type") -- is_field_role() further down
+-- compares against 'range_office'/'tiger_cell' directly, so commit here to
+-- close out the ALTER TYPE statements before anything reads the new values.
+commit;
+
 do $$ begin
   create type task_status as enum ('NotStarted', 'InProgress', 'Completed', 'Archived');
 exception when duplicate_object then null; end $$;
