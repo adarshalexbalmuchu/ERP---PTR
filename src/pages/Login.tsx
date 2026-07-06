@@ -146,7 +146,8 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   autoComplete="email"
-                  className="w-full px-3.5 py-3 border border-ptr-brown/25 rounded-md text-sm text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
+                  className="w-full px-3.5 py-3 border border-ptr-brown/25 rounded-md text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
+                  style={{ fontSize: '16px' }}
                   required
                 />
               </div>
@@ -159,7 +160,8 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     autoComplete="current-password"
-                    className="w-full px-3.5 py-3 pr-10 border border-ptr-brown/25 rounded-md text-sm text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
+                    className="w-full px-3.5 py-3 pr-10 border border-ptr-brown/25 rounded-md text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
+                    style={{ fontSize: '16px' }}
                     required
                   />
                   <button

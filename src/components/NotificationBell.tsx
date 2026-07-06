@@ -29,6 +29,7 @@ export default function NotificationBell() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const showPushPrompt = push.status === 'unsubscribed' && push.permission !== 'denied' && !promptDismissed;
+  const showIOSInstallHint = push.needsIOSInstall && !promptDismissed;
 
   const dismissPushPrompt = () => {
     setPromptDismissed(true);
@@ -56,7 +57,7 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative p-2 rounded-xl hover:bg-ptr-cream transition-colors"
+        className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
         <Bell className="w-5 h-5 text-ptr-brown" />
@@ -68,19 +69,47 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-ptr-cream-dark z-50 overflow-hidden animate-slide-down">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-ptr-cream-dark">
+        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-ptr-cream-dark z-50 overflow-hidden animate-slide-down">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-ptr-cream-dark">
             <h3 className="text-sm font-semibold text-ptr-brown">Notifications</h3>
-            {unreadCount > 0 && (
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {unreadCount > 0 && (
+                <button
+                  onClick={() => markAllRead.mutate()}
+                  className="text-xs text-ptr-green font-medium flex items-center gap-1"
+                >
+                  <Check className="w-3 h-3" />
+                  Mark all read
+                </button>
+              )}
               <button
-                onClick={() => markAllRead.mutate()}
-                className="text-xs text-ptr-green font-medium flex items-center gap-1"
+                onClick={() => setOpen(false)}
+                className="p-1 rounded-full hover:bg-ptr-cream transition-colors text-ptr-brown-light"
+                aria-label="Close notifications"
               >
-                <Check className="w-3 h-3" />
-                Mark all read
+                <X className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
+          {showIOSInstallHint && (
+            <div className="flex items-start gap-2.5 px-4 py-3 bg-ptr-green/5 border-b border-ptr-cream-dark">
+              <BellRing className="w-4 h-4 text-ptr-green flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-ptr-brown">Get notified on this device</p>
+                <p className="text-xs text-ptr-brown-light mt-0.5">
+                  On iPhone/iPad, first add this app to your Home Screen (Share button &rarr; Add to Home
+                  Screen), then open it from there to turn on notifications.
+                </p>
+              </div>
+              <button
+                onClick={dismissPushPrompt}
+                className="p-0.5 rounded text-ptr-brown-light/60 hover:text-ptr-brown-light flex-shrink-0"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           {showPushPrompt && (
             <div className="flex items-start gap-2.5 px-4 py-3 bg-ptr-green/5 border-b border-ptr-cream-dark">
               <BellRing className="w-4 h-4 text-ptr-green flex-shrink-0 mt-0.5" />

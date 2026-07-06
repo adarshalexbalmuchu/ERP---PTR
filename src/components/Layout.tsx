@@ -55,7 +55,8 @@ function Sidebar({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
+              aria-label="Close menu"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
             >
               <X className="w-5 h-5 text-white/70" />
             </button>
@@ -134,7 +135,7 @@ function AdminLayout({ items }: { items: NavItem[] }) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-ptr-cream overflow-hidden">
+    <div className="flex flex-col h-dvh bg-ptr-cream overflow-hidden">
       <GovStrip />
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
@@ -165,7 +166,7 @@ function AdminLayout({ items }: { items: NavItem[] }) {
           <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors"
               aria-label="Open navigation"
             >
               <Menu className="w-5 h-5 text-ptr-brown" />
@@ -283,8 +284,9 @@ function GuardLayout() {
                 </NavLink>
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
                   title="Log out"
+                  aria-label="Log out"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>

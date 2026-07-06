@@ -4,6 +4,7 @@ import {
   getPushSubscriptionStatus,
   subscribeToPush,
   unsubscribeFromPush,
+  isIOSBrowserTab,
   type PushStatus,
 } from '../utils/push';
 
@@ -46,6 +47,7 @@ export function usePushNotifications() {
   }, []);
 
   const permission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
+  const needsIOSInstall = status === 'unsupported' && typeof window !== 'undefined' && isIOSBrowserTab();
 
-  return { status, error, loading, enable, disable, permission };
+  return { status, error, loading, enable, disable, permission, needsIOSInstall };
 }

@@ -146,17 +146,17 @@ export default function OfficerTaskList() {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <PriorityBadge priority={task.priority} size="sm" />
                   <StatusBadge status={task.status} size="sm" />
-                  <div className="flex items-center gap-1 ml-1">
+                  <div className="flex items-center gap-1.5 ml-1">
                     <button
                       onClick={() => navigate(`/officer/tasks/${task.id}`)}
-                      className="p-1.5 rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
                       title="View"
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => { setEditingTask(task); setFormOpen(true); }}
-                      className="p-1.5 rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
                       title="Edit"
                     >
                       <Pencil className="w-3.5 h-3.5" />

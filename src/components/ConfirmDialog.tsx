@@ -25,7 +25,7 @@ export default function ConfirmDialog({
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6"
         style={{ animation: 'scaleIn 0.15s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
