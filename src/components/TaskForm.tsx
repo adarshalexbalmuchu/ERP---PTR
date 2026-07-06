@@ -239,14 +239,34 @@ export default function TaskForm({
                 value={assigneeSearch}
                 onChange={(e) => { setAssigneeSearch(e.target.value); setAssigneeDropdownOpen(true); }}
                 onFocus={() => setAssigneeDropdownOpen(true)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setAssigneeDropdownOpen(false); }}
                 placeholder={`Search ${assignableUsers.length} staff by name or designation…`}
                 className={`input-field pl-9 pr-9 ${errors.assigneeIds ? 'input-error' : ''}`}
               />
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ptr-brown-light pointer-events-none" />
+              <button
+                type="button"
+                onClick={() => setAssigneeDropdownOpen((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5"
+                aria-label={assigneeDropdownOpen ? 'Close staff list' : 'Open staff list'}
+              >
+                <ChevronDown className={`w-4 h-4 text-ptr-brown-light transition-transform ${assigneeDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
             </div>
 
             {assigneeDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-ptr-cream-dark rounded-xl shadow-lg">
+              <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-ptr-cream-dark rounded-xl shadow-lg">
+                <div className="sticky top-0 flex items-center justify-between gap-2 px-3 py-2 bg-white border-b border-ptr-cream-dark">
+                  <span className="text-xs text-ptr-brown-light">
+                    {assigneeIds.length} selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAssigneeDropdownOpen(false)}
+                    className="text-xs font-semibold text-ptr-green"
+                  >
+                    Done
+                  </button>
+                </div>
                 {filteredAssignableUsers.length === 0 ? (
                   <p className="px-3 py-3 text-xs text-ptr-brown-light">No matching staff found</p>
                 ) : (
