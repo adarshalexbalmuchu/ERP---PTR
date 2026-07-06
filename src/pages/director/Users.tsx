@@ -8,14 +8,18 @@ const ROLE_LABELS: Record<Role, string> = {
   director: 'Director',
   range_officer: 'Range Officer',
   guard: 'Guard / Field Staff',
+  range_office: 'Range Office',
+  tiger_cell: 'Tiger Cell',
 };
 
 // Director gets the one brand-color highlight (top authority); the other
-// two roles stay neutral — role is already legible from the label text.
+// roles stay neutral — role is already legible from the label text.
 const ROLE_COLORS: Record<Role, string> = {
   director: 'bg-ptr-green/10 text-ptr-green border border-ptr-green/20',
   range_officer: 'bg-white text-ptr-brown border border-ptr-cream-dark',
   guard: 'bg-white text-ptr-brown-light border border-ptr-cream-dark',
+  range_office: 'bg-white text-ptr-brown-light border border-ptr-cream-dark',
+  tiger_cell: 'bg-white text-ptr-brown-light border border-ptr-cream-dark',
 };
 
 interface UserFormData {
@@ -156,6 +160,8 @@ function UserFormModal({
                 <option value="director">Director</option>
                 <option value="range_officer">Range Officer</option>
                 <option value="guard">Guard / Field Staff</option>
+                <option value="range_office">Range Office</option>
+                <option value="tiger_cell">Tiger Cell</option>
               </select>
             </div>
             <div>
@@ -255,6 +261,8 @@ export default function DirectorUsers() {
           <option value="director">Director</option>
           <option value="range_officer">Range Officer</option>
           <option value="guard">Guard / Field Staff</option>
+          <option value="range_office">Range Office</option>
+          <option value="tiger_cell">Tiger Cell</option>
         </select>
       </div>
 
