@@ -5,8 +5,8 @@ export type Role = 'director' | 'range_officer' | 'guard' | 'range_office' | 'ti
 // personnel label. Anywhere the app branches on "is this a field-level
 // user", check this instead of `role === 'guard'` directly.
 export const FIELD_ROLES: Role[] = ['guard', 'range_office', 'tiger_cell'];
-export function isFieldRole(role: Role): boolean {
-  return FIELD_ROLES.includes(role);
+export function isFieldRole(role: Role | undefined): boolean {
+  return role !== undefined && FIELD_ROLES.includes(role);
 }
 
 export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
