@@ -21,6 +21,7 @@ import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 import type { Task } from '../../types';
+import { isFieldRole } from '../../types';
 
 // One cell of the unified Overview strip — large numeral, small semibold
 // label, muted context line. Hierarchy is carried by type, not color.
@@ -318,7 +319,7 @@ export default function DirectorDashboard() {
             }
             setFormOpen(false);
           }}
-          assignableUsers={users.filter((u) => u.role === 'guard')}
+          assignableUsers={users.filter((u) => isFieldRole(u.role))}
           initialData={null}
           currentUserId={currentUser.id}
         />

@@ -27,6 +27,7 @@ import CommentThread from '../../components/CommentThread';
 import AttachmentList from '../../components/AttachmentList';
 import TaskForm from '../../components/TaskForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { isFieldRole } from '../../types';
 
 function ProgressBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.max(0, value));
@@ -126,7 +127,7 @@ export default function TaskDetailPage() {
   const isAssignee = currentUser?.id === task.assigneeId || task.coAssigneeIds.includes(currentUser?.id ?? '');
   const canManage = role === 'director' || role === 'range_officer';
 
-  const assignableUsers = users.filter((u) => u.role === 'guard');
+  const assignableUsers = users.filter((u) => isFieldRole(u.role));
 
   const backPath =
     role === 'director'
@@ -220,7 +221,7 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Guard actions */}
-      {isAssignee && role === 'guard' && (
+      {isAssignee && isFieldRole(role) && (
         <div className="card p-5 border-l-4 border-l-amber-400 space-y-3">
           {task.status === 'NotStarted' && (
             <div>
@@ -398,7 +399,7 @@ export default function TaskDetailPage() {
       )}
 
       {/* Guard can add update from detail (quick link) */}
-      {isAssignee && role === 'guard' && task.status === 'InProgress' && task.taskUpdates.length === 0 && (
+      {isAssignee && isFieldRole(role) && task.status === 'InProgress' && task.taskUpdates.length === 0 && (
         <button
           onClick={() => { setShowUpdateForm(true); setUpdatePct(0); }}
           className="w-full py-3 rounded-2xl border-2 border-dashed border-ptr-cream-dark text-sm text-ptr-brown-light hover:border-ptr-green hover:text-ptr-green transition-colors flex items-center justify-center gap-2"

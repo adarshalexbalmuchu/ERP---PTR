@@ -4,6 +4,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { queryClient, queryPersister } from './lib/queryClient';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import useStore from './store/useStore';
+import { isFieldRole } from './types';
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import OfflineBanner from './components/OfflineBanner';
@@ -66,7 +67,7 @@ function ProtectedGuard({ children }: { children: ReactNode }) {
   const user = useStore((s) => s.currentUser);
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'guard') return <Navigate to={roleHome(user.role)} replace />;
+  if (!isFieldRole(user.role)) return <Navigate to={roleHome(user.role)} replace />;
   return <>{children}</>;
 }
 

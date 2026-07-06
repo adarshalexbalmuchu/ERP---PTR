@@ -14,8 +14,14 @@ create extension if not exists pg_net with schema extensions;
 -- Enums (idempotent)
 -- ─────────────────────────────────────────────
 do $$ begin
-  create type user_role as enum ('director', 'range_officer', 'guard');
+  create type user_role as enum ('director', 'range_officer', 'guard', 'range_office', 'tiger_cell');
 exception when duplicate_object then null; end $$;
+
+-- range_office and tiger_cell were added after the type's initial creation
+-- above, so an already-deployed database needs these ALTER statements to
+-- pick them up (the do-block above only fires create on a fresh database).
+alter type user_role add value if not exists 'range_office';
+alter type user_role add value if not exists 'tiger_cell';
 
 do $$ begin
   create type task_status as enum ('NotStarted', 'InProgress', 'Completed', 'Archived');
@@ -326,6 +332,16 @@ set search_path = '' as $$
   select role from public.profiles where id = auth.uid();
 $$;
 
+-- range_office and tiger_cell hold the same access level as guard (field
+-- staff scoped to their own assigned tasks/incidents) — just a different
+-- personnel label. Every RLS policy and trigger that used to check
+-- `get_my_role() = 'guard'` calls this instead, so the three stay in sync.
+create or replace function is_field_role()
+returns boolean language sql security invoker stable
+set search_path = '' as $$
+  select (select public.get_my_role()) in ('guard', 'range_office', 'tiger_cell');
+$$;
+
 create or replace function get_my_range_id()
 returns uuid language sql security definer stable
 set search_path = '' as $$
@@ -416,7 +432,7 @@ create or replace function enforce_guard_task_update()
 returns trigger language plpgsql
 set search_path = '' as $$
 begin
-  if public.get_my_role() = 'guard' then
+  if public.is_field_role() then
     if new.title is distinct from old.title
       or new.description is distinct from old.description
       or new.assignee_id is distinct from old.assignee_id
@@ -574,7 +590,7 @@ create policy "tasks_officer_write" on tasks
 
 create policy "tasks_guard_read" on tasks
   for select using (
-    (select get_my_role()) = 'guard' and (
+    (select is_field_role()) and (
       assignee_id = (select auth.uid())
       or is_task_assignee(tasks.id)
     )
@@ -582,7 +598,7 @@ create policy "tasks_guard_read" on tasks
 
 create policy "tasks_guard_update" on tasks
   for update using (
-    (select get_my_role()) = 'guard' and (
+    (select is_field_role()) and (
       assignee_id = (select auth.uid())
       or is_task_assignee(tasks.id)
     )
@@ -600,7 +616,7 @@ create policy "task_updates_officer" on task_updates
 
 create policy "task_updates_guard_read" on task_updates
   for select using (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     exists (
       select 1 from tasks where tasks.id = task_updates.task_id and (
         tasks.assignee_id = (select auth.uid())
@@ -611,7 +627,7 @@ create policy "task_updates_guard_read" on task_updates
 
 create policy "task_updates_guard_insert" on task_updates
   for insert with check (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     user_id = (select auth.uid()) and
     exists (
       select 1 from tasks where tasks.id = task_updates.task_id and (
@@ -633,7 +649,7 @@ create policy "comments_officer" on comments
 
 create policy "comments_guard_read" on comments
   for select using (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     exists (
       select 1 from tasks where tasks.id = comments.task_id and (
         tasks.assignee_id = (select auth.uid())
@@ -644,7 +660,7 @@ create policy "comments_guard_read" on comments
 
 create policy "comments_guard_insert" on comments
   for insert with check (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     user_id = (select auth.uid()) and
     exists (
       select 1 from tasks where tasks.id = comments.task_id and (
@@ -666,7 +682,7 @@ create policy "attachments_officer" on attachments
 
 create policy "attachments_guard_read" on attachments
   for select using (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     exists (
       select 1 from tasks where tasks.id = attachments.task_id and (
         tasks.assignee_id = (select auth.uid())
@@ -677,7 +693,7 @@ create policy "attachments_guard_read" on attachments
 
 create policy "attachments_guard_insert" on attachments
   for insert with check (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     user_id = (select auth.uid()) and
     exists (
       select 1 from tasks where tasks.id = attachments.task_id and (
@@ -706,7 +722,7 @@ create policy "task_assignees_officer" on task_assignees
 
 create policy "task_assignees_guard_read" on task_assignees
   for select using (
-    (select get_my_role()) = 'guard' and (
+    (select is_field_role()) and (
       exists (select 1 from tasks t where t.id = task_assignees.task_id and t.assignee_id = (select auth.uid()))
       or is_task_assignee(task_assignees.task_id)
     )
@@ -762,7 +778,7 @@ create policy "daily_reports_director" on daily_reports
   for all using ((select get_my_role()) = 'director');
 
 create policy "daily_reports_read" on daily_reports
-  for select using ((select get_my_role()) = 'range_officer' or (select get_my_role()) = 'guard');
+  for select using ((select get_my_role()) = 'range_officer' or (select is_field_role()));
 
 -- incidents: director full; officer full within their range; guard can
 -- report (insert) and read incidents within their own range for situational
@@ -775,10 +791,10 @@ create policy "incidents_officer" on incidents
   for all using ((select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[]));
 
 create policy "incidents_guard_read" on incidents
-  for select using ((select get_my_role()) = 'guard' and range_id = (select get_my_range_id()));
+  for select using ((select is_field_role()) and range_id = (select get_my_range_id()));
 
 create policy "incidents_guard_insert" on incidents
-  for insert with check ((select get_my_role()) = 'guard' and reported_by = (select auth.uid()));
+  for insert with check ((select is_field_role()) and reported_by = (select auth.uid()));
 
 -- incident_photos: same shape as incidents itself. Guards can only attach
 -- photos to incidents THEY reported (not any incident in their range) and
@@ -795,13 +811,13 @@ create policy "incident_photos_officer" on incident_photos
 
 create policy "incident_photos_guard_read" on incident_photos
   for select using (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.range_id = (select get_my_range_id()))
   );
 
 create policy "incident_photos_guard_insert" on incident_photos
   for insert with check (
-    (select get_my_role()) = 'guard' and
+    (select is_field_role()) and
     uploaded_by = (select auth.uid()) and
     exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.reported_by = (select auth.uid()))
   );

@@ -13,6 +13,7 @@ import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 import type { Task, TaskStatus, TaskPriority } from '../../types';
+import { isFieldRole } from '../../types';
 
 export default function DirectorTaskList() {
   const navigate = useNavigate();
@@ -176,7 +177,7 @@ export default function DirectorTaskList() {
             setFormOpen(false);
             setEditingTask(null);
           }}
-          assignableUsers={users.filter((u) => u.role === 'guard')}
+          assignableUsers={users.filter((u) => isFieldRole(u.role))}
           initialData={editingTask}
           currentUserId={currentUser.id}
         />
