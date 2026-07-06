@@ -7,7 +7,7 @@ import type { User, Role } from '../../types';
 const ROLE_LABELS: Record<Role, string> = {
   director: 'Director',
   range_officer: 'Range Officer',
-  guard: 'Staff',
+  guard: 'Guard / Field Staff',
   range_office: 'Range Office',
   tiger_cell: 'Tiger Cell',
 };
@@ -159,7 +159,7 @@ function UserFormModal({
               >
                 <option value="director">Director</option>
                 <option value="range_officer">Range Officer</option>
-                <option value="guard">Staff</option>
+                <option value="guard">Guard / Field Staff</option>
                 <option value="range_office">Range Office</option>
                 <option value="tiger_cell">Tiger Cell</option>
               </select>
@@ -260,7 +260,7 @@ export default function DirectorUsers() {
           <option value="">All Roles</option>
           <option value="director">Director</option>
           <option value="range_officer">Range Officer</option>
-          <option value="guard">Staff</option>
+          <option value="guard">Guard / Field Staff</option>
           <option value="range_office">Range Office</option>
           <option value="tiger_cell">Tiger Cell</option>
         </select>

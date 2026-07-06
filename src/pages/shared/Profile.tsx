@@ -9,7 +9,7 @@ import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 const ROLE_LABELS: Record<string, string> = {
   director: 'Director',
   range_officer: 'Range Officer / Forester',
-  guard: 'Staff',
+  guard: 'Forest Guard',
   range_office: 'Range Office',
   tiger_cell: 'Tiger Cell',
 };
