@@ -14,6 +14,7 @@ import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 import type { Task, TaskStatus, TaskPriority } from '../../types';
+import { isFieldRole } from '../../types';
 
 export default function OfficerTaskList() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export default function OfficerTaskList() {
 
   const { activeRangeId: myRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
   const myTasks = tasks.filter((t) => t.rangeId === myRangeId);
-  const myGuards = users.filter((u) => u.role === 'guard' && u.rangeId === myRangeId);
+  const myGuards = users.filter((u) => isFieldRole(u.role) && u.rangeId === myRangeId);
   const myAreas = areas.filter((a) => a.rangeId === myRangeId);
 
   const filtered = myTasks.filter((t) => {

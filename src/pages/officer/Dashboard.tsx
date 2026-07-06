@@ -9,6 +9,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
+import { isFieldRole } from '../../types';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
@@ -43,7 +44,7 @@ export default function OfficerDashboard() {
 
   const myRange = ranges.find((r) => r.id === activeRangeId);
   const myTasks = tasks.filter((t) => t.rangeId === activeRangeId);
-  const myGuards = users.filter((u) => u.role === 'guard' && u.rangeId === activeRangeId);
+  const myGuards = users.filter((u) => isFieldRole(u.role) && u.rangeId === activeRangeId);
   const myAreas = areas.filter((a) => a.rangeId === activeRangeId);
 
   // Metrics are computed from the already-fetched task list, scoped to the

@@ -10,6 +10,8 @@ const ROLE_LABELS: Record<string, string> = {
   director: 'Director',
   range_officer: 'Range Officer / Forester',
   guard: 'Forest Guard',
+  range_office: 'Range Office',
+  tiger_cell: 'Tiger Cell',
 };
 
 // Matches the create-user Edge Function and provisioning script policy so a
