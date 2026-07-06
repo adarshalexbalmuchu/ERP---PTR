@@ -1,4 +1,3 @@
-
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -19,50 +18,51 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'all', label: 'All' },
 ];
 
-function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
+// Matches the director dashboard's Overview cell — large numeral, small
+// semibold uppercase label, muted context line — so every role reads the
+// same institutional style.
+function Metric({ label, value, sub, valueClass = 'text-ptr-brown' }: { label: string; value: number | string; sub: string; valueClass?: string }) {
+  return (
+    <div className="px-5 py-4">
+      <div className={`text-2xl xl:text-3xl font-bold tracking-tight tabular-nums ${valueClass}`}>{value}</div>
+      <div className="text-[11px] text-ptr-brown font-semibold uppercase tracking-[0.06em] mt-1">{label}</div>
+      <div className="text-[11px] text-ptr-brown-light mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h2 className="text-xs font-bold text-ptr-brown uppercase tracking-[0.08em]">{children}</h2>;
+}
+
+// One flat row in the task list — same divided-list treatment as the
+// director dashboard's Range Status / Recent Tasks, not a floating card.
+function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
   const overdue = isOverdue(task);
   const pct = task.completionPercentage;
-
-  const accentColor = overdue
-    ? 'bg-red-500'
-    : task.priority === 'Critical' || task.priority === 'High'
-    ? 'bg-amber-500'
-    : task.status === 'Completed'
-    ? 'bg-ptr-green'
-    : 'bg-ptr-brown/30';
-
   return (
     <button
       onClick={onClick}
-      className="w-full card pl-5 p-4 text-left hover:shadow-md transition-shadow flex items-start gap-3 relative overflow-hidden"
+      className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-ptr-cream transition-colors"
     >
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor}`} />
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="font-medium text-sm text-ptr-brown leading-snug">{task.title}</div>
-          <ChevronRight className="w-4 h-4 text-ptr-brown-light flex-shrink-0 mt-0.5" />
-        </div>
-
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="text-[13px] font-semibold text-ptr-brown leading-snug">{task.title}</div>
         <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge status={task.status} size="sm" />
           <PriorityBadge priority={task.priority} size="sm" />
         </div>
-
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-ptr-brown-light">Progress</span>
-            <span className="font-medium text-ptr-brown">{pct}%</span>
-          </div>
-          <div className="h-1.5 bg-ptr-brown/10 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-ptr-green" style={{ width: `${pct}%` }} />
-          </div>
+        <div className="flex items-center gap-3">
+          <span className="flex-1 h-1 bg-ptr-brown/10 overflow-hidden">
+            <span className="block h-full bg-ptr-green" style={{ width: `${pct}%` }} />
+          </span>
+          <span className="text-xs font-semibold text-ptr-brown tabular-nums flex-shrink-0">{pct}%</span>
         </div>
-
-        <div className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-ptr-brown-light'}`}>
-          Due: {formatDate(task.dueDate)}
+        <div className={`text-xs ${overdue ? 'text-signal-crimson font-medium' : 'text-ptr-brown-light'}`}>
+          Due {formatDate(task.dueDate)}
           {overdue && ' · Overdue'}
         </div>
       </div>
+      <ChevronRight className="w-4 h-4 text-ptr-brown-light flex-shrink-0 mt-0.5" />
     </button>
   );
 }
@@ -86,40 +86,41 @@ export default function GuardMyTasks() {
   const activeCount = myTasks.filter((t) => t.status === 'NotStarted' || t.status === 'InProgress').length;
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-ptr-brown tracking-tight">My Tasks</h1>
-        <p className="text-sm text-ptr-brown-light">
-          {activeCount} active · {overdueCount > 0 ? <span className="text-red-600 font-medium">{overdueCount} overdue</span> : '0 overdue'}
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Page header — institutional heading, matches director/officer */}
+      <div className="border-b border-ptr-brown/10 pb-4">
+        <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">My Tasks</h1>
+        <p className="text-[13px] text-ptr-brown-light mt-1">
+          {activeCount} active &middot;{' '}
+          {overdueCount > 0 ? <span className="text-signal-crimson font-medium">{overdueCount} overdue</span> : '0 overdue'}
         </p>
       </div>
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Total', value: myTasks.length, accent: 'bg-ptr-green', valueColor: 'text-ptr-brown' },
-          { label: 'Active', value: activeCount, accent: 'bg-ptr-brown/40', valueColor: 'text-ptr-brown' },
-          { label: 'Overdue', value: overdueCount, accent: overdueCount > 0 ? 'bg-red-500' : 'bg-ptr-brown/20', valueColor: overdueCount > 0 ? 'text-red-600' : 'text-ptr-brown-light' },
-        ].map((m) => (
-          <div key={m.label} className="card pl-4 p-3 relative overflow-hidden">
-            <div className={`absolute left-0 top-0 bottom-0 w-1 ${m.accent}`} />
-            <div className={`text-2xl font-bold tabular-nums tracking-tight ${m.valueColor}`}>{m.value}</div>
-            <div className="text-xs text-ptr-brown-light font-semibold uppercase tracking-wide mt-0.5">{m.label}</div>
-          </div>
-        ))}
+      {/* Overview — one unified strip with dividers (director style) */}
+      <div className="card">
+        <div className="px-5 py-3 border-b border-ptr-cream-dark">
+          <SectionHeading>Overview</SectionHeading>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-ptr-cream-dark">
+          <Metric label="Total" value={myTasks.length} sub="Assigned to me" />
+          <Metric label="Active" value={activeCount} sub="In progress or new" />
+          <Metric
+            label="Overdue"
+            value={overdueCount}
+            sub="Past due date"
+            valueClass={overdueCount > 0 ? 'text-signal-crimson' : 'text-ptr-brown'}
+          />
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-ptr-cream rounded-xl p-1">
+      {/* Tabs — flat underline bar */}
+      <div className="flex gap-6 border-b border-ptr-cream-dark">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-              tab === t.id
-                ? 'bg-white text-ptr-brown shadow-sm'
-                : 'text-ptr-brown-light hover:text-ptr-brown'
+            className={`-mb-px pb-2.5 text-[13px] font-medium border-b-2 transition-colors ${
+              tab === t.id ? 'border-ptr-green text-ptr-brown' : 'border-transparent text-ptr-brown-light hover:text-ptr-brown'
             }`}
           >
             {t.label}
@@ -127,14 +128,14 @@ export default function GuardMyTasks() {
         ))}
       </div>
 
-      {/* Task list */}
+      {/* Task list — flat divided rows in one card */}
       {filtered.length === 0 ? (
         <EmptyState
           title={tab === 'active' ? 'No active tasks' : tab === 'completed' ? 'No completed tasks yet' : 'No tasks assigned'}
           description={tab === 'active' ? 'All caught up! Check back later.' : ''}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
           {filtered
             .sort((a, b) => {
               const priority = { Critical: 0, High: 1, Medium: 2, Low: 3 };
@@ -143,11 +144,7 @@ export default function GuardMyTasks() {
               return priority[a.priority] - priority[b.priority];
             })
             .map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onClick={() => navigate(`/guard/tasks/${task.id}`)}
-              />
+              <TaskRow key={task.id} task={task} onClick={() => navigate(`/guard/tasks/${task.id}`)} />
             ))}
         </div>
       )}
