@@ -109,8 +109,7 @@ export interface Notification {
     | 'task_updated'
     | 'task_completed'
     | 'changes_requested'
-    | 'task_archived'
-    | 'sos_alert';
+    | 'task_archived';
   title: string;
   message: string;
   taskId: string;

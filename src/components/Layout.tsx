@@ -13,16 +13,13 @@ import {
   History,
   UserCircle,
   RadioTower,
-  Siren,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocationSharing } from '../hooks/useLiveLocation';
-import { useSOS } from '../hooks/useSOS';
 import NotificationBell from './NotificationBell';
 import GovStrip from './GovStrip';
 import Footer from './Footer';
-import ConfirmDialog from './ConfirmDialog';
 import ptrLogo from '../assets/ptr-logo.png';
 
 type NavItem = { to: string; label: string; icon: React.ReactNode };
@@ -228,21 +225,11 @@ function GuardLayout() {
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
   const { isSharing } = useLocationSharing();
-  const { trigger: triggerSOS, canTrigger: canTriggerSOS } = useSOS();
-  const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
   const [showLocationDetail, setShowLocationDetail] = useState(false);
 
   const handleLogout = async () => {
     await logoutFromSupabase();
     navigate('/login', { replace: true });
-  };
-
-  const handleSOSConfirm = () => {
-    setSosConfirmOpen(false);
-    triggerSOS.mutate(undefined, {
-      onError: (err) => alert(err instanceof Error ? err.message : 'Failed to send SOS alert.'),
-      onSuccess: () => alert('SOS sent — your Director and Range Officer have been alerted with your location.'),
-    });
   };
 
   return (
@@ -262,17 +249,6 @@ function GuardLayout() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {canTriggerSOS && (
-                <button
-                  onClick={() => setSosConfirmOpen(true)}
-                  disabled={triggerSOS.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
-                  title="Send an emergency alert with your location to your Director and Range Officer"
-                >
-                  <Siren className="w-3.5 h-3.5" />
-                  SOS
-                </button>
-              )}
               <NotificationBell />
               <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
                 <NavLink
@@ -375,15 +351,6 @@ function GuardLayout() {
           Profile
         </NavLink>
       </nav>
-      <ConfirmDialog
-        isOpen={sosConfirmOpen}
-        title="Send SOS emergency alert?"
-        message="This immediately shares your current location with your Director and Range Officer and flags it as a critical incident. Only use this in a genuine emergency."
-        confirmLabel="Send SOS"
-        variant="danger"
-        onConfirm={handleSOSConfirm}
-        onCancel={() => setSosConfirmOpen(false)}
-      />
     </div>
   );
 }
