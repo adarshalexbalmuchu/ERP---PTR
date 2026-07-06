@@ -210,7 +210,7 @@ export default function TaskDetailPage() {
           valueClass={overdue ? 'text-red-600 font-medium' : undefined}
         />
         <MetaItem icon={<MapPin className="w-4 h-4" />} label="Range" value={range?.name ?? '—'} />
-        <MetaItem icon={<Tag className="w-4 h-4" />} label="Category" value={task.category} />
+        <MetaItem icon={<Tag className="w-4 h-4" />} label="Category" value={task.category === 'Other' && task.categoryOther ? task.categoryOther : task.category} />
         {area && <MetaItem label="Area / Zone" value={area.name} />}
         {task.acknowledgedAt && (
           <MetaItem label="Started" value={formatDateTime(task.acknowledgedAt)} />

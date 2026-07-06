@@ -63,6 +63,7 @@ export default function TaskForm({
   const [areaId, setAreaId] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('Medium');
   const [category, setCategory] = useState<TaskCategory>('Patrol');
+  const [categoryOther, setCategoryOther] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -82,6 +83,7 @@ export default function TaskForm({
       setAreaId(initialData?.areaId ?? '');
       setPriority(initialData?.priority ?? 'Medium');
       setCategory(initialData?.category ?? 'Patrol');
+      setCategoryOther(initialData?.categoryOther ?? '');
       setDueDate(initialData?.dueDate ? initialData.dueDate.substring(0, 10) : '');
       setErrors({});
       setPendingFiles([]);
@@ -133,6 +135,7 @@ export default function TaskForm({
     if (!title.trim()) errs.title = 'Title is required';
     if (assigneeIds.length === 0) errs.assigneeIds = 'Please select at least one assignee';
     if (!rangeId) errs.rangeId = 'Please select a range';
+    if (category === 'Other' && !categoryOther.trim()) errs.categoryOther = 'Please specify the category';
     if (!dueDate) errs.dueDate = 'Due date is required';
     return errs;
   };
@@ -153,6 +156,7 @@ export default function TaskForm({
       status: initialData?.status ?? 'NotStarted',
       priority,
       category,
+      categoryOther: category === 'Other' ? categoryOther.trim() : undefined,
       dueDate: new Date(dueDate + 'T00:00:00').toISOString(),
       completionPercentage: initialData?.completionPercentage ?? 0,
       acknowledgedAt: initialData?.acknowledgedAt,
@@ -346,7 +350,10 @@ export default function TaskForm({
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Category</label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as TaskCategory)}
+                onChange={(e) => {
+                  setCategory(e.target.value as TaskCategory);
+                  setErrors((p) => ({ ...p, categoryOther: '' }));
+                }}
                 className="input-field"
               >
                 {CATEGORIES.map((c) => (
@@ -355,6 +362,23 @@ export default function TaskForm({
               </select>
             </div>
           </div>
+
+          {category === 'Other' && (
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+                Specify category <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={categoryOther}
+                onChange={(e) => { setCategoryOther(e.target.value); setErrors((p) => ({ ...p, categoryOther: '' })); }}
+                placeholder="e.g. Boundary pillar check, Fire line clearing"
+                maxLength={100}
+                className={`input-field ${errors.categoryOther ? 'input-error' : ''}`}
+              />
+              {errors.categoryOther && <p className="text-xs text-red-600 mt-1">{errors.categoryOther}</p>}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">
