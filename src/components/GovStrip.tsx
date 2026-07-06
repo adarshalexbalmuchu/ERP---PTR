@@ -2,7 +2,7 @@ import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 
 export default function GovStrip() {
   return (
-    <div className="bg-ptr-green flex-shrink-0">
+    <div className="bg-ptr-green flex-shrink-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="px-4 md:px-6 py-2 flex items-center justify-between text-white">
         <span className="flex items-center gap-2.5 min-w-0">
           <img src={jharkhandEmblem} alt="" className="w-6 h-6 flex-shrink-0" />
