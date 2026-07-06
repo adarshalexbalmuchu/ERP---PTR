@@ -118,6 +118,11 @@ create table if not exists tasks (
   updated_at            timestamptz not null default now()
 );
 
+-- Free-text label for tasks whose category is 'Other' — lets the creator
+-- say what the "Other" work actually is. Null for the fixed categories.
+-- Idempotent so re-running against an existing database just adds it.
+alter table tasks add column if not exists category_other text;
+
 create table if not exists task_updates (
   id                  uuid primary key default uuid_generate_v4(),
   task_id             uuid not null references tasks(id) on delete cascade,
@@ -291,6 +296,10 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   alter table tasks add constraint tasks_description_len check (char_length(description) <= 5000);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table tasks add constraint tasks_category_other_len check (char_length(category_other) <= 100);
 exception when duplicate_object then null; end $$;
 
 do $$ begin

@@ -71,6 +71,7 @@ export function useTasks() {
           status: 'NotStarted',
           priority: data.priority,
           category: data.category,
+          category_other: data.category === 'Other' ? (data.categoryOther?.trim() || null) : null,
           due_date: data.dueDate,
           completion_percentage: 0,
         })
@@ -115,7 +116,10 @@ export function useTasks() {
       if (data.rangeId !== undefined) patch.range_id = data.rangeId;
       if (data.areaId !== undefined) patch.area_id = data.areaId ?? null;
       if (data.priority !== undefined) patch.priority = data.priority;
-      if (data.category !== undefined) patch.category = data.category;
+      if (data.category !== undefined) {
+        patch.category = data.category;
+        patch.category_other = data.category === 'Other' ? (data.categoryOther?.trim() || null) : null;
+      }
       if (data.dueDate !== undefined) patch.due_date = data.dueDate;
       if (data.status !== undefined) patch.status = data.status;
       if (data.completionPercentage !== undefined) patch.completion_percentage = data.completionPercentage;

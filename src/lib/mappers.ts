@@ -80,6 +80,7 @@ export function mapTask(
     status: row.status,
     priority: row.priority,
     category: row.category,
+    categoryOther: row.category_other ?? undefined,
     dueDate: row.due_date,
     completionPercentage: row.completion_percentage,
     acknowledgedAt: row.acknowledged_at ?? undefined,

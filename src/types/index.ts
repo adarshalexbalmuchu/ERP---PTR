@@ -90,6 +90,8 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   category: TaskCategory;
+  /** Free-text label when category is 'Other'; undefined otherwise. */
+  categoryOther?: string;
   dueDate: string;
   completionPercentage: number;
   taskUpdates: TaskUpdate[];

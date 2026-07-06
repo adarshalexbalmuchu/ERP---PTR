@@ -78,6 +78,7 @@ export interface Database {
           status: TaskStatus;
           priority: TaskPriority;
           category: TaskCategory;
+          category_other: string | null;
           due_date: string;
           completion_percentage: number;
           acknowledged_at: string | null;
@@ -97,6 +98,7 @@ export interface Database {
           status?: TaskStatus;
           priority: TaskPriority;
           category: TaskCategory;
+          category_other?: string | null;
           due_date: string;
           completion_percentage?: number;
           acknowledged_at?: string | null;
@@ -114,6 +116,7 @@ export interface Database {
           status?: TaskStatus;
           priority?: TaskPriority;
           category?: TaskCategory;
+          category_other?: string | null;
           due_date?: string;
           completion_percentage?: number;
           acknowledged_at?: string | null;
