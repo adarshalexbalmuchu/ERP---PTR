@@ -14,9 +14,8 @@ const MIN_UPDATE_INTERVAL_MS = 30_000;
 // see STALE_AFTER_MS usage in MapView.
 export const STALE_AFTER_MS = 15 * 60 * 1000;
 
-// The task a user is actively patrolling right now, if any — shared between
-// useLocationSharing (where to report position) and useSOS (which task an
-// emergency alert is tied to).
+// The task a user is actively patrolling right now, if any — drives where
+// useLocationSharing reports position.
 export function findActiveTask(tasks: Task[], userId: string): Task | undefined {
   return tasks.find(
     (t) => t.status === 'InProgress' && (t.assigneeId === userId || t.coAssigneeIds.includes(userId)),

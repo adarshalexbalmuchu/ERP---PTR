@@ -43,10 +43,8 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived', 'sos_alert');
+  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived');
 exception when duplicate_object then null; end $$;
-
-alter type notification_type add value if not exists 'sos_alert';
 
 do $$ begin
   create type incident_type as enum ('human_attack', 'livestock_attack', 'crop_damage', 'property_damage', 'poaching_sign', 'wildlife_sighting', 'other');

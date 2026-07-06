@@ -13,16 +13,13 @@ import {
   History,
   UserCircle,
   RadioTower,
-  Siren,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocationSharing } from '../hooks/useLiveLocation';
-import { useSOS } from '../hooks/useSOS';
 import NotificationBell from './NotificationBell';
 import GovStrip from './GovStrip';
 import Footer from './Footer';
-import ConfirmDialog from './ConfirmDialog';
 import ptrLogo from '../assets/ptr-logo.png';
 
 type NavItem = { to: string; label: string; icon: React.ReactNode };
@@ -228,21 +225,11 @@ function GuardLayout() {
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
   const { isSharing } = useLocationSharing();
-  const { trigger: triggerSOS, canTrigger: canTriggerSOS } = useSOS();
-  const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
   const [showLocationDetail, setShowLocationDetail] = useState(false);
 
   const handleLogout = async () => {
     await logoutFromSupabase();
     navigate('/login', { replace: true });
-  };
-
-  const handleSOSConfirm = () => {
-    setSosConfirmOpen(false);
-    triggerSOS.mutate(undefined, {
-      onError: (err) => alert(err instanceof Error ? err.message : 'Failed to send SOS alert.'),
-      onSuccess: () => alert('SOS sent — your Director and Range Officer have been alerted with your location.'),
-    });
   };
 
   return (
@@ -251,28 +238,17 @@ function GuardLayout() {
         <GovStrip />
         <header className="bg-white border-b border-ptr-cream-dark">
           {/* Brand + actions row */}
-          <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
                 <img src={ptrLogo} alt="Palamu Tiger Reserve" className="w-full h-full object-contain p-0.5" />
               </div>
-              <div>
-                <div className="text-sm font-bold text-ptr-brown leading-tight">Palamu Tiger Reserve</div>
-                <div className="text-xs text-ptr-brown-light leading-tight">Tiger Cell &middot; Task Management</div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-ptr-brown leading-tight truncate">Palamu Tiger Reserve</div>
+                <div className="text-xs text-ptr-brown-light leading-tight truncate">Tiger Cell &middot; Task Management</div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {canTriggerSOS && (
-                <button
-                  onClick={() => setSosConfirmOpen(true)}
-                  disabled={triggerSOS.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
-                  title="Send an emergency alert with your location to your Director and Range Officer"
-                >
-                  <Siren className="w-3.5 h-3.5" />
-                  SOS
-                </button>
-              )}
+            <div className="flex items-center gap-2 flex-shrink-0">
               <NotificationBell />
               <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
                 <NavLink
@@ -375,15 +351,6 @@ function GuardLayout() {
           Profile
         </NavLink>
       </nav>
-      <ConfirmDialog
-        isOpen={sosConfirmOpen}
-        title="Send SOS emergency alert?"
-        message="This immediately shares your current location with your Director and Range Officer and flags it as a critical incident. Only use this in a genuine emergency."
-        confirmLabel="Send SOS"
-        variant="danger"
-        onConfirm={handleSOSConfirm}
-        onCancel={() => setSosConfirmOpen(false)}
-      />
     </div>
   );
 }
