@@ -15,6 +15,20 @@ export function isPushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+// iOS Safari only exposes PushManager/Notification once the site has been
+// added to the Home Screen (iOS 16.4+) — in a regular Safari tab
+// isPushSupported() above is correctly false, but that reads to the user
+// as "notifications aren't available here" rather than "install first."
+// This flags that specific case so the UI can say the right thing.
+export function isIOSBrowserTab(): boolean {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS 13+
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches
+    || (navigator as unknown as { standalone?: boolean }).standalone === true;
+  return isIOS && !isStandalone;
+}
+
 export type PushStatus = 'subscribed' | 'unsubscribed' | 'unsupported';
 
 export async function getPushSubscriptionStatus(): Promise<PushStatus> {

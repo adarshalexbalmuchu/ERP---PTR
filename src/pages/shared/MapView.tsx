@@ -157,7 +157,7 @@ export default function MapView() {
 
       <div className="card overflow-hidden relative" style={{ height: '65vh', isolation: 'isolate' }}>
         {/* Google Maps-style base-layer switcher */}
-        <div className="absolute top-3 right-3 z-[1000] bg-white rounded-xl shadow-md border border-ptr-cream-dark p-1 flex gap-0.5">
+        <div className="absolute top-3 right-3 z-[1000] bg-white rounded-xl shadow-md border border-ptr-cream-dark p-1 flex gap-1">
           {(Object.keys(MAP_LAYERS) as LayerId[]).map((id) => {
             const opt = MAP_LAYERS[id];
             const Icon = opt.icon;
@@ -165,7 +165,7 @@ export default function MapView() {
               <button
                 key={id}
                 onClick={() => setLayer(id)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                className={`flex items-center justify-center gap-1.5 min-w-[40px] min-h-[40px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   layer === id ? 'bg-ptr-green text-white' : 'text-ptr-brown-light hover:bg-ptr-cream'
                 }`}
                 title={opt.label}

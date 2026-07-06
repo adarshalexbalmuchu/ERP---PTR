@@ -55,7 +55,8 @@ function Sidebar({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
+              aria-label="Close menu"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/10 transition-colors md:hidden flex-shrink-0"
             >
               <X className="w-5 h-5 text-white/70" />
             </button>
@@ -134,7 +135,7 @@ function AdminLayout({ items }: { items: NavItem[] }) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-ptr-cream overflow-hidden">
+    <div className="flex flex-col h-dvh bg-ptr-cream overflow-hidden">
       <GovStrip />
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
@@ -165,7 +166,7 @@ function AdminLayout({ items }: { items: NavItem[] }) {
           <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-ptr-cream-dark flex-shrink-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="p-2 rounded-xl hover:bg-ptr-cream transition-colors"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors"
               aria-label="Open navigation"
             >
               <Menu className="w-5 h-5 text-ptr-brown" />
@@ -246,82 +247,88 @@ function GuardLayout() {
 
   return (
     <div className="min-h-screen bg-ptr-cream flex flex-col">
-      <GovStrip />
-      <header className="bg-white border-b border-ptr-cream-dark sticky top-0 z-30">
-        {/* Brand + actions row */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
-              <img src={ptrLogo} alt="Palamu Tiger Reserve" className="w-full h-full object-contain p-0.5" />
+      <div className="sticky top-0 z-30">
+        <GovStrip />
+        <header className="bg-white border-b border-ptr-cream-dark">
+          {/* Brand + actions row */}
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
+                <img src={ptrLogo} alt="Palamu Tiger Reserve" className="w-full h-full object-contain p-0.5" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-ptr-brown leading-tight">Palamu Tiger Reserve</div>
+                <div className="text-xs text-ptr-brown-light leading-tight">Tiger Cell &middot; Task Management</div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm font-bold text-ptr-brown leading-tight">Palamu Tiger Reserve</div>
-              <div className="text-xs text-ptr-brown-light leading-tight">Tiger Cell &middot; Task Management</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {canTriggerSOS && (
-              <button
-                onClick={() => setSosConfirmOpen(true)}
-                disabled={triggerSOS.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
-                title="Send an emergency alert with your location to your Director and Range Officer"
-              >
-                <Siren className="w-3.5 h-3.5" />
-                SOS
-              </button>
-            )}
-            <NotificationBell />
-            <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
-              <NavLink
-                to="/guard/profile"
-                className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green flex-shrink-0"
-                title="My Profile"
-              >
-                {currentUser?.avatarInitials}
-              </NavLink>
-              <button
-                onClick={handleLogout}
-                className="p-2 rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
-                title="Log out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-        {/* Logged-in-as + date strip — matches AdminLayout's institutional tone */}
-        <div className="px-4 pb-3 border-t border-ptr-cream-dark bg-ptr-cream/40">
-          <p className="text-xs font-semibold text-ptr-brown pt-2">
-            {currentUser?.name}
-            {currentUser?.designation && <span className="font-normal text-ptr-brown-light"> &middot; {currentUser.designation}</span>}
-          </p>
-          {isSharing && (
-            <div className="mt-1">
-              <button
-                onClick={() => setShowLocationDetail((v) => !v)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ptr-green/10 text-ptr-green text-[11px] font-medium"
-              >
-                <RadioTower className="w-2.5 h-2.5" />
-                Sharing location
-              </button>
-              {showLocationDetail && (
-                <p className="text-xs text-ptr-brown-light mt-1">
-                  Visible to your Director &amp; Range Officer while this task is active.
-                </p>
+            <div className="flex items-center gap-2">
+              {canTriggerSOS && (
+                <button
+                  onClick={() => setSosConfirmOpen(true)}
+                  disabled={triggerSOS.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
+                  title="Send an emergency alert with your location to your Director and Range Officer"
+                >
+                  <Siren className="w-3.5 h-3.5" />
+                  SOS
+                </button>
               )}
+              <NotificationBell />
+              <div className="flex items-center gap-2 pl-2 border-l border-ptr-cream-dark">
+                <NavLink
+                  to="/guard/profile"
+                  className="w-8 h-8 rounded-full bg-ptr-green/10 flex items-center justify-center text-xs font-semibold text-ptr-green flex-shrink-0"
+                  title="My Profile"
+                >
+                  {currentUser?.avatarInitials}
+                </NavLink>
+                <button
+                  onClick={handleLogout}
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors text-ptr-brown-light hover:text-red-600"
+                  title="Log out"
+                  aria-label="Log out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          )}
-          <p className="text-xs text-ptr-brown-light">
-            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-      </header>
-      <main className="flex-1 pb-16">
+          </div>
+          {/* Logged-in-as + date strip — matches AdminLayout's institutional tone */}
+          <div className="px-4 pb-3 border-t border-ptr-cream-dark bg-ptr-cream/40">
+            <p className="text-xs font-semibold text-ptr-brown pt-2">
+              {currentUser?.name}
+              {currentUser?.designation && <span className="font-normal text-ptr-brown-light"> &middot; {currentUser.designation}</span>}
+            </p>
+            {isSharing && (
+              <div className="mt-1">
+                <button
+                  onClick={() => setShowLocationDetail((v) => !v)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ptr-green/10 text-ptr-green text-[11px] font-medium"
+                >
+                  <RadioTower className="w-2.5 h-2.5" />
+                  Sharing location
+                </button>
+                {showLocationDetail && (
+                  <p className="text-xs text-ptr-brown-light mt-1">
+                    Visible to your Director &amp; Range Officer while this task is active.
+                  </p>
+                )}
+              </div>
+            )}
+            <p className="text-xs text-ptr-brown-light">
+              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+        </header>
+      </div>
+      <main className="flex-1" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
         <Outlet />
         <Footer />
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-ptr-cream-dark flex items-stretch z-30">
+      <nav
+        className="fixed bottom-0 left-0 right-0 bg-white border-t border-ptr-cream-dark flex items-stretch z-30"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <NavLink
           to="/guard"
           end
