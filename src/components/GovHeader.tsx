@@ -28,11 +28,11 @@ export default function GovHeader({ compact = false }: Props) {
             compact ? 'w-10 h-10' : 'w-14 h-14'
           }`}
         >
-          <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
+          <img src={ptrLogo} alt="Palamau Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
         </div>
         <div className="min-w-0">
           <h1 className={`font-bold text-ptr-brown tracking-tight leading-tight ${compact ? 'text-sm' : 'text-lg md:text-xl'}`}>
-            Palamu Tiger Reserve
+            Palamau Tiger Reserve
           </h1>
           <p className={`text-ptr-brown-light font-medium ${compact ? 'text-xs' : 'text-xs md:text-sm'}`}>
             Field Operations Management System
