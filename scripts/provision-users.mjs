@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Provision the PTR North Division staff as app users.
 //
-// Source: "Posting of FG" staffing chart (Palamu Tiger Reserve, North
+// Source: "Posting of FG" staffing chart (Palamau Tiger Reserve, North
 // Division, Medininagar) — 4 ranges, 11 beats, 69 sub-beat postings.
 //
 // What it does, idempotently:
