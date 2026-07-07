@@ -145,6 +145,7 @@ export type IncidentType =
   | 'property_damage'
   | 'poaching_sign'
   | 'wildlife_sighting'
+  | 'road_kill'
   | 'other';
 
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';

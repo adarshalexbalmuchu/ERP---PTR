@@ -60,6 +60,7 @@ const TYPE_LABELS: Record<string, string> = {
   property_damage: 'Property Damage',
   poaching_sign: 'Poaching Sign',
   wildlife_sighting: 'Wildlife Sighting',
+  road_kill: 'Road Kill',
   other: 'Other',
 };
 

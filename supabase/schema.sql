@@ -47,8 +47,12 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type incident_type as enum ('human_attack', 'livestock_attack', 'crop_damage', 'property_damage', 'poaching_sign', 'wildlife_sighting', 'other');
+  create type incident_type as enum ('human_attack', 'livestock_attack', 'crop_damage', 'property_damage', 'poaching_sign', 'wildlife_sighting', 'road_kill', 'other');
 exception when duplicate_object then null; end $$;
+
+-- Values appended to incident_type after the initial rollout; no-ops on a
+-- fresh database where create type above already includes them.
+alter type incident_type add value if not exists 'road_kill' before 'other';
 
 do $$ begin
   create type incident_severity as enum ('Low', 'Medium', 'High', 'Critical');
