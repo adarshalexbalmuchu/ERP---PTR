@@ -10,7 +10,7 @@ import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
 import type { IncidentSeverity } from '../../types';
 
-// Approximate center of Palamu Tiger Reserve, Jharkhand.
+// Approximate center of Palamau Tiger Reserve, Jharkhand.
 const PTR_CENTER: [number, number] = [23.87, 84.19];
 const USER_LOCATION_ZOOM = 14;
 

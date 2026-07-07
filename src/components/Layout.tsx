@@ -41,10 +41,10 @@ function Sidebar({
       <div className="px-4 py-4 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/95 border border-white/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
+            <img src={ptrLogo} alt="Palamau Tiger Reserve emblem" className="w-full h-full object-contain p-0.5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-white leading-snug">Palamu Tiger Reserve</div>
+            <div className="text-sm font-bold text-white leading-snug">Palamau Tiger Reserve</div>
             <div className="text-[11px] text-white/50 uppercase tracking-[0.08em] leading-tight mt-0.5">
               Field Operations
             </div>
@@ -241,10 +241,10 @@ function GuardLayout() {
           <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-full bg-white border border-ptr-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
-                <img src={ptrLogo} alt="Palamu Tiger Reserve" className="w-full h-full object-contain p-0.5" />
+                <img src={ptrLogo} alt="Palamau Tiger Reserve" className="w-full h-full object-contain p-0.5" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-bold text-ptr-brown leading-tight truncate">Palamu Tiger Reserve</div>
+                <div className="text-sm font-bold text-ptr-brown leading-tight truncate">Palamau Tiger Reserve</div>
                 <div className="text-xs text-ptr-brown-light leading-tight truncate">Tiger Cell &middot; Task Management</div>
               </div>
             </div>

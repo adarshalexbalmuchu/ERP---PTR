@@ -90,10 +90,10 @@ export default function Login() {
           {/* System identity */}
           <div className="border-t border-white/10 pt-8">
             <div className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center mb-6 overflow-hidden">
-              <img src={ptrLogo} alt="Palamu Tiger Reserve emblem" className="w-full h-full object-contain p-1" />
+              <img src={ptrLogo} alt="Palamau Tiger Reserve emblem" className="w-full h-full object-contain p-1" />
             </div>
             <div className="text-[11px] font-semibold tracking-[0.14em] uppercase text-white/60">
-              Palamu Tiger Reserve
+              Palamau Tiger Reserve
             </div>
             <h1 className="text-2xl xl:text-[1.75rem] font-bold tracking-tight leading-snug mt-1.5">
               Field Operations

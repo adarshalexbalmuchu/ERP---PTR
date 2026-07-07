@@ -142,7 +142,7 @@ export default function DirectorDashboard() {
             Field Operations Dashboard
           </h1>
           <p className="text-[13px] text-ptr-brown-light mt-1">
-            Palamu Tiger Reserve &middot; All Ranges &middot;{' '}
+            Palamau Tiger Reserve &middot; All Ranges &middot;{' '}
             <span className="tabular-nums">
               {new Date().toLocaleDateString('en-IN', {
                 weekday: 'long',

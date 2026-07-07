@@ -1,4 +1,4 @@
-# Palamu Tiger Reserve — Task Management System
+# Palamau Tiger Reserve — Task Management System
 
 A field task management app for PTR — task assignment and closed-loop tracking,
 incident reporting with geotagged photos, patrol map, audit log, and web push
