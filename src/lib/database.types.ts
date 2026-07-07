@@ -5,7 +5,7 @@ export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
 export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived';
-export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'poaching_sign' | 'wildlife_sighting' | 'other';
+export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'poaching_sign' | 'wildlife_sighting' | 'road_kill' | 'other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
 type Relationships = {
