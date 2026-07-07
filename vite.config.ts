@@ -21,8 +21,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
       },
       manifest: {
-        name: 'Palamau Tiger Reserve | Tiger Cell',
-        short_name: 'PTR Tiger Cell',
+        name: 'PTR Work | Palamau Tiger Reserve',
+        short_name: 'PTR Work',
         description: 'Task management for Palamau Tiger Reserve field operations',
         theme_color: '#1A4731',
         background_color: '#F5F1E8',
