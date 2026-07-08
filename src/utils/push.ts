@@ -42,32 +42,57 @@ function getVapidKey(): string | undefined {
   return import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 }
 
+type PgError = { message: string; code?: string };
+
+// True when the error means claim_push_subscription doesn't exist on this
+// deployment — i.e. the latest schema.sql hasn't been applied yet. Postgres
+// raises 42883 (undefined_function); PostgREST reports PGRST202 when the
+// function isn't in its schema cache.
+function isMissingFunctionError(error: PgError): boolean {
+  if (error.code === '42883' || error.code === 'PGRST202') return true;
+  return /claim_push_subscription|find the function|schema cache/i.test(error.message);
+}
+
 // Store (or refresh) the row the send-push Edge Function reads to reach this
-// device. Goes through the claim_push_subscription routine (see schema.sql)
-// rather than a direct upsert: on a shared device the endpoint's row may still
-// belong to the previous user, which the "own row" RLS policy hides — so a
-// plain upsert on `endpoint` would fail. The routine re-points the row at
-// whoever is signed in now, which is exactly what that hand-off needs.
+// device. Prefers the claim_push_subscription routine (see schema.sql) over a
+// direct upsert: on a shared device the endpoint's row may still belong to the
+// previous user, which the "own row" RLS policy hides — so a plain upsert on
+// `endpoint` would fail. The routine re-points the row at whoever is signed in
+// now, which is exactly what that hand-off needs.
+//
+// It falls back to a direct upsert when the routine isn't present (a
+// deployment that hasn't applied the latest schema.sql). That still works for
+// the common single-user device — so notifications aren't silently dead just
+// because one migration is pending; only the shared-device hand-off needs the
+// routine.
 async function saveSubscription(userId: string, subscription: PushSubscription): Promise<void> {
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
     throw new Error('Push subscription is missing required fields.');
   }
+  const record = { user_id: userId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+
   // Called through a narrow shim rather than the typed client: this project's
   // hand-written database.types.ts models Functions as an empty map (its loose
   // relationship types can't coexist with enumerated RPCs), so the typed
   // `supabase.rpc` doesn't know this function. The cast is confined to this
   // one call and stays honest about the argument and error shapes.
   const rpc = (supabase as unknown as {
-    rpc: (fn: string, args: Record<string, string>) => PromiseLike<{ error: { message: string } | null }>;
+    rpc: (fn: string, args: Record<string, string>) => PromiseLike<{ error: PgError | null }>;
   }).rpc;
   const { error } = await rpc('claim_push_subscription', {
     p_user_id: userId,
-    p_endpoint: json.endpoint,
-    p_p256dh: json.keys.p256dh,
-    p_auth: json.keys.auth,
+    p_endpoint: record.endpoint,
+    p_p256dh: record.p256dh,
+    p_auth: record.auth,
   });
-  if (error) throw error;
+  if (!error) return;
+  if (!isMissingFunctionError(error)) throw error;
+
+  const { error: upsertError } = await supabase
+    .from('push_subscriptions')
+    .upsert(record, { onConflict: 'endpoint' });
+  if (upsertError) throw upsertError;
 }
 
 // True when an existing subscription was created against a *different* VAPID
