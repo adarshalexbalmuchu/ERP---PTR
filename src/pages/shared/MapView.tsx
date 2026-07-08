@@ -8,6 +8,7 @@ import { useLiveLocations, STALE_AFTER_MS } from '../../hooks/useLiveLocation';
 import useStore from '../../store/useStore';
 import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
+import { INCIDENT_TYPE_LABELS } from '../../lib/incidentTypes';
 import type { IncidentSeverity } from '../../types';
 
 // Approximate center of Palamau Tiger Reserve, Jharkhand.
@@ -51,17 +52,6 @@ const SEVERITY_COLOR: Record<IncidentSeverity, string> = {
   Medium: '#8A7F5C',
   High: '#A8551E',
   Critical: '#DC2626',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  human_attack: 'Attack on Human',
-  livestock_attack: 'Livestock Attack',
-  crop_damage: 'Crop Damage',
-  property_damage: 'Property Damage',
-  poaching_sign: 'Poaching Sign',
-  wildlife_sighting: 'Wildlife Sighting',
-  road_kill: 'Road Kill',
-  other: 'Other',
 };
 
 export default function MapView() {
@@ -228,7 +218,7 @@ export default function MapView() {
               >
                 <Popup>
                   <div className="text-xs space-y-1">
-                    <div className="font-semibold">{TYPE_LABELS[incident.type] ?? incident.type}</div>
+                    <div className="font-semibold">{INCIDENT_TYPE_LABELS[incident.type] ?? incident.type}</div>
                     <div className="text-ptr-brown-light">{incident.severity} severity</div>
                     <div>{incident.description}</div>
                     <div className="text-ptr-brown-light">{formatDateTime(incident.incidentDate)}</div>
