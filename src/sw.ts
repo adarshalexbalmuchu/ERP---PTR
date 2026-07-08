@@ -20,6 +20,19 @@ precacheAndRoute(self.__WB_MANIFEST);
 // stay in sync with SW_API_CACHE_NAME in src/contexts/AuthContext.tsx,
 // which deletes this cache on sign-out.
 const SUPABASE_ORIGIN = new URL(import.meta.env.VITE_SUPABASE_URL as string).origin;
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+
+// Web Push wants the VAPID public key as raw bytes; it's shipped as base64url.
+// (Duplicated from src/utils/push.ts on purpose — that module pulls in the
+// browser Supabase client, which has no place in the worker bundle.)
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
 registerRoute(
   ({ url }) => url.origin === SUPABASE_ORIGIN && url.pathname.startsWith('/rest/v1/'),
   new NetworkFirst({
@@ -87,6 +100,59 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
+
+// The browser can rotate or expire a push subscription at any time — Chrome
+// does so periodically, and always after clearing site data or a long idle —
+// and fires this event in the worker. It's the ONLY chance to react while the
+// app itself is closed; without it the device silently stops receiving
+// notifications until the user next opens the app. We re-subscribe with the
+// same VAPID key and hand the old + new subscription to the sync-subscription
+// Edge Function, which moves the stored row to the new endpoint. The worker
+// has no user session, so possession of the *old* subscription's keys is what
+// authorizes the move server-side.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const evt = event as ExtendableEvent & {
+    oldSubscription?: PushSubscription | null;
+    newSubscription?: PushSubscription | null;
+  };
+  event.waitUntil(rotateSubscription(evt.oldSubscription ?? null, evt.newSubscription ?? null));
+});
+
+async function rotateSubscription(
+  oldSub: PushSubscription | null,
+  providedNew: PushSubscription | null,
+): Promise<void> {
+  if (!VAPID_PUBLIC_KEY) return;
+
+  // Without the old keys we can't prove ownership of the row to move, so there
+  // is nothing safe to do here — the on-load self-heal (ensurePushSubscription)
+  // will re-create the subscription the next time the app is opened.
+  const oldJson = oldSub?.toJSON();
+  if (!oldJson?.endpoint || !oldJson.keys?.p256dh || !oldJson.keys?.auth) return;
+
+  try {
+    let newSub = providedNew;
+    if (!newSub) {
+      newSub = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+      });
+    }
+    const newJson = newSub.toJSON();
+    if (!newJson.endpoint || !newJson.keys?.p256dh || !newJson.keys?.auth) return;
+
+    await fetch(`${SUPABASE_ORIGIN}/functions/v1/sync-subscription`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        old: { endpoint: oldJson.endpoint, p256dh: oldJson.keys.p256dh, auth: oldJson.keys.auth },
+        new: { endpoint: newJson.endpoint, p256dh: newJson.keys.p256dh, auth: newJson.keys.auth },
+      }),
+    });
+  } catch {
+    // Best-effort — a failed rotation is recovered by the on-load self-heal.
+  }
+}
 
 // Focuses an already-open tab (navigating it to the task) instead of
 // always spawning a new one.

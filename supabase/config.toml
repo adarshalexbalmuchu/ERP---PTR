@@ -4,3 +4,10 @@
 # supabase/functions/send-push/index.ts.
 [functions.send-push]
 verify_jwt = false
+
+# sync-subscription is called by the service worker's pushsubscriptionchange
+# handler while the app is closed, so there's no user JWT either. It authorizes
+# by proof of possession of the old subscription's keys instead — see
+# supabase/functions/sync-subscription/index.ts.
+[functions.sync-subscription]
+verify_jwt = false

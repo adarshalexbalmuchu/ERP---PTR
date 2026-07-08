@@ -842,6 +842,43 @@ create policy "officer_ranges_director" on officer_ranges
 create policy "push_subscriptions_own" on push_subscriptions
   for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
+-- Claim (upsert) this device's push subscription for the CURRENT user. The
+-- client can't do this with a plain upsert on `endpoint`: on a SHARED device
+-- the endpoint's row may still belong to whoever was signed in before, and the
+-- "own row" policy above hides that row, so ON CONFLICT can neither see nor
+-- update it (the insert then fails the unique constraint). This runs SECURITY
+-- DEFINER to reassign the endpoint across users, but forces user_id to the
+-- caller's own auth.uid() — so a caller can only ever claim a subscription for
+-- themselves, never register or hijack one for someone else. Called by
+-- subscribeToPush / ensurePushSubscription in src/utils/push.ts.
+create or replace function claim_push_subscription(
+  p_user_id uuid,
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text
+) returns void language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+begin
+  if uid is null then
+    raise exception 'not authenticated';
+  end if;
+  if p_user_id is distinct from uid then
+    raise exception 'cannot claim a push subscription for another user';
+  end if;
+
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth)
+    values (uid, p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update
+    set user_id = excluded.user_id,
+        p256dh  = excluded.p256dh,
+        auth    = excluded.auth;
+end;
+$$;
+
+revoke all on function claim_push_subscription(uuid, text, text, text) from public;
+grant execute on function claim_push_subscription(uuid, text, text, text) to authenticated;
+
 -- live_locations: a field-role user manages only their own row (the app
 -- writes it only while an on-screen "sharing" indicator is visible to
 -- them — see useLocationSharing). Director sees everyone; a range officer

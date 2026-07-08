@@ -51,7 +51,11 @@ logins, and no credentials are committed to this repo.
 
 ### Shared
 - Realtime updates (Supabase Realtime) — task/notification changes appear without refresh
-- Web push notifications at the OS level via a Postgres trigger → Edge Function
+- Web push notifications at the OS level via a Postgres trigger → Edge Function,
+  delivered even when the app (tab or installed PWA) is fully closed. Subscriptions
+  self-heal: the app silently re-subscribes on load if the browser rotated or
+  expired one, and the service worker re-registers on the `pushsubscriptionchange`
+  event so a device that never reopens the app keeps receiving alerts
 - Offline-capable PWA: app shell precached, last-loaded data readable with no
   signal, offline mutations queued and replayed (TanStack Query persistence)
 - Overdue detection — red due dates and "Overdue" badge past due date
@@ -76,7 +80,7 @@ re-run them.
 Deployed with the Supabase CLI:
 
 ```bash
-supabase functions deploy create-user delete-user send-push
+supabase functions deploy create-user delete-user send-push sync-subscription
 ```
 
 `send-push` additionally needs `PUSH_WEBHOOK_SECRET`, `VAPID_PUBLIC_KEY`,
