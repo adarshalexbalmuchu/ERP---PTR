@@ -208,10 +208,12 @@ export default function IncidentLog() {
   const [filterSeverity, setFilterSeverity] = useState('');
 
   const { activeRangeId, rangeIds, isMultiRange } = useOfficerRanges();
-  // Directors pick any range; multi-range officers pick among THEIR ranges
-  // (select stays enabled, options limited below); everyone else is locked
-  // to their single range.
-  const lockRange = currentUser?.role !== 'director' && !isMultiRange;
+  // Directors and Tiger Cell staff aren't posted to one range, so they pick
+  // any range; multi-range officers pick among THEIR ranges (select stays
+  // enabled, options limited below); everyone else is locked to their
+  // single range.
+  const hasNoFixedRange = currentUser?.role === 'director' || currentUser?.role === 'tiger_cell';
+  const lockRange = !hasNoFixedRange && !isMultiRange;
   const canManage = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
 
   const handleDelete = (id: string) => {
@@ -334,9 +336,9 @@ export default function IncidentLog() {
         <ReportForm
           isOpen={formOpen}
           onClose={() => setFormOpen(false)}
-          defaultRangeId={currentUser.role === 'director' ? '' : activeRangeId}
+          defaultRangeId={hasNoFixedRange ? '' : activeRangeId}
           lockRange={lockRange && !!activeRangeId}
-          allowedRangeIds={currentUser.role === 'director' ? undefined : rangeIds}
+          allowedRangeIds={hasNoFixedRange ? undefined : rangeIds}
         />
       )}
     </div>
