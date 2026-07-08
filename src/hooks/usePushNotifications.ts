@@ -4,6 +4,7 @@ import {
   getPushSubscriptionStatus,
   subscribeToPush,
   unsubscribeFromPush,
+  ensurePushSubscription,
   isIOSBrowserTab,
   type PushStatus,
 } from '../utils/push';
@@ -21,6 +22,18 @@ export function usePushNotifications() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Silently keep this device's subscription alive on every load once a user
+  // is signed in. If they'd already granted permission, this re-creates a
+  // subscription the browser rotated/expired (or re-points a shared device at
+  // the current user) so notifications keep arriving without the user ever
+  // having to re-enable them. It never prompts, so it's safe to run eagerly.
+  useEffect(() => {
+    if (!currentUser) return;
+    void ensurePushSubscription(currentUser.id).then((ok) => {
+      if (ok) setStatus('subscribed');
+    });
+  }, [currentUser]);
 
   const enable = useCallback(async () => {
     if (!currentUser) return;
