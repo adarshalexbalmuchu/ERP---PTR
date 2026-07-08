@@ -619,8 +619,17 @@ create policy "ranges_write" on ranges for all using ((select get_my_role()) = '
 create policy "areas_read" on areas for select using ((select auth.uid()) is not null);
 create policy "areas_write" on areas for all using ((select get_my_role()) = 'director');
 
--- profiles
-create policy "profiles_read" on profiles for select using ((select auth.uid()) is not null);
+-- profiles: everyone can read their own row and any director's (directors
+-- create tasks reserve-wide, so their name needs to resolve everywhere);
+-- otherwise readable only within the caller's own range(s) — officers and
+-- guards have no legitimate reason to read another range's roster.
+create policy "profiles_read" on profiles for select using (
+  (select auth.uid()) is not null and (
+    id = (select auth.uid())
+    or role = 'director'
+    or range_id = any ((select get_my_range_ids())::uuid[])
+  )
+);
 create policy "profiles_self_update" on profiles for update using (id = (select auth.uid()));
 create policy "profiles_director" on profiles for all using ((select get_my_role()) = 'director');
 
@@ -874,7 +883,7 @@ create policy "incident_photos_director" on incident_photos
 create policy "incident_photos_officer" on incident_photos
   for all using (
     (select get_my_role()) = 'range_officer' and
-    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.range_id = (select get_my_range_id()))
+    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.range_id = any ((select get_my_range_ids())::uuid[]))
   );
 
 create policy "incident_photos_guard_read" on incident_photos
