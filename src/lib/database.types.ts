@@ -360,6 +360,7 @@ export interface Database {
         Row: {
           id: string;
           type: IncidentType;
+          type_other: string | null;
           severity: IncidentSeverity;
           description: string;
           range_id: string;
@@ -373,6 +374,7 @@ export interface Database {
         Insert: {
           id?: string;
           type: IncidentType;
+          type_other?: string | null;
           severity?: IncidentSeverity;
           description: string;
           range_id: string;
@@ -385,6 +387,7 @@ export interface Database {
         Update: {
           id?: string;
           type?: IncidentType;
+          type_other?: string | null;
           severity?: IncidentSeverity;
           description?: string;
           range_id?: string;

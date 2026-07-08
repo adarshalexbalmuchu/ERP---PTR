@@ -8,7 +8,7 @@ import { useLiveLocations, STALE_AFTER_MS } from '../../hooks/useLiveLocation';
 import useStore from '../../store/useStore';
 import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
-import { INCIDENT_TYPE_LABELS } from '../../lib/incidentTypes';
+import { formatIncidentType } from '../../lib/incidentTypes';
 import type { IncidentSeverity } from '../../types';
 
 // Approximate center of Palamau Tiger Reserve, Jharkhand.
@@ -218,7 +218,7 @@ export default function MapView() {
               >
                 <Popup>
                   <div className="text-xs space-y-1">
-                    <div className="font-semibold">{INCIDENT_TYPE_LABELS[incident.type] ?? incident.type}</div>
+                    <div className="font-semibold">{formatIncidentType(incident)}</div>
                     <div className="text-ptr-brown-light">{incident.severity} severity</div>
                     <div>{incident.description}</div>
                     <div className="text-ptr-brown-light">{formatDateTime(incident.incidentDate)}</div>

@@ -8,7 +8,7 @@ import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDateTime } from '../../utils/formatters';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
-import { INCIDENT_CATEGORIES, INCIDENT_TYPE_LABELS } from '../../lib/incidentTypes';
+import { INCIDENT_CATEGORIES, formatIncidentType, isOtherIncidentType } from '../../lib/incidentTypes';
 import type { IncidentType, IncidentSeverity } from '../../types';
 
 const SEVERITIES: IncidentSeverity[] = ['Low', 'Medium', 'High', 'Critical'];
@@ -35,12 +35,15 @@ function ReportForm({
   const { reportIncident } = useIncidents();
 
   const [type, setType] = useState<IncidentType>('wildlife_sighting');
+  const [typeOther, setTypeOther] = useState('');
   const [severity, setSeverity] = useState<IncidentSeverity>('Medium');
   const [description, setDescription] = useState('');
   const [rangeId, setRangeId] = useState(defaultRangeId);
   const [areaId, setAreaId] = useState('');
   const [error, setError] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
+
+  const isOther = isOtherIncidentType(type);
 
   // Recomputed only when the file list itself changes (not on every
   // keystroke elsewhere in the form), and revoked on cleanup so preview
@@ -70,14 +73,24 @@ function ReportForm({
     e.preventDefault();
     if (!description.trim()) { setError('Description is required'); return; }
     if (!rangeId) { setError('Please select a range'); return; }
+    if (isOther && !typeOther.trim()) { setError('Please specify the type'); return; }
     reportIncident.mutate(
-      { type, severity, description: description.trim(), rangeId, areaId: areaId || undefined, files: photos },
+      {
+        type,
+        typeOther: isOther ? typeOther.trim() : undefined,
+        severity,
+        description: description.trim(),
+        rangeId,
+        areaId: areaId || undefined,
+        files: photos,
+      },
       {
         onSuccess: () => {
           setDescription('');
           setAreaId('');
           setSeverity('Medium');
           setType('wildlife_sighting');
+          setTypeOther('');
           setPhotos([]);
           onClose();
         },
@@ -98,7 +111,11 @@ function ReportForm({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Type</label>
-            <select value={type} onChange={(e) => setType(e.target.value as IncidentType)} className="input-field select-field">
+            <select
+              value={type}
+              onChange={(e) => { setType(e.target.value as IncidentType); setTypeOther(''); setError(''); }}
+              className="input-field select-field"
+            >
               {INCIDENT_CATEGORIES.map((group) => (
                 <optgroup key={group.id} label={group.label}>
                   {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
@@ -106,6 +123,21 @@ function ReportForm({
               ))}
             </select>
           </div>
+          {isOther && (
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+                Specify type <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={typeOther}
+                onChange={(e) => { setTypeOther(e.target.value); setError(''); }}
+                placeholder="e.g. Snake bite, Fence damage"
+                maxLength={100}
+                className="input-field"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Severity</label>
             <select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)} className="input-field select-field">
@@ -271,7 +303,7 @@ export default function IncidentLog() {
               <div key={incident.id} className="p-4 space-y-2">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-ptr-brown">{INCIDENT_TYPE_LABELS[incident.type]}</span>
+                    <span className="text-sm font-semibold text-ptr-brown">{formatIncidentType(incident)}</span>
                     <PriorityBadge priority={incident.severity} size="sm" />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

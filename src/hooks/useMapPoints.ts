@@ -28,6 +28,7 @@ export function useMapPoints() {
       return data.map((row) => ({
         id: row.id,
         type: row.type as IncidentType,
+        typeOther: row.type_other ?? undefined,
         severity: row.severity as IncidentSeverity,
         description: row.description,
         rangeId: row.range_id,

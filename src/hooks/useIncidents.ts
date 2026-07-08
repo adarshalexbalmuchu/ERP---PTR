@@ -9,6 +9,7 @@ import type { Incident, IncidentType, IncidentSeverity } from '../types';
 
 type CreateIncidentData = {
   type: IncidentType;
+  typeOther?: string;
   severity: IncidentSeverity;
   description: string;
   rangeId: string;
@@ -70,6 +71,7 @@ export function useIncidents() {
         .from('incidents')
         .insert({
           type: data.type,
+          type_other: data.typeOther ?? null,
           severity: data.severity,
           description: data.description,
           range_id: data.rangeId,

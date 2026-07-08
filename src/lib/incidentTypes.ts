@@ -50,3 +50,20 @@ export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = INCIDENT_CATEG
   },
   {} as Record<IncidentType, string>,
 );
+
+// The per-category "Other" catch-alls — selecting one of these prompts for
+// a free-text label (Incident.typeOther) since the fixed subcategories
+// don't cover it.
+export const OTHER_INCIDENT_TYPES: IncidentType[] = ['conflict_other', 'other', 'sighting_other'];
+export function isOtherIncidentType(type: IncidentType): boolean {
+  return OTHER_INCIDENT_TYPES.includes(type);
+}
+
+// Display label for an incident's type — "Other — <what the reporter typed>"
+// when applicable, otherwise the fixed subcategory label.
+export function formatIncidentType(incident: { type: IncidentType; typeOther?: string }): string {
+  const label = INCIDENT_TYPE_LABELS[incident.type] ?? incident.type;
+  return isOtherIncidentType(incident.type) && incident.typeOther
+    ? `${label} — ${incident.typeOther}`
+    : label;
+}
