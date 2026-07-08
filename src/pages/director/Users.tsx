@@ -22,6 +22,16 @@ const ROLE_COLORS: Record<Role, string> = {
   tiger_cell: 'bg-white text-ptr-brown-light border border-ptr-cream-dark',
 };
 
+// Director works reserve-wide and Tiger Cell staff (research/tech roles that
+// span ranges) aren't posted to one range either — both skip the field.
+const ROLE_HAS_NO_RANGE: Record<Role, boolean> = {
+  director: true,
+  range_officer: false,
+  guard: false,
+  range_office: false,
+  tiger_cell: true,
+};
+
 interface UserFormData {
   name: string;
   email: string;
@@ -75,7 +85,7 @@ function UserFormModal({
         errs.password = 'Password must contain both letters and numbers';
     }
     if (!form.designation.trim()) errs.designation = 'Designation is required';
-    if (form.role !== 'director' && !form.rangeId) errs.rangeId = 'Range is required for this role';
+    if (!ROLE_HAS_NO_RANGE[form.role] && !form.rangeId) errs.rangeId = 'Range is required for this role';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -166,15 +176,15 @@ function UserFormModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">
-                Range {form.role !== 'director' && <span className="text-red-500">*</span>}
+                Range {!ROLE_HAS_NO_RANGE[form.role] && <span className="text-red-500">*</span>}
               </label>
               <select
                 value={form.rangeId}
                 onChange={(e) => set('rangeId', e.target.value)}
-                disabled={form.role === 'director'}
+                disabled={ROLE_HAS_NO_RANGE[form.role]}
                 className={`input-field select-field ${errors.rangeId ? 'input-error' : ''}`}
               >
-                <option value="">{form.role === 'director' ? 'N/A' : 'Select range'}</option>
+                <option value="">{ROLE_HAS_NO_RANGE[form.role] ? 'N/A' : 'Select range'}</option>
                 {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
               {errors.rangeId && <p className="text-xs text-red-600 mt-1">{errors.rangeId}</p>}
@@ -218,7 +228,7 @@ export default function DirectorUsers() {
       .map((w) => w[0].toUpperCase())
       .slice(0, 2)
       .join('');
-    const rangeId = data.role === 'director' ? undefined : data.rangeId || undefined;
+    const rangeId = ROLE_HAS_NO_RANGE[data.role] ? undefined : data.rangeId || undefined;
     const onSuccess = () => { setFormOpen(false); setEditing(null); };
 
     if (editing) {
