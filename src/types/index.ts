@@ -146,6 +146,8 @@ export interface IncidentPhoto {
 export interface Incident {
   id: string;
   type: IncidentType;
+  /** Free-text label when type is one of the per-category "Other" catch-alls; undefined otherwise. */
+  typeOther?: string;
   severity: IncidentSeverity;
   description: string;
   rangeId: string;

@@ -250,6 +250,12 @@ create table if not exists incidents (
   created_at    timestamptz not null default now()
 );
 
+-- Free-text label for incidents whose type is one of the per-category
+-- "Other" catch-alls — lets the reporter say what it actually is. Null for
+-- the fixed subcategories. Idempotent so re-running against an existing
+-- database just adds it.
+alter table incidents add column if not exists type_other text;
+
 -- Photos attached to an incident report. Compressed client-side before
 -- upload (see src/lib/incidentPhotos.ts) — this table only ever stores the
 -- already-optimized file, same as attachments does for tasks.
@@ -314,6 +320,10 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   alter table tasks add constraint tasks_category_other_len check (char_length(category_other) <= 100);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table incidents add constraint incidents_type_other_len check (char_length(type_other) <= 100);
 exception when duplicate_object then null; end $$;
 
 do $$ begin

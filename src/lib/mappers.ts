@@ -122,6 +122,7 @@ export function mapIncident(row: IncidentRow & { incident_photos?: IncidentPhoto
   return {
     id: row.id,
     type: row.type,
+    typeOther: row.type_other ?? undefined,
     severity: row.severity,
     description: row.description,
     rangeId: row.range_id,
