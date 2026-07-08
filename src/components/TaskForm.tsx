@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { X, Upload, Image, FileText, File as FileIcon, Search, ChevronDown } from 'lucide-react';
-import { useRanges } from '../hooks/useRanges';
 import { formatFileSize } from '../utils/formatters';
 import AttachmentList from './AttachmentList';
 import type { Task, User, TaskPriority, TaskCategory } from '../types';
@@ -51,24 +50,18 @@ export default function TaskForm({
   onUploadAttachment,
   onRemoveAttachment,
 }: Props) {
-  const { ranges, areas } = useRanges();
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const assigneeBoxRef = useRef<HTMLDivElement>(null);
-  const [rangeId, setRangeId] = useState('');
-  const [areaId, setAreaId] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('Medium');
   const [category, setCategory] = useState<TaskCategory>('Patrol');
   const [categoryOther, setCategoryOther] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-
-  const filteredAreas = areas.filter((a) => a.rangeId === rangeId);
 
   useEffect(() => {
     if (isOpen) {
@@ -79,8 +72,6 @@ export default function TaskForm({
       );
       setAssigneeSearch('');
       setAssigneeDropdownOpen(false);
-      setRangeId(initialData?.rangeId ?? defaultRangeId ?? '');
-      setAreaId(initialData?.areaId ?? '');
       setPriority(initialData?.priority ?? 'Medium');
       setCategory(initialData?.category ?? 'Patrol');
       setCategoryOther(initialData?.categoryOther ?? '');
@@ -134,7 +125,6 @@ export default function TaskForm({
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = 'Title is required';
     if (assigneeIds.length === 0) errs.assigneeIds = 'Please select at least one assignee';
-    if (!rangeId) errs.rangeId = 'Please select a range';
     if (category === 'Other' && !categoryOther.trim()) errs.categoryOther = 'Please specify the category';
     if (!dueDate) errs.dueDate = 'Due date is required';
     return errs;
@@ -145,6 +135,11 @@ export default function TaskForm({
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     const [assigneeId, ...coAssigneeIds] = assigneeIds;
+    const rangeId =
+      defaultRangeId ??
+      assignableUsers.find((u) => u.id === assigneeId)?.rangeId ??
+      initialData?.rangeId ??
+      '';
     onSave({
       title: title.trim(),
       description: description.trim(),
@@ -152,7 +147,7 @@ export default function TaskForm({
       coAssigneeIds,
       createdById: currentUserId,
       rangeId,
-      areaId: areaId || undefined,
+      areaId: initialData?.areaId,
       status: initialData?.status ?? 'NotStarted',
       priority,
       category,
@@ -297,40 +292,6 @@ export default function TaskForm({
               </div>
             )}
             {errors.assigneeIds && <p className="text-xs text-red-600 mt-1">{errors.assigneeIds}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
-                Range <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={rangeId}
-                onChange={(e) => { setRangeId(e.target.value); setAreaId(''); setErrors((p) => ({ ...p, rangeId: '' })); }}
-                className={`input-field ${errors.rangeId ? 'input-error' : ''}`}
-                disabled={!!defaultRangeId}
-              >
-                <option value="">Select range</option>
-                {ranges.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-              {errors.rangeId && <p className="text-xs text-red-600 mt-1">{errors.rangeId}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ptr-brown mb-1.5">Area / Zone</label>
-              <select
-                value={areaId}
-                onChange={(e) => setAreaId(e.target.value)}
-                className="input-field"
-                disabled={!rangeId}
-              >
-                <option value="">All areas</option>
-                {filteredAreas.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
