@@ -124,9 +124,11 @@ export type IncidentType =
   | 'livestock_attack'
   | 'crop_damage'
   | 'property_damage'
-  | 'road_kill'
   | 'conflict_other'
   | 'poaching_sign'
+  | 'road_kill'
+  | 'animal_injury'
+  | 'tree_felling'
   | 'other'
   | 'wildlife_sighting'
   | 'sighting_other';
