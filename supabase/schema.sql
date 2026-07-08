@@ -60,6 +60,10 @@ alter type incident_type add value if not exists 'road_kill' before 'other';
 alter type incident_type add value if not exists 'conflict_other' before 'poaching_sign';
 alter type incident_type add value if not exists 'sighting_other' after 'wildlife_sighting';
 
+-- Protection category grew beyond just Poaching Sign / Road Kill.
+alter type incident_type add value if not exists 'animal_injury' after 'road_kill';
+alter type incident_type add value if not exists 'tree_felling' after 'animal_injury';
+
 do $$ begin
   create type incident_severity as enum ('Low', 'Medium', 'High', 'Critical');
 exception when duplicate_object then null; end $$;

@@ -17,7 +17,6 @@ export const INCIDENT_CATEGORIES: IncidentCategoryGroup[] = [
       { type: 'livestock_attack', label: 'Livestock Attack' },
       { type: 'crop_damage', label: 'Crop Damage' },
       { type: 'property_damage', label: 'Property Damage' },
-      { type: 'road_kill', label: 'Road Kill' },
       { type: 'conflict_other', label: 'Other' },
     ],
   },
@@ -26,6 +25,9 @@ export const INCIDENT_CATEGORIES: IncidentCategoryGroup[] = [
     label: 'Protection',
     options: [
       { type: 'poaching_sign', label: 'Poaching Sign' },
+      { type: 'road_kill', label: 'Road Kill' },
+      { type: 'animal_injury', label: 'Animal Injury' },
+      { type: 'tree_felling', label: 'Illegal Tree Felling' },
       { type: 'other', label: 'Other' },
     ],
   },
