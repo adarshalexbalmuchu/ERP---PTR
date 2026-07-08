@@ -75,12 +75,17 @@ async function saveSubscription(userId: string, subscription: PushSubscription):
   // Called through a narrow shim rather than the typed client: this project's
   // hand-written database.types.ts models Functions as an empty map (its loose
   // relationship types can't coexist with enumerated RPCs), so the typed
-  // `supabase.rpc` doesn't know this function. The cast is confined to this
-  // one call and stays honest about the argument and error shapes.
-  const rpc = (supabase as unknown as {
+  // `supabase.rpc` doesn't know this function. The cast is confined to these
+  // calls and stays honest about the argument and error shapes.
+  //
+  // Must be invoked as `client.rpc(...)`, NOT via an extracted `const rpc =
+  // client.rpc` — supabase-js's rpc() reads `this.rest` internally, so a
+  // detached call throws "Cannot read properties of undefined (reading 'rest')"
+  // and no device ever gets subscribed.
+  const client = supabase as unknown as {
     rpc: (fn: string, args: Record<string, string>) => PromiseLike<{ error: PgError | null }>;
-  }).rpc;
-  const { error } = await rpc('claim_push_subscription', {
+  };
+  const { error } = await client.rpc('claim_push_subscription', {
     p_user_id: userId,
     p_endpoint: record.endpoint,
     p_p256dh: record.p256dh,
