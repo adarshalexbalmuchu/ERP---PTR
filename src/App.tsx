@@ -14,7 +14,6 @@ import ptrLogo from './assets/ptr-logo.png';
 // bundles (charts, user management, etc.) and vice versa.
 const DirectorDashboard = lazy(() => import('./pages/director/Dashboard'));
 const DirectorTaskList = lazy(() => import('./pages/director/TaskList'));
-const DirectorReports = lazy(() => import('./pages/director/Reports'));
 const DirectorUsers = lazy(() => import('./pages/director/Users'));
 const OfficerDashboard = lazy(() => import('./pages/officer/Dashboard'));
 const OfficerTaskList = lazy(() => import('./pages/officer/TaskList'));
@@ -125,7 +124,6 @@ export default function App() {
               <Route index element={<DirectorDashboard />} />
               <Route path="tasks" element={<DirectorTaskList />} />
               <Route path="tasks/:id" element={<TaskDetailPage />} />
-              <Route path="reports" element={<DirectorReports />} />
               <Route path="users" element={<DirectorUsers />} />
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />

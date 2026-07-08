@@ -385,11 +385,10 @@ export default function TaskForm({
               )}
               <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-ptr-cream-dark rounded-xl text-sm text-ptr-brown-light hover:bg-ptr-cream cursor-pointer transition-colors min-h-[44px]">
                 <Upload className="w-4 h-4" />
-                <span>Upload PDF, image, or Excel/Word document</span>
+                <span>Upload a document</span>
                 <input
                   type="file"
                   className="sr-only"
-                  accept="image/*,.pdf,.xlsx,.xls,.doc,.docx"
                   multiple
                   onChange={handleFileSelect}
                 />

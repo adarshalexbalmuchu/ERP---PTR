@@ -119,25 +119,6 @@ export interface Notification {
   createdAt: string;
 }
 
-export interface DailyReport {
-  id: string;
-  reportDate: string;
-  generatedBy: string;
-  totalTasks: number;
-  completedCount: number;
-  inProgressCount: number;
-  notStartedCount: number;
-  overdueCount: number;
-  rangeBreakdown: Array<{
-    rangeId: string;
-    rangeName: string;
-    total: number;
-    completed: number;
-    overdue: number;
-  }>;
-  createdAt: string;
-}
-
 export type IncidentType =
   | 'human_attack'
   | 'livestock_attack'
