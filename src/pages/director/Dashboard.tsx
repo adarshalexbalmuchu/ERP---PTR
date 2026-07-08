@@ -11,6 +11,7 @@ import {
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
+import { useRanges } from '../../hooks/useRanges';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
 import { supabase } from '../../lib/supabase';
 import { mapTask } from '../../lib/mappers';
@@ -92,6 +93,7 @@ export default function DirectorDashboard() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
   const { users } = useUsers();
+  const { ranges } = useRanges();
   const { createTask } = useTasks();
   const { stats, rangeStats } = useDashboardStats();
 
@@ -322,6 +324,7 @@ export default function DirectorDashboard() {
           assignableUsers={users.filter((u) => isFieldRole(u.role))}
           initialData={null}
           currentUserId={currentUser.id}
+          ranges={ranges}
         />
       )}
     </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'r
 import { X, Upload, Image, FileText, File as FileIcon, Search, ChevronDown } from 'lucide-react';
 import { formatFileSize } from '../utils/formatters';
 import AttachmentList from './AttachmentList';
-import type { Task, User, TaskPriority, TaskCategory } from '../types';
+import type { Task, User, TaskPriority, TaskCategory, Range } from '../types';
 
 interface Props {
   isOpen: boolean;
@@ -12,6 +12,13 @@ interface Props {
   initialData?: Task | null;
   currentUserId: string;
   defaultRangeId?: string;
+  /**
+   * When the caller isn't scoped to a single range (the director flow passes
+   * no defaultRangeId), these populate a required Range picker so every task
+   * gets a valid range — some field staff (e.g. Tiger Cell) have no range of
+   * their own to infer one from.
+   */
+  ranges?: Range[];
   /** Wire these up (from TaskDetailPage) to allow adding/removing attachments while editing an existing task. */
   onUploadAttachment?: (file: File) => void;
   onRemoveAttachment?: (attachmentId: string) => void;
@@ -47,6 +54,7 @@ export default function TaskForm({
   initialData,
   currentUserId,
   defaultRangeId,
+  ranges = [],
   onUploadAttachment,
   onRemoveAttachment,
 }: Props) {
@@ -60,8 +68,16 @@ export default function TaskForm({
   const [category, setCategory] = useState<TaskCategory>('Patrol');
   const [categoryOther, setCategoryOther] = useState('');
   const [dueDate, setDueDate] = useState('');
+  // Only surfaced (and required) when the caller is range-agnostic, i.e. no
+  // defaultRangeId — otherwise the task's range is fixed to defaultRangeId.
+  const [rangeId, setRangeId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  // Shown only for a range-agnostic caller (no defaultRangeId) that actually
+  // supplies ranges to choose from — e.g. the director's create flow. Edit
+  // surfaces that pass neither (TaskDetailPage) keep the task's existing range.
+  const showRangePicker = !defaultRangeId && ranges.length > 0;
 
   useEffect(() => {
     if (isOpen) {
@@ -76,10 +92,19 @@ export default function TaskForm({
       setCategory(initialData?.category ?? 'Patrol');
       setCategoryOther(initialData?.categoryOther ?? '');
       setDueDate(initialData?.dueDate ? initialData.dueDate.substring(0, 10) : '');
+      setRangeId(initialData?.rangeId ?? defaultRangeId ?? '');
       setErrors({});
       setPendingFiles([]);
     }
   }, [isOpen, initialData, defaultRangeId]);
+
+  // Prefill the range from the primary assignee's own range as a convenience,
+  // but only when it's still unset — never clobber a range the user picked.
+  useEffect(() => {
+    if (!showRangePicker) return;
+    const inferred = assignableUsers.find((u) => u.id === assigneeIds[0])?.rangeId;
+    if (inferred) setRangeId((prev) => prev || inferred);
+  }, [assigneeIds, assignableUsers, showRangePicker]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -125,6 +150,7 @@ export default function TaskForm({
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = 'Title is required';
     if (assigneeIds.length === 0) errs.assigneeIds = 'Please select at least one assignee';
+    if (showRangePicker && !rangeId) errs.rangeId = 'Please select a range';
     if (category === 'Other' && !categoryOther.trim()) errs.categoryOther = 'Please specify the category';
     if (!dueDate) errs.dueDate = 'Due date is required';
     return errs;
@@ -135,18 +161,16 @@ export default function TaskForm({
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     const [assigneeId, ...coAssigneeIds] = assigneeIds;
-    const rangeId =
-      defaultRangeId ??
-      assignableUsers.find((u) => u.id === assigneeId)?.rangeId ??
-      initialData?.rangeId ??
-      '';
+    // defaultRangeId (officer flow) always wins; otherwise use the picked
+    // range, which validate() has already guaranteed is non-empty.
+    const resolvedRangeId = defaultRangeId ?? rangeId;
     onSave({
       title: title.trim(),
       description: description.trim(),
       assigneeId,
       coAssigneeIds,
       createdById: currentUserId,
-      rangeId,
+      rangeId: resolvedRangeId,
       areaId: initialData?.areaId,
       status: initialData?.status ?? 'NotStarted',
       priority,
@@ -293,6 +317,25 @@ export default function TaskForm({
             )}
             {errors.assigneeIds && <p className="text-xs text-red-600 mt-1">{errors.assigneeIds}</p>}
           </div>
+
+          {showRangePicker && (
+            <div>
+              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
+                Range <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={rangeId}
+                onChange={(e) => { setRangeId(e.target.value); setErrors((p) => ({ ...p, rangeId: '' })); }}
+                className={`input-field select-field ${errors.rangeId ? 'input-error' : ''}`}
+              >
+                <option value="">Select a range…</option>
+                {ranges.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+              {errors.rangeId && <p className="text-xs text-red-600 mt-1">{errors.rangeId}</p>}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

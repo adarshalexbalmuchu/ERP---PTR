@@ -180,6 +180,7 @@ export default function DirectorTaskList() {
           assignableUsers={users.filter((u) => isFieldRole(u.role))}
           initialData={editingTask}
           currentUserId={currentUser.id}
+          ranges={ranges}
         />
       )}
     </div>
