@@ -3,7 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ClipboardList,
-  FileText,
   Users,
   Menu,
   X,
@@ -362,7 +361,6 @@ export default function Layout() {
     const items: NavItem[] = [
       { to: '/director', label: 'Dashboard', icon: <LayoutDashboard className="w-[18px] h-[18px] flex-shrink-0" /> },
       { to: '/director/tasks', label: 'Task Registry', icon: <ClipboardList className="w-[18px] h-[18px] flex-shrink-0" /> },
-      { to: '/director/reports', label: 'Reports', icon: <FileText className="w-[18px] h-[18px] flex-shrink-0" /> },
       { to: '/director/incidents', label: 'Incident Reports', icon: <AlertTriangle className="w-[18px] h-[18px] flex-shrink-0" /> },
       { to: '/director/map', label: 'Range Map', icon: <MapIcon className="w-[18px] h-[18px] flex-shrink-0" /> },
       { to: '/director/audit', label: 'System Audit', icon: <History className="w-[18px] h-[18px] flex-shrink-0" /> },

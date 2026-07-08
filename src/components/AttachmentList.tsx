@@ -84,7 +84,6 @@ export default function AttachmentList({
           <input
             type="file"
             className="sr-only"
-            accept="image/*,.pdf,.xlsx,.xls,.doc,.docx"
             multiple
             onChange={handleFileInput}
           />
