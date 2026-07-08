@@ -124,10 +124,12 @@ export type IncidentType =
   | 'livestock_attack'
   | 'crop_damage'
   | 'property_damage'
-  | 'poaching_sign'
-  | 'wildlife_sighting'
   | 'road_kill'
-  | 'other';
+  | 'conflict_other'
+  | 'poaching_sign'
+  | 'other'
+  | 'wildlife_sighting'
+  | 'sighting_other';
 
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 

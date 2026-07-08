@@ -8,20 +8,9 @@ import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDateTime } from '../../utils/formatters';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
+import { INCIDENT_CATEGORIES, INCIDENT_TYPE_LABELS } from '../../lib/incidentTypes';
 import type { IncidentType, IncidentSeverity } from '../../types';
 
-const TYPE_LABELS: Record<IncidentType, string> = {
-  human_attack: 'Attack on Human',
-  livestock_attack: 'Livestock Attack',
-  crop_damage: 'Crop Damage',
-  property_damage: 'Property Damage',
-  poaching_sign: 'Poaching Sign',
-  wildlife_sighting: 'Wildlife Sighting',
-  road_kill: 'Road Kill',
-  other: 'Other',
-};
-
-const TYPES = Object.keys(TYPE_LABELS) as IncidentType[];
 const SEVERITIES: IncidentSeverity[] = ['Low', 'Medium', 'High', 'Critical'];
 
 function ReportForm({
@@ -110,7 +99,11 @@ function ReportForm({
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Type</label>
             <select value={type} onChange={(e) => setType(e.target.value as IncidentType)} className="input-field select-field">
-              {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+              {INCIDENT_CATEGORIES.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
           <div>
@@ -249,7 +242,11 @@ export default function IncidentLog() {
       <div className="card p-4 grid grid-cols-2 gap-3">
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field">
           <option value="">All Types</option>
-          {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+          {INCIDENT_CATEGORIES.map((group) => (
+            <optgroup key={group.id} label={group.label}>
+              {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
+            </optgroup>
+          ))}
         </select>
         <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} className="input-field select-field">
           <option value="">All Severities</option>
@@ -272,7 +269,7 @@ export default function IncidentLog() {
               <div key={incident.id} className="p-4 space-y-2">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-ptr-brown">{TYPE_LABELS[incident.type]}</span>
+                    <span className="text-sm font-semibold text-ptr-brown">{INCIDENT_TYPE_LABELS[incident.type]}</span>
                     <PriorityBadge priority={incident.severity} size="sm" />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

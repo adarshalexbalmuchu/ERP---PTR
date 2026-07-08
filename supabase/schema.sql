@@ -54,6 +54,12 @@ exception when duplicate_object then null; end $$;
 -- fresh database where create type above already includes them.
 alter type incident_type add value if not exists 'road_kill' before 'other';
 
+-- Per-category "Other" catch-alls, added when the incident type dropdown
+-- was grouped into Human-Wildlife Conflict / Protection / Wildlife Sighting
+-- categories — 'other' remains Protection's catch-all.
+alter type incident_type add value if not exists 'conflict_other' before 'poaching_sign';
+alter type incident_type add value if not exists 'sighting_other' after 'wildlife_sighting';
+
 do $$ begin
   create type incident_severity as enum ('Low', 'Medium', 'High', 'Critical');
 exception when duplicate_object then null; end $$;
