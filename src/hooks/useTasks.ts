@@ -59,6 +59,10 @@ export function useTasks() {
   const createTask = useMutation({
     mutationFn: async (data: CreateTaskData) => {
       if (!currentUser) throw new Error('Not authenticated');
+      // range_id is NOT NULL in the schema; an empty string here would reach
+      // Postgres as an invalid UUID (22P02). The form guards this, but fail
+      // with a clear message rather than a raw driver error if it slips through.
+      if (!data.rangeId) throw new Error('A range is required for this task.');
       const { data: row, error } = await supabase
         .from('tasks')
         .insert({
@@ -113,7 +117,9 @@ export function useTasks() {
       if (data.title !== undefined) patch.title = data.title;
       if (data.description !== undefined) patch.description = data.description;
       if (data.assigneeId !== undefined) patch.assignee_id = data.assigneeId;
-      if (data.rangeId !== undefined) patch.range_id = data.rangeId;
+      // Truthy check, not `!== undefined`: range_id is NOT NULL, so an empty
+      // string must never reach the patch (it'd be an invalid UUID).
+      if (data.rangeId) patch.range_id = data.rangeId;
       if (data.areaId !== undefined) patch.area_id = data.areaId ?? null;
       if (data.priority !== undefined) patch.priority = data.priority;
       if (data.category !== undefined) {
