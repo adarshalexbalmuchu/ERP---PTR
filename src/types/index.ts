@@ -111,7 +111,10 @@ export interface Notification {
     | 'task_updated'
     | 'task_completed'
     | 'changes_requested'
-    | 'task_archived';
+    | 'task_archived'
+    | 'task_due_soon'
+    | 'task_due_today'
+    | 'task_overdue';
   title: string;
   message: string;
   taskId: string;

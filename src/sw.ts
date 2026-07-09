@@ -75,10 +75,11 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title ?? 'PTR Tiger Cell';
   const url = sanitizeNotificationUrl(payload.url);
-  // Critical/High priority tasks (and changes-requested, which always needs
-  // action) get a stronger vibration and stay on screen until dismissed
-  // instead of disappearing after a few seconds.
-  const isUrgent = payload.priority === 'Critical' || payload.priority === 'High' || payload.type === 'changes_requested';
+  // Critical/High priority tasks (and changes-requested / overdue reminders,
+  // which always need action) get a stronger vibration and stay on screen
+  // until dismissed instead of disappearing after a few seconds.
+  const isUrgent = payload.priority === 'Critical' || payload.priority === 'High'
+    || payload.type === 'changes_requested' || payload.type === 'task_overdue';
 
   // TS's WebWorker lib types lag behind the real Notifications API spec —
   // renotify/vibrate/actions are all valid, widely-supported options that

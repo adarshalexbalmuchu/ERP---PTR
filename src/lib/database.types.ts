@@ -4,7 +4,7 @@ export type UserRole = 'director' | 'range_officer' | 'guard' | 'range_office' |
 export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
-export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived';
+export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue';
 export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'conflict_other' | 'poaching_sign' | 'road_kill' | 'animal_injury' | 'tree_felling' | 'other' | 'wildlife_sighting' | 'sighting_other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
