@@ -13,10 +13,10 @@ interface Props {
   currentUserId: string;
   defaultRangeId?: string;
   /**
-   * When the caller isn't scoped to a single range (the director flow passes
-   * no defaultRangeId), these back the Range picker that only appears when
-   * the selected assignee has no home range of their own to infer one from
-   * (e.g. Tiger Cell) — every other assignment infers its range silently.
+   * Directors assign tasks to any staff reserve-wide, so there's no range
+   * picker in this form — a task's range is silently resolved (from the
+   * assignee's own range, or a fallback) purely to satisfy the database's
+   * non-null range_id column, and is never shown to or chosen by the user.
    */
   ranges?: Range[];
   /** Wire these up (from TaskDetailPage) to allow adding/removing attachments while editing an existing task. */
@@ -68,19 +68,8 @@ export default function TaskForm({
   const [category, setCategory] = useState<TaskCategory>('Patrol');
   const [categoryOther, setCategoryOther] = useState('');
   const [dueDate, setDueDate] = useState('');
-  // Only surfaced (and required) when the caller is range-agnostic, i.e. no
-  // defaultRangeId — otherwise the task's range is fixed to defaultRangeId.
-  const [rangeId, setRangeId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-
-  // The range is inferred from the primary assignee's own range, so staff
-  // creating a task never has to pick one manually. The one case that can't
-  // be inferred is a Tiger Cell assignee, who has no home range of their
-  // own — the picker is surfaced only then, and only for a range-agnostic
-  // caller (no defaultRangeId) that actually supplies ranges to choose from.
-  const primaryAssignee = assignableUsers.find((u) => u.id === assigneeIds[0]);
-  const showRangePicker = !defaultRangeId && ranges.length > 0 && assigneeIds.length > 0 && !primaryAssignee?.rangeId;
 
   useEffect(() => {
     if (isOpen) {
@@ -95,21 +84,10 @@ export default function TaskForm({
       setCategory(initialData?.category ?? 'Patrol');
       setCategoryOther(initialData?.categoryOther ?? '');
       setDueDate(initialData?.dueDate ? initialData.dueDate.substring(0, 10) : '');
-      setRangeId(initialData?.rangeId ?? defaultRangeId ?? '');
       setErrors({});
       setPendingFiles([]);
     }
   }, [isOpen, initialData, defaultRangeId]);
-
-  // Keep the range in sync with the primary assignee's own range — but only
-  // while creating a task. An existing task keeps whatever range it already
-  // has (seeded above) even if its assignee's own range has since changed;
-  // this only clears to '' (surfacing the picker) when a Tiger Cell assignee
-  // is picked, since they have no range to infer.
-  useEffect(() => {
-    if (defaultRangeId || initialData) return;
-    setRangeId(assignableUsers.find((u) => u.id === assigneeIds[0])?.rangeId ?? '');
-  }, [assigneeIds, assignableUsers, defaultRangeId, initialData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -155,10 +133,26 @@ export default function TaskForm({
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = 'Title is required';
     if (assigneeIds.length === 0) errs.assigneeIds = 'Please select at least one assignee';
-    if (showRangePicker && !rangeId) errs.rangeId = 'Please select a range';
     if (category === 'Other' && !categoryOther.trim()) errs.categoryOther = 'Please specify the category';
     if (!dueDate) errs.dueDate = 'Due date is required';
     return errs;
+  };
+
+  // Tasks aren't range-scoped from the assigner's point of view (directors
+  // assign reserve-wide; only a range officer's own flow is range-limited,
+  // via defaultRangeId below) — but tasks.range_id is NOT NULL in the
+  // database, so something valid still has to go in it. Resolved quietly,
+  // in order: the caller's fixed range, the primary assignee's own range,
+  // any other selected assignee's range, the task's existing range (edits),
+  // then simply the first range that exists — never surfaced or chosen by
+  // the user.
+  const resolveRangeId = (): string => {
+    if (defaultRangeId) return defaultRangeId;
+    for (const id of assigneeIds) {
+      const r = assignableUsers.find((u) => u.id === id)?.rangeId;
+      if (r) return r;
+    }
+    return initialData?.rangeId ?? ranges[0]?.id ?? '';
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -166,16 +160,13 @@ export default function TaskForm({
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     const [assigneeId, ...coAssigneeIds] = assigneeIds;
-    // defaultRangeId (officer flow) always wins; otherwise use the picked
-    // range, which validate() has already guaranteed is non-empty.
-    const resolvedRangeId = defaultRangeId ?? rangeId;
     onSave({
       title: title.trim(),
       description: description.trim(),
       assigneeId,
       coAssigneeIds,
       createdById: currentUserId,
-      rangeId: resolvedRangeId,
+      rangeId: resolveRangeId(),
       areaId: initialData?.areaId,
       status: initialData?.status ?? 'NotStarted',
       priority,
@@ -322,26 +313,6 @@ export default function TaskForm({
             )}
             {errors.assigneeIds && <p className="text-xs text-red-600 mt-1">{errors.assigneeIds}</p>}
           </div>
-
-          {showRangePicker && (
-            <div>
-              <label className="block text-sm font-medium text-ptr-brown mb-1.5">
-                Range <span className="text-red-500">*</span>
-                <span className="text-ptr-brown-light font-normal"> (Tiger Cell has no home range — pick one for this task)</span>
-              </label>
-              <select
-                value={rangeId}
-                onChange={(e) => { setRangeId(e.target.value); setErrors((p) => ({ ...p, rangeId: '' })); }}
-                className={`input-field select-field ${errors.rangeId ? 'input-error' : ''}`}
-              >
-                <option value="">Select a range…</option>
-                {ranges.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-              {errors.rangeId && <p className="text-xs text-red-600 mt-1">{errors.rangeId}</p>}
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
