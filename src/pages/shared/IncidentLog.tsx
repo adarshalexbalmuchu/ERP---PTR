@@ -6,6 +6,7 @@ import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
+import Select from '../../components/Select';
 import { formatDateTime } from '../../utils/formatters';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
 import { INCIDENT_CATEGORIES, formatIncidentType, isOtherIncidentType } from '../../lib/incidentTypes';
@@ -111,7 +112,7 @@ function ReportForm({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Type</label>
-            <select
+            <Select
               value={type}
               onChange={(e) => { setType(e.target.value as IncidentType); setTypeOther(''); setError(''); }}
               className="input-field select-field"
@@ -121,7 +122,7 @@ function ReportForm({
                   {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
                 </optgroup>
               ))}
-            </select>
+            </Select>
           </div>
           {isOther && (
             <div>
@@ -140,14 +141,14 @@ function ReportForm({
           )}
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">Severity</label>
-            <select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)} className="input-field select-field">
+            <Select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)} className="input-field select-field">
               {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Range</label>
-              <select
+              <Select
                 value={rangeId}
                 onChange={(e) => { setRangeId(e.target.value); setAreaId(''); }}
                 className="input-field select-field"
@@ -155,14 +156,14 @@ function ReportForm({
               >
                 <option value="">Select range</option>
                 {selectableRanges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Area / Zone</label>
-              <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="input-field select-field" disabled={!rangeId}>
+              <Select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="input-field select-field" disabled={!rangeId}>
                 <option value="">Unspecified</option>
                 {filteredAreas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              </Select>
             </div>
           </div>
           <div>
@@ -274,18 +275,18 @@ export default function IncidentLog() {
       </div>
 
       <div className="card p-4 grid grid-cols-2 gap-3">
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field">
+        <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field">
           <option value="">All Types</option>
           {INCIDENT_CATEGORIES.map((group) => (
             <optgroup key={group.id} label={group.label}>
               {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
             </optgroup>
           ))}
-        </select>
-        <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} className="input-field select-field">
+        </Select>
+        <Select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} className="input-field select-field">
           <option value="">All Severities</option>
           {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        </Select>
       </div>
 
       {!isLoading && filtered.length === 0 ? (

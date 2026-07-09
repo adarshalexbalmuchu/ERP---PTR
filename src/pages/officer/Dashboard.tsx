@@ -13,6 +13,7 @@ import { isFieldRole } from '../../types';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
+import Select from '../../components/Select';
 import StatusBadge from '../../components/StatusBadge';
 import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
@@ -95,7 +96,7 @@ export default function OfficerDashboard() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {isMultiRange && (
-            <select
+            <Select
               value={activeRangeId}
               onChange={(e) => setActiveRangeId(e.target.value)}
               className="input-field select-field !w-auto text-sm"
@@ -105,7 +106,7 @@ export default function OfficerDashboard() {
                 const r = ranges.find((rr) => rr.id === id);
                 return <option key={id} value={id}>{r?.name ?? 'Range'}</option>;
               })}
-            </select>
+            </Select>
           )}
           <button onClick={() => setFormOpen(true)} className="btn-primary flex-shrink-0">
             <Plus className="w-4 h-4" />

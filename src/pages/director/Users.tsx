@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
+import Select from '../../components/Select';
 import type { User, Role } from '../../types';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -162,7 +163,7 @@ function UserFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Role</label>
-              <select
+              <Select
                 value={form.role}
                 onChange={(e) => set('role', e.target.value as Role)}
                 className="input-field select-field"
@@ -172,13 +173,13 @@ function UserFormModal({
                 <option value="guard">Guard / Field Staff</option>
                 <option value="range_office">Range Office</option>
                 <option value="tiger_cell">Tiger Cell</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">
                 Range {!ROLE_HAS_NO_RANGE[form.role] && <span className="text-red-500">*</span>}
               </label>
-              <select
+              <Select
                 value={form.rangeId}
                 onChange={(e) => set('rangeId', e.target.value)}
                 disabled={ROLE_HAS_NO_RANGE[form.role]}
@@ -186,7 +187,7 @@ function UserFormModal({
               >
                 <option value="">{ROLE_HAS_NO_RANGE[form.role] ? 'N/A' : 'Select range'}</option>
                 {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
+              </Select>
               {errors.rangeId && <p className="text-xs text-red-600 mt-1">{errors.rangeId}</p>}
             </div>
           </div>
@@ -266,14 +267,14 @@ export default function DirectorUsers() {
       </div>
 
       <div className="flex items-center gap-3">
-        <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="input-field select-field w-48">
+        <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="input-field select-field w-48">
           <option value="">All Roles</option>
           <option value="director">Director</option>
           <option value="range_officer">Range Officer</option>
           <option value="guard">Guard / Field Staff</option>
           <option value="range_office">Range Office</option>
           <option value="tiger_cell">Tiger Cell</option>
-        </select>
+        </Select>
       </div>
 
       <div className="card divide-y divide-ptr-cream-dark overflow-hidden">

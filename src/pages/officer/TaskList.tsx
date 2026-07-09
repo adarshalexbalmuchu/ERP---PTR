@@ -13,6 +13,7 @@ import StatusBadge from '../../components/StatusBadge';
 import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
+import Select from '../../components/Select';
 import type { Task, TaskStatus, TaskPriority } from '../../types';
 import { isFieldRole } from '../../types';
 
@@ -57,7 +58,7 @@ export default function OfficerTaskList() {
         </div>
         <div className="flex items-center gap-2">
           {isMultiRange && (
-            <select
+            <Select
               value={myRangeId}
               onChange={(e) => setActiveRangeId(e.target.value)}
               className="input-field select-field !w-auto text-sm"
@@ -67,7 +68,7 @@ export default function OfficerTaskList() {
                 const r = ranges.find((rr) => rr.id === id);
                 return <option key={id} value={id}>{r?.name ?? 'Range'}</option>;
               })}
-            </select>
+            </Select>
           )}
           <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary">
             <Plus className="w-4 h-4" />
@@ -88,24 +89,24 @@ export default function OfficerTaskList() {
             className="input-field pl-9"
           />
         </div>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field select-field">
+        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field select-field">
           <option value="">All Statuses</option>
           {(['NotStarted', 'InProgress', 'Completed', 'Archived'] as TaskStatus[]).map((s) => (
             <option key={s} value={s}>
               {s === 'NotStarted' ? 'Not Started' : s === 'InProgress' ? 'In Progress' : s}
             </option>
           ))}
-        </select>
-        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field select-field">
+        </Select>
+        <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field select-field">
           <option value="">All Priorities</option>
           {(['Critical', 'High', 'Medium', 'Low'] as TaskPriority[]).map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
-        </select>
-        <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-field select-field">
+        </Select>
+        <Select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-field select-field">
           <option value="">All Areas</option>
           {myAreas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
+        </Select>
       </div>
 
       <p className="text-xs text-ptr-brown-light">{filtered.length} task{filtered.length !== 1 ? 's' : ''}</p>

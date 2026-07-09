@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'r
 import { X, Upload, Image, FileText, File as FileIcon, Search, ChevronDown } from 'lucide-react';
 import { formatFileSize } from '../utils/formatters';
 import AttachmentList from './AttachmentList';
+import Select from './Select';
 import type { Task, User, TaskPriority, TaskCategory, Range } from '../types';
 
 interface Props {
@@ -317,7 +318,7 @@ export default function TaskForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Priority</label>
-              <select
+              <Select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
                 className="input-field"
@@ -325,11 +326,11 @@ export default function TaskForm({
                 {PRIORITIES.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">Category</label>
-              <select
+              <Select
                 value={category}
                 onChange={(e) => {
                   setCategory(e.target.value as TaskCategory);
@@ -340,7 +341,7 @@ export default function TaskForm({
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
