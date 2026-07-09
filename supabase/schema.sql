@@ -43,8 +43,19 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived');
+  create type notification_type as enum ('task_assigned', 'task_updated', 'task_completed', 'changes_requested', 'task_archived', 'task_due_soon', 'task_due_today', 'task_overdue');
 exception when duplicate_object then null; end $$;
+
+-- Deadline-reminder types appended after the enum's initial rollout; no-ops
+-- on a fresh database where create type above already includes them. A new
+-- enum value can't be referenced until the transaction that added it commits
+-- ("unsafe use of new value of enum type"), and send_task_deadline_reminders
+-- below inserts these literals — commit now so an already-deployed database
+-- can run this whole file in one paste.
+alter type notification_type add value if not exists 'task_due_soon';
+alter type notification_type add value if not exists 'task_due_today';
+alter type notification_type add value if not exists 'task_overdue';
+commit;
 
 do $$ begin
   create type incident_type as enum ('human_attack', 'livestock_attack', 'crop_damage', 'property_damage', 'poaching_sign', 'wildlife_sighting', 'road_kill', 'other');
@@ -219,6 +230,22 @@ create table if not exists push_subscriptions (
   p256dh     text not null,
   auth       text not null,
   created_at timestamptz not null default now()
+);
+
+-- Bookkeeping for send_task_deadline_reminders(): one row per reminder
+-- actually sent, keyed on (task, recipient, kind, the due date it was about).
+-- The composite PK is what makes the hourly cron idempotent — a reminder can
+-- never repeat for the same deadline, but moving a task's due date changes
+-- due_date here, so the reschedule correctly re-arms all three reminder
+-- kinds for the new date. Not a user-facing table: RLS is enabled with no
+-- policies (only the SECURITY DEFINER reminder function writes it).
+create table if not exists task_reminders_sent (
+  task_id  uuid not null references tasks(id) on delete cascade,
+  user_id  uuid not null references profiles(id) on delete cascade,
+  kind     text not null check (kind in ('due_soon', 'due_today', 'overdue')),
+  due_date date not null,
+  sent_at  timestamptz not null default now(),
+  primary key (task_id, user_id, kind, due_date)
 );
 
 create table if not exists daily_reports (
@@ -586,6 +613,137 @@ create trigger notifications_push_trigger
   for each row execute function notify_push_on_notification_insert();
 
 -- ─────────────────────────────────────────────
+-- Task deadline reminders
+--
+-- Inserts ordinary `notifications` rows — which the push trigger above then
+-- delivers to devices — for three moments in a task's life:
+--   due_soon:  the day before due_date        → every assignee
+--   due_today: the morning of due_date        → every assignee
+--   overdue:   past due_date and still open   → every assignee + the creator
+-- "Assignees" = tasks.assignee_id UNION task_assignees. Only NotStarted /
+-- InProgress tasks remind (a task marked Completed and awaiting approval
+-- shouldn't nag anyone).
+--
+-- Dates are computed in IST (Asia/Kolkata — the reserve's timezone), and the
+-- function refuses to send outside 08:00–20:00 IST so the date flipping at
+-- midnight never buzzes a phone at night; the hourly cron job simply
+-- delivers the pending reminders on its first run after 8 AM. Pass
+-- p_ignore_quiet_hours := true to bypass the gate when testing by hand:
+--   select send_task_deadline_reminders(true);
+--
+-- task_reminders_sent (see above) makes every send exactly-once per
+-- (task, user, kind, due date): the insert into it is the gate, and only
+-- rows that actually landed there produce a notification.
+create or replace function send_task_deadline_reminders(p_ignore_quiet_hours boolean default false)
+returns void language plpgsql security definer
+set search_path = '' as $$
+declare
+  today    date := (now() at time zone 'Asia/Kolkata')::date;
+  hour_ist int  := extract(hour from now() at time zone 'Asia/Kolkata');
+begin
+  if not p_ignore_quiet_hours and (hour_ist < 8 or hour_ist >= 20) then
+    return;
+  end if;
+
+  -- due tomorrow → assignees
+  with recipients as (
+    select t.id as task_id, t.title, t.due_date, t.assignee_id as user_id
+      from public.tasks t
+     where t.status in ('NotStarted', 'InProgress') and t.due_date = today + 1
+    union
+    select t.id, t.title, t.due_date, ta.user_id
+      from public.tasks t
+      join public.task_assignees ta on ta.task_id = t.id
+     where t.status in ('NotStarted', 'InProgress') and t.due_date = today + 1
+  ), marked as (
+    insert into public.task_reminders_sent (task_id, user_id, kind, due_date)
+    select task_id, user_id, 'due_soon', due_date from recipients
+    on conflict do nothing
+    returning task_id, user_id
+  )
+  insert into public.notifications (user_id, type, title, message, task_id)
+  select m.user_id, 'task_due_soon', 'Reminder: Task Due Tomorrow',
+         'Your task "' || left(r.title, 150) || '" is due tomorrow (' || to_char(r.due_date, 'DD Mon') || ').',
+         m.task_id
+    from marked m
+    join recipients r on r.task_id = m.task_id and r.user_id = m.user_id;
+
+  -- due today → assignees
+  with recipients as (
+    select t.id as task_id, t.title, t.due_date, t.assignee_id as user_id
+      from public.tasks t
+     where t.status in ('NotStarted', 'InProgress') and t.due_date = today
+    union
+    select t.id, t.title, t.due_date, ta.user_id
+      from public.tasks t
+      join public.task_assignees ta on ta.task_id = t.id
+     where t.status in ('NotStarted', 'InProgress') and t.due_date = today
+  ), marked as (
+    insert into public.task_reminders_sent (task_id, user_id, kind, due_date)
+    select task_id, user_id, 'due_today', due_date from recipients
+    on conflict do nothing
+    returning task_id, user_id
+  )
+  insert into public.notifications (user_id, type, title, message, task_id)
+  select m.user_id, 'task_due_today', 'Reminder: Task Due Today',
+         'Your task "' || left(r.title, 150) || '" is due today. Update progress or mark it done.',
+         m.task_id
+    from marked m
+    join recipients r on r.task_id = m.task_id and r.user_id = m.user_id;
+
+  -- overdue → assignees + creator (the creator runs the closed loop, so they
+  -- should know a deadline slipped without opening the dashboard)
+  with recipients as (
+    select t.id as task_id, t.title, t.due_date, t.assignee_id as user_id
+      from public.tasks t
+     where t.status in ('NotStarted', 'InProgress') and t.due_date < today
+    union
+    select t.id, t.title, t.due_date, ta.user_id
+      from public.tasks t
+      join public.task_assignees ta on ta.task_id = t.id
+     where t.status in ('NotStarted', 'InProgress') and t.due_date < today
+    union
+    select t.id, t.title, t.due_date, t.created_by_id
+      from public.tasks t
+     where t.status in ('NotStarted', 'InProgress') and t.due_date < today
+  ), marked as (
+    insert into public.task_reminders_sent (task_id, user_id, kind, due_date)
+    select task_id, user_id, 'overdue', due_date from recipients
+    on conflict do nothing
+    returning task_id, user_id
+  )
+  insert into public.notifications (user_id, type, title, message, task_id)
+  select m.user_id, 'task_overdue', 'Task Overdue',
+         'Task "' || left(r.title, 150) || '" was due on ' || to_char(r.due_date, 'DD Mon') || ' and is still open.',
+         m.task_id
+    from marked m
+    join recipients r on r.task_id = m.task_id and r.user_id = m.user_id;
+end;
+$$;
+
+revoke all on function send_task_deadline_reminders(boolean) from public;
+
+-- Hourly via pg_cron; the function's own quiet-hours/dedup logic makes every
+-- run a cheap no-op when there's nothing new to say. Both steps are wrapped
+-- so this file still applies where pg_cron isn't installable (the local test
+-- shim) — on real Supabase, enable the pg_cron extension and re-run this
+-- block if the do-blocks report nothing scheduled.
+do $$ begin
+  create extension if not exists pg_cron;
+exception when others then
+  raise notice 'pg_cron unavailable; deadline reminders not scheduled';
+end $$;
+
+do $$ begin
+  perform cron.unschedule('task-deadline-reminders')
+    from cron.job where jobname = 'task-deadline-reminders';
+  perform cron.schedule('task-deadline-reminders', '0 * * * *',
+                        'select public.send_task_deadline_reminders()');
+exception when others then
+  raise notice 'pg_cron unavailable; deadline reminders not scheduled';
+end $$;
+
+-- ─────────────────────────────────────────────
 -- Row Level Security
 --
 -- get_my_role()/get_my_range_id()/auth.uid() calls below are wrapped in
@@ -607,6 +765,9 @@ alter table comments      enable row level security;
 alter table attachments   enable row level security;
 alter table task_assignees enable row level security;
 alter table notifications enable row level security;
+-- No policies on purpose: only the SECURITY DEFINER reminder function
+-- touches this table, so every client role is locked out entirely.
+alter table task_reminders_sent enable row level security;
 alter table daily_reports enable row level security;
 alter table incidents     enable row level security;
 alter table incident_photos enable row level security;

@@ -56,6 +56,10 @@ logins, and no credentials are committed to this repo.
   self-heal: the app silently re-subscribes on load if the browser rotated or
   expired one, and the service worker re-registers on the `pushsubscriptionchange`
   event so a device that never reopens the app keeps receiving alerts
+- Deadline reminders (pg_cron, IST-aware): assignees are notified the day before
+  a task is due, the morning it's due, and — along with the task's creator — once
+  it's overdue. Exactly-once per deadline; rescheduling a task re-arms them; no
+  sends during night hours
 - Offline-capable PWA: app shell precached, last-loaded data readable with no
   signal, offline mutations queued and replayed (TanStack Query persistence)
 - Overdue detection — red due dates and "Overdue" badge past due date
