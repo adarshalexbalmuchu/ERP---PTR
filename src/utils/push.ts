@@ -38,8 +38,13 @@ export async function getPushSubscriptionStatus(): Promise<PushStatus> {
   return subscription ? 'subscribed' : 'unsubscribed';
 }
 
+// Trimmed for the same reason the Edge Function trims its secrets: a stray
+// newline/space pasted into the Vercel dashboard would make this device
+// subscribe under a corrupted key, and every push to it would then be
+// rejected with 403 "invalid JWT".
 function getVapidKey(): string | undefined {
-  return import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  const key = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined)?.trim();
+  return key ? key : undefined;
 }
 
 type PgError = { message: string; code?: string };
@@ -146,6 +151,7 @@ export async function subscribeToPush(userId: string): Promise<void> {
   if (!subscription) subscription = await createSubscription(registration, vapidPublicKey);
 
   await saveSubscription(userId, subscription);
+  console.info(`[push] subscribed: …${subscription.endpoint.slice(-12)} (key ${vapidPublicKey.slice(0, 12)}…)`);
 }
 
 // Best-effort "keep push alive" pass, safe to run on every app load once a
@@ -190,4 +196,44 @@ export async function unsubscribeFromPush(): Promise<void> {
   const { endpoint } = subscription;
   await subscription.unsubscribe();
   await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+}
+
+export interface PushTestResult {
+  sent: number;
+  total: number;
+  failures: { endpoint: string; statusCode?: number; message?: string }[];
+  vapid?: {
+    configured: boolean;
+    publicKeyBytes: number | null;
+    privateKeyBytes: number | null;
+    pairMatches: boolean | null;
+    subjectSet: boolean;
+  };
+  error?: string;
+}
+
+// Asks the send-push Edge Function to deliver a real test push to THIS user's
+// registered devices, exercising the exact same path a task notification
+// takes (Edge Function → web-push → FCM/APNs → service worker). The response
+// carries per-device delivery results plus the server's VAPID diagnostics, so
+// a key misconfiguration is visible right in the app instead of requiring
+// dashboard/SQL spelunking.
+export async function sendTestPush(): Promise<PushTestResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Sign in to send a test notification.');
+
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string).trim();
+  const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string).trim();
+  const res = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': anonKey,
+    },
+    body: JSON.stringify({ mode: 'test' }),
+  });
+  const result = await res.json() as PushTestResult & { error?: string };
+  if (!res.ok) throw new Error(result.error ?? `Test failed (HTTP ${res.status})`);
+  return result;
 }

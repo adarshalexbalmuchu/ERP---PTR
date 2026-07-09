@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Phone, KeyRound, ShieldCheck, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Phone, KeyRound, ShieldCheck, Eye, EyeOff, CheckCircle2, BellRing, Send } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
+import type { PushTestResult } from '../../utils/push';
 
 const ROLE_LABELS: Record<string, string> = {
   director: 'Director',
@@ -21,6 +23,29 @@ function passwordProblem(pw: string): string | null {
   if (pw.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
   if (!/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) return 'Password must contain both letters and numbers';
   return null;
+}
+
+// Turns the raw send-push test response into one plain-language verdict the
+// field staff (or whoever is debugging their device) can act on directly.
+function describeTestResult(result: PushTestResult): { ok: boolean; text: string } {
+  if (result.error) return { ok: false, text: result.error };
+  if (result.vapid && result.vapid.configured === false) {
+    return { ok: false, text: 'The server is missing its VAPID keys — ask the administrator to configure push notifications.' };
+  }
+  if (result.vapid?.pairMatches === false) {
+    return { ok: false, text: 'Server key configuration problem: the VAPID public and private keys are not a matching pair. Regenerate one pair and set both values from the same generation.' };
+  }
+  if (result.total === 0) {
+    return { ok: false, text: 'No registered devices found for your account. Turn notifications off and on again, then retry.' };
+  }
+  if (result.sent === result.total) {
+    return { ok: true, text: `Test notification sent to ${result.sent} device${result.sent === 1 ? '' : 's'} — check your notification bar.` };
+  }
+  const first = result.failures[0];
+  const hint = first?.statusCode === 403
+    ? 'The push service rejected the send (403) — this device subscribed under a different key than the server uses. Turn notifications off and on again here; if it persists, the server keys were changed without redeploying the app.'
+    : `Delivery failed (${first?.statusCode ?? 'network'}): ${first?.message ?? 'unknown error'}`;
+  return { ok: false, text: `Sent to ${result.sent} of ${result.total} devices. ${hint}` };
 }
 
 function SectionCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
@@ -41,6 +66,7 @@ export default function Profile() {
   const { loginWithSupabase } = useAuth();
   const { ranges } = useRanges();
   const { rangeIds } = useOfficerRanges();
+  const push = usePushNotifications();
 
   const [phone, setPhone] = useState(currentUser?.phone ?? '');
   const [phoneStatus, setPhoneStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -189,6 +215,75 @@ export default function Profile() {
             )}
           </div>
         </form>
+      </SectionCard>
+
+      {/* Push notifications — per-device status, with a real end-to-end test
+          so "is push working on THIS phone?" is answerable without any
+          dashboard or SQL access. */}
+      <SectionCard title="Notifications" icon={<BellRing className="w-4 h-4" />}>
+        {push.needsIOSInstall ? (
+          <p className="text-sm text-ptr-brown-light">
+            On iPhone/iPad, notifications need the app installed first: open the Share menu, choose{' '}
+            <span className="font-semibold text-ptr-brown">Add to Home Screen</span>, then open the app
+            from that icon and turn notifications on here.
+          </p>
+        ) : push.status === 'unsupported' ? (
+          <p className="text-sm text-ptr-brown-light">
+            This browser does not support push notifications. Use Chrome on Android, or install the app
+            to your home screen.
+          </p>
+        ) : push.permission === 'denied' && push.status !== 'subscribed' ? (
+          <p className="text-sm text-ptr-brown-light">
+            Notifications are <span className="font-semibold text-red-600">blocked</span> for this site.
+            Allow them in your browser&rsquo;s site settings (tap the lock icon in the address bar), then
+            return here and enable them.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-ptr-brown">
+                  {push.status === 'subscribed' ? 'Enabled on this device' : 'Not enabled on this device'}
+                </div>
+                <p className="text-xs text-ptr-brown-light mt-0.5">
+                  {push.status === 'subscribed'
+                    ? 'You will get task alerts even when the app is closed.'
+                    : 'Turn on to get task alerts even when the app is closed.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void (push.status === 'subscribed' ? push.disable() : push.enable())}
+                disabled={push.loading || push.status === 'checking'}
+                className={push.status === 'subscribed' ? 'btn-secondary flex-shrink-0' : 'btn-primary flex-shrink-0'}
+              >
+                {push.loading ? 'Working…' : push.status === 'subscribed' ? 'Turn off' : 'Turn on'}
+              </button>
+            </div>
+            {push.error && <p className="text-xs text-red-600">{push.error}</p>}
+            {push.status === 'subscribed' && (
+              <div className="border-t border-ptr-cream-dark pt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void push.sendTest()}
+                  disabled={push.testLoading}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-ptr-green disabled:opacity-60"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {push.testLoading ? 'Sending test…' : 'Send test notification'}
+                </button>
+                {push.testResult && (() => {
+                  const verdict = describeTestResult(push.testResult);
+                  return (
+                    <p className={`text-xs ${verdict.ok ? 'text-ptr-green' : 'text-red-600'}`}>
+                      {verdict.text}
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
+          </>
+        )}
       </SectionCard>
 
       {/* Password */}

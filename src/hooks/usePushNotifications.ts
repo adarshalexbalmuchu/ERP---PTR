@@ -5,8 +5,10 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
   ensurePushSubscription,
+  sendTestPush,
   isIOSBrowserTab,
   type PushStatus,
+  type PushTestResult,
 } from '../utils/push';
 
 export function usePushNotifications() {
@@ -59,8 +61,30 @@ export function usePushNotifications() {
     }
   }, []);
 
+  // Fires a real push through the full server path (Edge Function → push
+  // service → this device's service worker) and keeps the per-device result
+  // for the UI. testResult doubles as the "in flight" flag via testLoading.
+  const [testResult, setTestResult] = useState<PushTestResult | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const sendTest = useCallback(async () => {
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      setTestResult(await sendTestPush());
+    } catch (err) {
+      setTestResult({
+        sent: 0,
+        total: 0,
+        failures: [],
+        error: err instanceof Error ? err.message : 'Test failed.',
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  }, []);
+
   const permission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
   const needsIOSInstall = status === 'unsupported' && typeof window !== 'undefined' && isIOSBrowserTab();
 
-  return { status, error, loading, enable, disable, permission, needsIOSInstall };
+  return { status, error, loading, enable, disable, permission, needsIOSInstall, sendTest, testResult, testLoading };
 }

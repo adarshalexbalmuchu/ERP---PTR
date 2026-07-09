@@ -88,6 +88,22 @@ supabase functions deploy create-user delete-user send-push sync-subscription
 `supabase secrets set` — see the comments in `supabase/schema.sql` for the
 matching Vault secret.
 
+### Push notification setup & troubleshooting
+
+Generate ONE VAPID key pair (`npx web-push generate-vapid-keys`) and use it in
+both places — the public key set as `VITE_VAPID_PUBLIC_KEY` (Vercel) must be
+the exact partner of `VAPID_PRIVATE_KEY` (Supabase Edge secrets), or the push
+service rejects every send with `403 invalid JWT`. Secrets are trimmed
+server-side, so stray whitespace from dashboard pasting can't corrupt them.
+After changing `VITE_VAPID_PUBLIC_KEY`, redeploy the frontend (the key is baked
+in at build time) and re-enable notifications on each device.
+
+To verify the whole path end to end, use **Profile → Notifications → Send test
+notification** in the app: it fires a real push through the Edge Function to
+your own devices and reports per-device delivery — including whether the
+configured VAPID public/private keys are actually a matching pair (the
+function derives one from the other and compares).
+
 ## Tech Stack
 
 - React 19 + Vite 8 + TypeScript
