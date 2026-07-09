@@ -14,9 +14,9 @@ interface Props {
   defaultRangeId?: string;
   /**
    * When the caller isn't scoped to a single range (the director flow passes
-   * no defaultRangeId), these populate a required Range picker so every task
-   * gets a valid range — some field staff (e.g. Tiger Cell) have no range of
-   * their own to infer one from.
+   * no defaultRangeId), these back the Range picker that only appears when
+   * the selected assignee has no home range of their own to infer one from
+   * (e.g. Tiger Cell) — every other assignment infers its range silently.
    */
   ranges?: Range[];
   /** Wire these up (from TaskDetailPage) to allow adding/removing attachments while editing an existing task. */
@@ -74,10 +74,13 @@ export default function TaskForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
-  // Shown only for a range-agnostic caller (no defaultRangeId) that actually
-  // supplies ranges to choose from — e.g. the director's create flow. Edit
-  // surfaces that pass neither (TaskDetailPage) keep the task's existing range.
-  const showRangePicker = !defaultRangeId && ranges.length > 0;
+  // The range is inferred from the primary assignee's own range, so staff
+  // creating a task never has to pick one manually. The one case that can't
+  // be inferred is a Tiger Cell assignee, who has no home range of their
+  // own — the picker is surfaced only then, and only for a range-agnostic
+  // caller (no defaultRangeId) that actually supplies ranges to choose from.
+  const primaryAssignee = assignableUsers.find((u) => u.id === assigneeIds[0]);
+  const showRangePicker = !defaultRangeId && ranges.length > 0 && assigneeIds.length > 0 && !primaryAssignee?.rangeId;
 
   useEffect(() => {
     if (isOpen) {
@@ -98,13 +101,15 @@ export default function TaskForm({
     }
   }, [isOpen, initialData, defaultRangeId]);
 
-  // Prefill the range from the primary assignee's own range as a convenience,
-  // but only when it's still unset — never clobber a range the user picked.
+  // Keep the range in sync with the primary assignee's own range — but only
+  // while creating a task. An existing task keeps whatever range it already
+  // has (seeded above) even if its assignee's own range has since changed;
+  // this only clears to '' (surfacing the picker) when a Tiger Cell assignee
+  // is picked, since they have no range to infer.
   useEffect(() => {
-    if (!showRangePicker) return;
-    const inferred = assignableUsers.find((u) => u.id === assigneeIds[0])?.rangeId;
-    if (inferred) setRangeId((prev) => prev || inferred);
-  }, [assigneeIds, assignableUsers, showRangePicker]);
+    if (defaultRangeId || initialData) return;
+    setRangeId(assignableUsers.find((u) => u.id === assigneeIds[0])?.rangeId ?? '');
+  }, [assigneeIds, assignableUsers, defaultRangeId, initialData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -322,6 +327,7 @@ export default function TaskForm({
             <div>
               <label className="block text-sm font-medium text-ptr-brown mb-1.5">
                 Range <span className="text-red-500">*</span>
+                <span className="text-ptr-brown-light font-normal"> (Tiger Cell has no home range — pick one for this task)</span>
               </label>
               <select
                 value={rangeId}
