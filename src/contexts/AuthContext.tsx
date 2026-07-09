@@ -71,7 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const storeLogout = useStore((s) => s.logout);
 
   useEffect(() => {
-    // Restore session on mount
+    // Restore session on mount. If there's no valid session (expired/absent
+    // refresh token — common after a long period offline or inactivity on
+    // the mobile PWA), the zustand store's persisted `currentUser` from a
+    // previous login must be cleared too. Otherwise the app keeps treating
+    // the visitor as signed in (routes gate on `currentUser`, not on an
+    // actual session) while every Supabase request goes out unauthenticated
+    // — which surfaces downstream as opaque RLS violations on writes like
+    // reporting an incident, instead of a clear "please sign in again".
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const { data } = await supabase
@@ -80,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('id', session.user.id)
           .single();
         if (data) setCurrentUser(mapProfile(data));
+      } else {
+        storeLogout();
+        clearPersistedCache();
       }
       setLoading(false);
     });
