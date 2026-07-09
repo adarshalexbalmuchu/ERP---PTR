@@ -9,6 +9,17 @@ declare let self: ServiceWorkerGlobalScope;
 self.skipWaiting();
 cleanupOutdatedCaches();
 
+// Without this, a newly activated service worker only controls tabs opened
+// AFTER activation — any tab that was already open (the overwhelmingly
+// common case on a phone that's just been left running) keeps being served
+// by the OLD worker until the user does a full reload. Claiming clients here
+// means the new worker takes over immediately, so main.tsx's
+// `controllerchange` listener can reload the page once and every open tab
+// picks up the new deploy without anyone needing to know to hard-refresh.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // App shell (JS/CSS/HTML) is precached so the app itself opens offline.
 precacheAndRoute(self.__WB_MANIFEST);
 

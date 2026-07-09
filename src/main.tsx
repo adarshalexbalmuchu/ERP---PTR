@@ -18,6 +18,22 @@ window.addEventListener('vite:preloadError', () => {
 });
 window.addEventListener('load', () => sessionStorage.removeItem(CHUNK_RELOAD_KEY));
 
+// The service worker (src/sw.ts) claims every open tab as soon as a new
+// deploy activates (see its `activate` handler), which fires this event on
+// navigator.serviceWorker in every tab that was already open. Without this
+// listener that new worker silently takes over in the background but the
+// page keeps running the OLD JS until someone manually reloads — this is
+// what makes changes (a newly assigned task, a bug fix, anything) only show
+// up after a hard refresh. Reloading once here means it just works.
+if ('serviceWorker' in navigator) {
+  let reloadedForNewWorker = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForNewWorker) return;
+    reloadedForNewWorker = true;
+    window.location.reload();
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

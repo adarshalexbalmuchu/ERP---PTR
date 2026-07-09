@@ -1,4 +1,4 @@
-import { type ReactNode, lazy, Suspense } from 'react';
+import { type ReactNode, lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryClient, queryPersister } from './lib/queryClient';
@@ -91,6 +91,27 @@ function TaskRedirect() {
 }
 
 export default function App() {
+  // Realtime subscriptions (see useTasks/useNotifications) push live updates,
+  // but a phone's OS aggressively suspends or kills a backgrounded app's
+  // WebSocket — so any change made while it was in the background (a task
+  // assigned, a comment added) never arrives over that dead connection, and
+  // there's no missed-event replay. Reopening/foregrounding the app doesn't
+  // necessarily reload the page either, so nothing re-fetches on its own.
+  // Refetching everything whenever the tab becomes visible again (or comes
+  // back online) closes that gap without needing a manual refresh.
+  useEffect(() => {
+    const refetchAll = () => { void queryClient.invalidateQueries(); };
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') refetchAll(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', refetchAll);
+    window.addEventListener('pageshow', refetchAll);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', refetchAll);
+      window.removeEventListener('pageshow', refetchAll);
+    };
+  }, []);
+
   return (
     <PersistQueryClientProvider
       client={queryClient}
