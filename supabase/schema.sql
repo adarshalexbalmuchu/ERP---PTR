@@ -671,6 +671,7 @@ begin
 
   for recipient in
     select id as user_id from public.profiles
+
       where role = 'director' and id <> new.reported_by
     union
     select id as user_id from public.profiles
@@ -1343,6 +1344,7 @@ create or replace view task_range_stats
     count(t.id) filter (where t.status = 'NotStarted') as not_started_count,
     count(t.id) filter (where t.status = 'InProgress') as in_progress_count,
     count(t.id) filter (where t.status = 'Completed') as completed_count,
+    
     count(t.id) filter (where t.status = 'Archived') as archived_count,
     count(t.id) filter (where t.status = 'Completed' or t.status = 'Archived') as completed,
     count(t.id) filter (where t.due_date < now() and t.status not in ('Completed', 'Archived')) as overdue
