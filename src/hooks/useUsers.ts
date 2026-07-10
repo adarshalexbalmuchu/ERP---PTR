@@ -7,9 +7,17 @@ import type { User, Role } from '../types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+// Throws a clear, actionable error instead of silently sending an empty
+// "Bearer " token when the session has expired or the refresh token was
+// revoked (long-idle tab, signed out elsewhere, etc.) — that used to reach
+// the edge function anyway and come back as an opaque generic "Unauthorized",
+// which looked like a permissions bug rather than an expired session.
 async function getAccessToken(): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? '';
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error || !session?.access_token) {
+    throw new Error('Your session has expired — please sign out and sign in again.');
+  }
+  return session.access_token;
 }
 
 export function useUsers() {
