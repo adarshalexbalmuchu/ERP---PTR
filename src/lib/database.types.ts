@@ -84,6 +84,7 @@ export interface Database {
           acknowledged_at: string | null;
           completed_at: string | null;
           archived_at: string | null;
+          batch_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -104,6 +105,7 @@ export interface Database {
           acknowledged_at?: string | null;
           completed_at?: string | null;
           archived_at?: string | null;
+          batch_id?: string | null;
         };
         Update: {
           id?: string;
@@ -122,6 +124,7 @@ export interface Database {
           acknowledged_at?: string | null;
           completed_at?: string | null;
           archived_at?: string | null;
+          batch_id?: string | null;
         };
         Relationships: Relationships;
       };

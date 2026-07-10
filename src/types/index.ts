@@ -98,6 +98,8 @@ export interface Task {
   acknowledgedAt?: string;
   completedAt?: string;
   archivedAt?: string;
+  /** Shared by every task spawned from the same "assign to several people" submission; undefined for a single-assignee task. Lets the UI group them into one card. */
+  batchId?: string;
   createdAt: string;
   comments: Comment[];
   attachments: Attachment[];

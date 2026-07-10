@@ -86,6 +86,7 @@ export function mapTask(
     acknowledgedAt: row.acknowledged_at ?? undefined,
     completedAt: row.completed_at ?? undefined,
     archivedAt: row.archived_at ?? undefined,
+    batchId: row.batch_id ?? undefined,
     createdAt: row.created_at,
     taskUpdates: (row.task_updates ?? []).map(mapTaskUpdate),
     comments: (row.comments ?? []).map(mapComment),

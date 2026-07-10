@@ -8,6 +8,7 @@ import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { isOverdue } from '../../utils/overdue';
+import { groupTasksByBatch } from '../../utils/groupTasksByBatch';
 import { formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
 import PriorityBadge from '../../components/PriorityBadge';
@@ -48,6 +49,8 @@ export default function OfficerTaskList() {
     }
     return true;
   });
+
+  const groups = groupTasksByBatch(filtered);
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -115,54 +118,69 @@ export default function OfficerTaskList() {
         <EmptyState title="No tasks found" description="Try adjusting your filters or create a new task." />
       ) : (
         <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
-          {filtered.map((task) => {
-            const assignee = users.find((u) => u.id === task.assigneeId);
-            const area = myAreas.find((a) => a.id === task.areaId);
-            const overdue = isOverdue(task);
+          {groups.map((group) => {
+            const first = group.tasks[0];
+            const anyOverdue = group.tasks.some(isOverdue);
             return (
-              <div key={task.id} className="flex items-center gap-3 p-3 hover:bg-ptr-cream/50 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-ptr-brown truncate">{task.title}</span>
-                    {overdue && (
-                      <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 font-medium flex-shrink-0">
-                        Overdue
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-ptr-brown-light">
-                    <span>{assignee?.name ?? '—'}{task.coAssigneeIds.length > 0 && ` +${task.coAssigneeIds.length}`}</span>
-                    {area && <><span>·</span><span>{area.name}</span></>}
-                    <span>·</span>
-                    <span className={overdue ? 'text-red-600 font-medium' : ''}>{formatDate(task.dueDate)}</span>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="mt-1.5 h-1 w-32 bg-ptr-cream-dark rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-ptr-green rounded-full"
-                      style={{ width: `${task.completionPercentage}%` }}
-                    />
-                  </div>
+              <div key={group.key} className="p-3 hover:bg-ptr-cream/50 transition-colors">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className="text-sm font-medium text-ptr-brown truncate">{first.title}</span>
+                  {group.tasks.length > 1 && (
+                    <span className="text-xs bg-ptr-green/10 text-ptr-green rounded-full px-2 py-0.5 font-medium flex-shrink-0">
+                      {group.tasks.length} assignees
+                    </span>
+                  )}
+                  {anyOverdue && (
+                    <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 font-medium flex-shrink-0">
+                      Overdue
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <PriorityBadge priority={task.priority} size="sm" />
-                  <StatusBadge status={task.status} size="sm" />
-                  <div className="flex items-center gap-1.5 ml-1">
-                    <button
-                      onClick={() => navigate(`/officer/tasks/${task.id}`)}
-                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                      title="View"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => { setEditingTask(task); setFormOpen(true); }}
-                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                      title="Edit"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                <div className="space-y-1">
+                  {group.tasks.map((task) => {
+                    const assignee = users.find((u) => u.id === task.assigneeId);
+                    const area = myAreas.find((a) => a.id === task.areaId);
+                    const overdue = isOverdue(task);
+                    return (
+                      <div key={task.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-white/70 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap text-xs">
+                            <span className="font-medium text-ptr-brown">{assignee?.name ?? '—'}</span>
+                            {area && <><span className="text-ptr-brown-light">·</span><span className="text-ptr-brown-light">{area.name}</span></>}
+                            <span className="text-ptr-brown-light">·</span>
+                            <span className={overdue ? 'text-red-600 font-medium' : 'text-ptr-brown-light'}>{formatDate(task.dueDate)}</span>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="mt-1.5 h-1 w-32 bg-ptr-cream-dark rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-ptr-green rounded-full"
+                              style={{ width: `${task.completionPercentage}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <PriorityBadge priority={task.priority} size="sm" />
+                          <StatusBadge status={task.status} size="sm" />
+                          <div className="flex items-center gap-1.5 ml-1">
+                            <button
+                              onClick={() => navigate(`/officer/tasks/${task.id}`)}
+                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
+                              title="View"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => { setEditingTask(task); setFormOpen(true); }}
+                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

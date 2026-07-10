@@ -148,6 +148,14 @@ create table if not exists tasks (
 -- Idempotent so re-running against an existing database just adds it.
 alter table tasks add column if not exists category_other text;
 
+-- Groups the individual task rows created from a single "assign to several
+-- people at once" submission in TaskForm — each assignee gets their own
+-- fully independent task row (own status/progress/due date), but the UI
+-- still shows them together as one card. Null for a task created with a
+-- single assignee, or any task from before this column existed.
+alter table tasks add column if not exists batch_id uuid;
+create index if not exists tasks_batch_id_idx on tasks(batch_id) where batch_id is not null;
+
 create table if not exists task_updates (
   id                  uuid primary key default uuid_generate_v4(),
   task_id             uuid not null references tasks(id) on delete cascade,

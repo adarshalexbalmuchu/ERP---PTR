@@ -73,6 +73,11 @@ export function useTasks() {
       // collaborator to one existing task" feature on the task detail
       // page, left as-is).
       const assigneeIds = [...new Set([data.assigneeId, ...data.coAssigneeIds])];
+      // Shared across every row spawned from this one submission so the
+      // task list can still group them into a single card — null when
+      // there's only one assignee, so a normal single-assignee task never
+      // gets lumped in with anything else.
+      const batchId = assigneeIds.length > 1 ? crypto.randomUUID() : null;
 
       const rows = await Promise.all(
         assigneeIds.map(async (assigneeId) => {
@@ -90,6 +95,7 @@ export function useTasks() {
               category: data.category,
               category_other: data.category === 'Other' ? (data.categoryOther?.trim() || null) : null,
               due_date: data.dueDate,
+              batch_id: batchId,
               completion_percentage: 0,
             })
             .select()
