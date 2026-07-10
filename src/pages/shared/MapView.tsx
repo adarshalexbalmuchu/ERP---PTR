@@ -4,7 +4,7 @@ import type { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AlertTriangle, ClipboardList, Map as MapIcon, Satellite, Mountain, LocateFixed, RadioTower } from 'lucide-react';
 import { useMapPoints } from '../../hooks/useMapPoints';
-import { useLiveLocations, STALE_AFTER_MS } from '../../hooks/useLiveLocation';
+import { useLiveLocations, FRESH_AFTER_MS, STALE_AFTER_MS } from '../../hooks/useLiveLocation';
 import useStore from '../../store/useStore';
 import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
@@ -246,17 +246,33 @@ export default function MapView() {
           ))}
 
           {showLive && liveLocations.map((loc) => {
-            const isStale = Date.now() - new Date(loc.updatedAt).getTime() > STALE_AFTER_MS;
+            // Three freshness tiers instead of a live/stale binary: a pin
+            // that's gone quiet for a while (most likely a no-signal patch
+            // inside the reserve, not necessarily anything wrong) reads
+            // very differently from one just a few seconds behind, and
+            // "No signal since 3:42 PM" tells the officer something a
+            // relative "22 min ago" doesn't — exactly when contact was lost.
+            const age = Date.now() - new Date(loc.updatedAt).getTime();
+            const freshness: 'live' | 'recent' | 'no-signal' =
+              age <= FRESH_AFTER_MS ? 'live' : age <= STALE_AFTER_MS ? 'recent' : 'no-signal';
+            const color = freshness === 'no-signal' ? '#9CA3AF' : '#2563EB';
+            const fillOpacity = freshness === 'live' ? 0.9 : freshness === 'recent' ? 0.55 : 0.3;
+            const label =
+              freshness === 'live'
+                ? `Live · ${formatRelative(loc.updatedAt)}`
+                : freshness === 'recent'
+                ? `Last known location · ${formatRelative(loc.updatedAt)}`
+                : `No signal since ${formatDateTime(loc.updatedAt)}`;
             return (
               <CircleMarker
                 key={loc.userId}
                 center={[loc.lat, loc.lng]}
                 radius={8}
                 pathOptions={{
-                  color: '#2563EB',
+                  color,
                   weight: 2,
-                  fillColor: '#2563EB',
-                  fillOpacity: isStale ? 0.3 : 0.85,
+                  fillColor: color,
+                  fillOpacity,
                 }}
               >
                 <Popup>
@@ -264,9 +280,8 @@ export default function MapView() {
                     <div className="font-semibold">{loc.userName}</div>
                     <div className="text-ptr-brown-light">{loc.designation}</div>
                     <div>{loc.taskTitle}</div>
-                    <div className="text-ptr-brown-light">
-                      {isStale ? 'Last known location · ' : 'Live · '}
-                      {formatRelative(loc.updatedAt)}
+                    <div className={freshness === 'no-signal' ? 'text-ptr-brown-light font-medium' : 'text-ptr-brown-light'}>
+                      {label}
                     </div>
                   </div>
                 </Popup>
