@@ -35,3 +35,5 @@ supabase/.temp
 # Generated login credentials (scripts/provision-users.mjs output) - never commit real passwords
 user-credentials-*.csv
 reset-credentials-*.csv
+# One-off scripts that hardcode real plaintext passwords (see scripts/fix-passwords.mjs) - never commit
+scripts/fix-passwords.mjs
