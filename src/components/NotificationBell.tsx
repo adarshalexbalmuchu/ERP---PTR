@@ -16,6 +16,7 @@ const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; cl
   task_due_soon: { icon: Clock, className: 'bg-amber-100 text-amber-700' },
   task_due_today: { icon: Clock, className: 'bg-amber-100 text-amber-700' },
   task_overdue: { icon: AlertTriangle, className: 'bg-red-100 text-red-600' },
+  incident_reported: { icon: AlertTriangle, className: 'bg-red-100 text-red-600' },
 };
 
 export default function NotificationBell() {
@@ -68,11 +69,14 @@ export default function NotificationBell() {
     return () => window.removeEventListener('resize', reposition);
   }, [open]);
 
-  const handleNotifClick = (notifId: string, taskId: string) => {
-    markRead.mutate(notifId);
+  const handleNotifClick = (notif: Notification) => {
+    markRead.mutate(notif.id);
     setOpen(false);
     const base = currentUser?.role === 'director' ? '/director' : currentUser?.role === 'range_officer' ? '/officer' : '/guard';
-    navigate(`${base}/tasks/${taskId}`);
+    // incident_reported notifications have no task — they route to the
+    // Incident Log instead of a task's detail page.
+    if (notif.taskId) navigate(`${base}/tasks/${notif.taskId}`);
+    else navigate(`${base}/incidents`);
   };
 
   return (
@@ -181,7 +185,7 @@ export default function NotificationBell() {
                 return (
                 <button
                   key={notif.id}
-                  onClick={() => handleNotifClick(notif.id, notif.taskId)}
+                  onClick={() => handleNotifClick(notif)}
                   className={`w-full text-left px-4 py-3 hover:bg-ptr-cream transition-colors border-b border-ptr-cream-dark last:border-0 ${
                     !notif.read ? 'bg-ptr-green/5' : ''
                   }`}

@@ -116,10 +116,14 @@ export interface Notification {
     | 'task_archived'
     | 'task_due_soon'
     | 'task_due_today'
-    | 'task_overdue';
+    | 'task_overdue'
+    | 'incident_reported';
   title: string;
   message: string;
-  taskId: string;
+  /** Set for every notification type except incident_reported. */
+  taskId?: string;
+  /** Set only for incident_reported. */
+  incidentId?: string;
   read: boolean;
   createdAt: string;
 }
@@ -160,6 +164,8 @@ export interface Incident {
   lat?: number;
   lng?: number;
   reportedBy: string;
+  /** The reporter's display name, joined in from profiles — undefined only if that profile row is unreadable/missing. */
+  reporterName?: string;
   incidentDate: string;
   createdAt: string;
   photos: IncidentPhoto[];

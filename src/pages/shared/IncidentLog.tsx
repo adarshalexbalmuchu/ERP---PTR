@@ -342,21 +342,27 @@ export default function IncidentLog() {
                   </div>
                 )}
                 <div className="flex items-center gap-2 flex-wrap text-xs text-ptr-brown-light">
+                  <span>Reported by {incident.reporterName ?? 'Unknown'}</span>
+                  <span>·</span>
                   <span>{range?.name ?? '—'}</span>
                   {area && <><span>·</span><span>{area.name}</span></>}
-                  {incident.lat !== undefined && incident.lng !== undefined && (
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-ptr-brown-light">
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  {incident.lat !== undefined && incident.lng !== undefined ? (
                     <>
-                      <span>·</span>
+                      <span className="tabular-nums">{incident.lat.toFixed(5)}, {incident.lng.toFixed(5)}</span>
                       <a
                         href={`https://www.google.com/maps?q=${incident.lat},${incident.lng}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-ptr-green font-medium hover:underline"
+                        className="text-ptr-green font-medium hover:underline"
                       >
-                        <MapPin className="w-3 h-3" />
-                        View location
+                        View on map
                       </a>
                     </>
+                  ) : (
+                    <span>No GPS location captured for this report</span>
                   )}
                 </div>
               </div>

@@ -55,6 +55,9 @@ exception when duplicate_object then null; end $$;
 alter type notification_type add value if not exists 'task_due_soon';
 alter type notification_type add value if not exists 'task_due_today';
 alter type notification_type add value if not exists 'task_overdue';
+-- Fired when a guard/officer/director reports a field incident — see
+-- notify_on_incident_insert() further down.
+alter type notification_type add value if not exists 'incident_reported';
 commit;
 
 do $$ begin
@@ -196,10 +199,18 @@ create table if not exists notifications (
   type       notification_type not null,
   title      text not null,
   message    text not null,
-  task_id    uuid not null references tasks(id) on delete cascade,
+  task_id    uuid references tasks(id) on delete cascade,
   read       boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- A notification is now either about a task OR an incident, not always a
+-- task — task_id above was NOT NULL until incident_reported notifications
+-- needed to point somewhere else. Idempotent for a database that already
+-- has this column from before incident notifications existed. The
+-- incident_id FK/index/check are added further down, once the incidents
+-- table this column references actually exists.
+alter table notifications alter column task_id drop not null;
 
 -- Additional assignees beyond tasks.assignee_id (the "primary" assignee).
 -- A director/officer can add as many collaborators to a task as needed;
@@ -290,6 +301,17 @@ create table if not exists incidents (
 -- the fixed subcategories. Idempotent so re-running against an existing
 -- database just adds it.
 alter table incidents add column if not exists type_other text;
+
+-- Now that incidents exists, wire up notifications.incident_id (see the
+-- notifications table above) — an incident_reported notification points
+-- here instead of at a task.
+alter table notifications add column if not exists incident_id uuid references incidents(id) on delete cascade;
+create index if not exists notifications_incident_id_idx on notifications(incident_id) where incident_id is not null;
+
+do $$ begin
+  alter table notifications add constraint notifications_task_or_incident_chk
+    check ((task_id is not null) <> (incident_id is not null));
+exception when duplicate_object then null; end $$;
 
 -- Photos attached to an incident report. Compressed client-side before
 -- upload (see src/lib/incidentPhotos.ts) — this table only ever stores the
@@ -590,7 +612,16 @@ begin
     return new;
   end if;
 
-  select priority::text into task_priority from public.tasks where id = new.task_id;
+  -- Drives the device vibration pattern in src/sw.ts — task notifications
+  -- key it off the task's priority; an incident_reported notification has
+  -- no task_id, so fall back to the incident's severity (same four
+  -- values: Critical/High/Medium/Low) so a Critical incident still buzzes
+  -- as urgently as a Critical task.
+  if new.task_id is not null then
+    select priority::text into task_priority from public.tasks where id = new.task_id;
+  elsif new.incident_id is not null then
+    select severity::text into task_priority from public.incidents where id = new.incident_id;
+  end if;
 
   begin
     perform net.http_post(
@@ -619,6 +650,52 @@ drop trigger if exists notifications_push_trigger on notifications;
 create trigger notifications_push_trigger
   after insert on notifications
   for each row execute function notify_push_on_notification_insert();
+
+-- Notifies the director(s) and whichever range officer(s) hold the
+-- incident's range the moment it's reported. SECURITY DEFINER is
+-- load-bearing here, not just convenience: the reporter is very often a
+-- guard, and a guard's own RLS can't see other users' officer_ranges rows
+-- (needed to find a MULTI-range officer) or other profiles' range_id —
+-- resolving recipients from the client would silently miss people. This
+-- runs as the table owner instead, so it sees every candidate regardless
+-- of who's reporting. The three-way UNION also de-duplicates automatically
+-- (UNION, not UNION ALL) if an officer somehow matches more than one arm.
+create or replace function notify_on_incident_insert()
+returns trigger language plpgsql security definer
+set search_path = '' as $$
+declare
+  recipient record;
+  range_name text;
+begin
+  select name into range_name from public.ranges where id = new.range_id;
+
+  for recipient in
+    select id as user_id from public.profiles
+      where role = 'director' and id <> new.reported_by
+    union
+    select id as user_id from public.profiles
+      where role = 'range_officer' and range_id = new.range_id and id <> new.reported_by
+    union
+    select user_id from public.officer_ranges
+      where range_id = new.range_id and user_id <> new.reported_by
+  loop
+    insert into public.notifications (user_id, type, title, message, incident_id)
+    values (
+      recipient.user_id,
+      'incident_reported',
+      new.severity::text || ' severity incident reported',
+      coalesce(range_name, 'Unknown range') || ' — ' || left(new.description, 150),
+      new.id
+    );
+  end loop;
+  return new;
+end;
+$$;
+
+drop trigger if exists incidents_notify_insert on incidents;
+create trigger incidents_notify_insert
+  after insert on incidents
+  for each row execute function notify_on_incident_insert();
 
 -- ─────────────────────────────────────────────
 -- Task deadline reminders

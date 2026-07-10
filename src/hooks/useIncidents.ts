@@ -43,7 +43,7 @@ export function useIncidents() {
     queryFn: async (): Promise<Incident[]> => {
       const { data, error } = await supabase
         .from('incidents')
-        .select('*, incident_photos(*)')
+        .select('*, incident_photos(*), profiles(name)')
         .order('incident_date', { ascending: false });
       if (error) throw error;
       return Promise.all(data.map((row) => resolveIncidentPhotoUrls(mapIncident(row))));

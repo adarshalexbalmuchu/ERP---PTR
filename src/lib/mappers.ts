@@ -101,7 +101,8 @@ export function mapNotification(row: NotificationRow): Notification {
     type: row.type,
     title: row.title,
     message: row.message,
-    taskId: row.task_id,
+    taskId: row.task_id ?? undefined,
+    incidentId: row.incident_id ?? undefined,
     read: row.read,
     createdAt: row.created_at,
   };
@@ -119,7 +120,12 @@ export function mapIncidentPhoto(row: IncidentPhotoRow): IncidentPhoto {
   };
 }
 
-export function mapIncident(row: IncidentRow & { incident_photos?: IncidentPhotoRow[] }): Incident {
+export function mapIncident(
+  row: IncidentRow & {
+    incident_photos?: IncidentPhotoRow[];
+    profiles?: { name: string } | null;
+  },
+): Incident {
   return {
     id: row.id,
     type: row.type,
@@ -131,6 +137,7 @@ export function mapIncident(row: IncidentRow & { incident_photos?: IncidentPhoto
     lat: row.lat ?? undefined,
     lng: row.lng ?? undefined,
     reportedBy: row.reported_by,
+    reporterName: row.profiles?.name ?? undefined,
     incidentDate: row.incident_date,
     createdAt: row.created_at,
     photos: (row.incident_photos ?? []).map(mapIncidentPhoto),
