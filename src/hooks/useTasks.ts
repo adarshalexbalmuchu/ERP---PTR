@@ -63,46 +63,58 @@ export function useTasks() {
       // Postgres as an invalid UUID (22P02). The form guards this, but fail
       // with a clear message rather than a raw driver error if it slips through.
       if (!data.rangeId) throw new Error('A range is required for this task.');
-      const { data: row, error } = await supabase
-        .from('tasks')
-        .insert({
-          title: data.title,
-          description: data.description,
-          assignee_id: data.assigneeId,
-          created_by_id: currentUser.id,
-          range_id: data.rangeId,
-          area_id: data.areaId ?? null,
-          status: 'NotStarted',
-          priority: data.priority,
-          category: data.category,
-          category_other: data.category === 'Other' ? (data.categoryOther?.trim() || null) : null,
-          due_date: data.dueDate,
-          completion_percentage: 0,
-        })
-        .select()
-        .single();
-      if (error) throw error;
 
-      // De-duplicate: the primary assignee already has the row above, so
-      // task_assignees only needs anyone *additional*.
-      const coAssigneeIds = [...new Set(data.coAssigneeIds)].filter((id) => id !== data.assigneeId);
-      if (coAssigneeIds.length > 0) {
-        const { error: coErr } = await supabase
-          .from('task_assignees')
-          .insert(coAssigneeIds.map((userId) => ({ task_id: row.id, user_id: userId })));
-        if (coErr) throw coErr;
-      }
+      // Picking several people in the assignee field is a bulk-create
+      // shortcut, NOT a shared/collaborative assignment — each selected
+      // person gets their OWN independent task row (own status, own
+      // progress, own completion), all seeded from the same title/
+      // description/due date/etc. for speed. This intentionally does not
+      // touch task_assignees (that table backs a separate "add a
+      // collaborator to one existing task" feature on the task detail
+      // page, left as-is).
+      const assigneeIds = [...new Set([data.assigneeId, ...data.coAssigneeIds])];
 
-      // Notify every assignee (primary + co-assignees) except whoever created it.
-      const allAssigneeIds = [...new Set([data.assigneeId, ...coAssigneeIds])];
-      await insertNotifications(
-        allAssigneeIds.filter((userId) => userId !== currentUser.id),
-        'task_assigned',
-        `New Task: ${data.priority} Priority`,
-        `${currentUser.name} assigned you "${data.title}" · Due ${formatDate(data.dueDate)}`,
-        row.id,
+      const rows = await Promise.all(
+        assigneeIds.map(async (assigneeId) => {
+          const { data: row, error } = await supabase
+            .from('tasks')
+            .insert({
+              title: data.title,
+              description: data.description,
+              assignee_id: assigneeId,
+              created_by_id: currentUser.id,
+              range_id: data.rangeId,
+              area_id: data.areaId ?? null,
+              status: 'NotStarted',
+              priority: data.priority,
+              category: data.category,
+              category_other: data.category === 'Other' ? (data.categoryOther?.trim() || null) : null,
+              due_date: data.dueDate,
+              completion_percentage: 0,
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          return row;
+        }),
       );
-      return row;
+
+      // Notify each assignee about THEIR OWN task (except whoever created it).
+      await Promise.all(
+        rows
+          .filter((row) => row.assignee_id !== currentUser.id)
+          .map((row) =>
+            insertNotifications(
+              [row.assignee_id],
+              'task_assigned',
+              `New Task: ${data.priority} Priority`,
+              `${currentUser.name} assigned you "${data.title}" · Due ${formatDate(data.dueDate)}`,
+              row.id,
+            ),
+          ),
+      );
+
+      return rows;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });

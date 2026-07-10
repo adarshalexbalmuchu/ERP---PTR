@@ -178,12 +178,16 @@ export default function OfficerTaskList() {
             if (editingTask) {
               updateTask.mutate({ id: editingTask.id, ...data });
             } else {
-              const row = await createTask.mutateAsync(data);
-              for (const file of files) {
-                try {
-                  await uploadTaskAttachment(row.id, currentUser.id, file);
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+              // Multiple assignees create one independent task per person —
+              // the same attachments are uploaded to each of their tasks.
+              const rows = await createTask.mutateAsync(data);
+              for (const row of rows) {
+                for (const file of files) {
+                  try {
+                    await uploadTaskAttachment(row.id, currentUser.id, file);
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+                  }
                 }
               }
             }

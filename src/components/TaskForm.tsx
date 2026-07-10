@@ -225,7 +225,12 @@ export default function TaskForm({
           <div ref={assigneeBoxRef} className="relative">
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">
               Assign To <span className="text-red-500">*</span>
-              <span className="text-ptr-brown-light font-normal"> (select one or more)</span>
+              <span className="text-ptr-brown-light font-normal">
+                {' '}
+                {initialData
+                  ? '(select one or more)'
+                  : '(select one or more — each person gets their own independent task)'}
+              </span>
             </label>
 
             {assigneeIds.length > 0 && (
