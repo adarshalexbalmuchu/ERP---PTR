@@ -256,7 +256,7 @@ export function useTask(id: string | undefined) {
       if (!id || !currentUser) throw new Error('Not authenticated');
       // Geotag the field entry (M-STrIPES style patrol log); silently
       // omitted if location is denied/unavailable, never blocks the update.
-      const position = await getCurrentPosition();
+      const { coords } = await getCurrentPosition();
       const { data, error } = await supabase
         .from('task_updates')
         .insert({
@@ -264,8 +264,8 @@ export function useTask(id: string | undefined) {
           user_id: currentUser.id,
           note,
           progress_percentage: progressPercentage,
-          lat: position?.lat ?? null,
-          lng: position?.lng ?? null,
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
         })
         .select()
         .single();

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { mapIncident } from '../lib/mappers';
 import { uploadIncidentPhoto } from '../lib/incidentPhotos';
-import { getCurrentPosition } from '../utils/geolocation';
+import { getCurrentPosition, describeGeolocationFailure } from '../utils/geolocation';
 import useStore from '../store/useStore';
 import type { Incident, IncidentType, IncidentSeverity } from '../types';
 
@@ -66,7 +66,12 @@ export function useIncidents() {
   const reportIncident = useMutation({
     mutationFn: async ({ files, ...data }: CreateIncidentData & { files: File[] }) => {
       if (!currentUser) throw new Error('Not authenticated');
-      const position = await getCurrentPosition();
+      // Location is mandatory for incident reports (unlike task-update
+      // geotagging, which stays best-effort) — a report with no coordinates
+      // can't be placed on the map or matched to a range/beat with
+      // confidence, so we refuse to save one rather than insert nulls.
+      const { coords, failureReason } = await getCurrentPosition();
+      if (!coords) throw new Error(describeGeolocationFailure(failureReason ?? 'position_unavailable'));
       const { data: row, error } = await supabase
         .from('incidents')
         .insert({
@@ -77,8 +82,8 @@ export function useIncidents() {
           range_id: data.rangeId,
           area_id: data.areaId ?? null,
           reported_by: currentUser.id,
-          lat: position?.lat ?? null,
-          lng: position?.lng ?? null,
+          lat: coords.lat,
+          lng: coords.lng,
         })
         .select()
         .single();

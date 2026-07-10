@@ -43,8 +43,26 @@ function ReportForm({
   const [areaId, setAreaId] = useState('');
   const [error, setError] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
+  const [locationBlocked, setLocationBlocked] = useState(false);
 
   const isOther = isOtherIncidentType(type);
+
+  // Browsers never re-prompt for geolocation once a user has denied it —
+  // getCurrentPosition() would then just silently fail on every future
+  // report. Check the permission state up front so we can tell the reporter
+  // *why* GPS won't attach and that it needs a settings change, not a retry.
+  useEffect(() => {
+    if (!isOpen || !('permissions' in navigator)) return;
+    let cancelled = false;
+    navigator.permissions.query({ name: 'geolocation' as PermissionName })
+      .then((status) => {
+        if (cancelled) return;
+        setLocationBlocked(status.state === 'denied');
+        status.onchange = () => setLocationBlocked(status.state === 'denied');
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   // Recomputed only when the file list itself changes (not on every
   // keystroke elsewhere in the form), and revoked on cleanup so preview
@@ -178,10 +196,17 @@ function ReportForm({
             />
             {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
           </div>
-          <p className="text-xs text-ptr-brown-light flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-            Your location will be captured automatically if permitted.
-          </p>
+          {locationBlocked ? (
+            <p className="text-xs text-red-600 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+              Location access is blocked for this app, so reports can't be submitted. Enable location for this site in your browser/phone settings, then reopen this form.
+            </p>
+          ) : (
+            <p className="text-xs text-ptr-brown-light flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+              GPS location is required and will be captured automatically — allow the location prompt if asked.
+            </p>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5">
@@ -222,7 +247,7 @@ function ReportForm({
 
           <div className="flex justify-end gap-3 pt-2 border-t border-ptr-cream-dark">
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={reportIncident.isPending} className="btn-primary">
+            <button type="submit" disabled={reportIncident.isPending || locationBlocked} className="btn-primary">
               {reportIncident.isPending ? 'Submitting…' : 'Submit Report'}
             </button>
           </div>
