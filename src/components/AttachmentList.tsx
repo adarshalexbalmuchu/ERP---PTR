@@ -44,25 +44,31 @@ export default function AttachmentList({
               key={att.id}
               className="flex items-center gap-2 bg-ptr-cream border border-ptr-cream-dark rounded-xl px-3 py-2"
             >
-              {att.previewUrl ? (
-                <a href={att.previewUrl} target="_blank" rel="noopener noreferrer">
+              <a
+                href={att.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 min-w-0"
+                title={`Open ${att.name}`}
+              >
+                {att.previewUrl ? (
                   <img
                     src={att.previewUrl}
                     alt={att.name}
-                    className="w-8 h-8 rounded-lg object-cover border border-ptr-cream-dark"
+                    className="w-8 h-8 rounded-lg object-cover border border-ptr-cream-dark flex-shrink-0"
                   />
-                </a>
-              ) : (
-                <span className="text-ptr-brown-light">
-                  <FileTypeIcon type={att.type} />
-                </span>
-              )}
-              <div className="min-w-0">
-                <div className="text-xs font-medium text-ptr-brown truncate max-w-[120px]">
-                  {att.name}
+                ) : (
+                  <span className="text-ptr-brown-light flex-shrink-0">
+                    <FileTypeIcon type={att.type} />
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-ptr-brown truncate max-w-[120px] hover:underline">
+                    {att.name}
+                  </div>
+                  <div className="text-xs text-ptr-brown-light">{formatFileSize(att.size)}</div>
                 </div>
-                <div className="text-xs text-ptr-brown-light">{formatFileSize(att.size)}</div>
-              </div>
+              </a>
               {canRemove && onRemove && (
                 <button
                   onClick={() => onRemove(att.id)}
