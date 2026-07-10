@@ -11,7 +11,6 @@ import {
   Map as MapIcon,
   History,
   UserCircle,
-  RadioTower,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -223,8 +222,10 @@ function GuardLayout() {
   const currentUser = useStore((s) => s.currentUser);
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
-  const { isSharing } = useLocationSharing();
-  const [showLocationDetail, setShowLocationDetail] = useState(false);
+  // Keeps sharing this user's live location (while they hold an active
+  // patrol task) running in the background — no on-screen indicator here
+  // by design; see useLocationSharing in src/hooks/useLiveLocation.ts.
+  useLocationSharing();
 
   const handleLogout = async () => {
     await logoutFromSupabase();
@@ -274,22 +275,6 @@ function GuardLayout() {
               {currentUser?.name}
               {currentUser?.designation && <span className="font-normal text-ptr-brown-light"> &middot; {currentUser.designation}</span>}
             </p>
-            {isSharing && (
-              <div className="mt-1">
-                <button
-                  onClick={() => setShowLocationDetail((v) => !v)}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ptr-green/10 text-ptr-green text-[11px] font-medium"
-                >
-                  <RadioTower className="w-2.5 h-2.5" />
-                  Sharing location
-                </button>
-                {showLocationDetail && (
-                  <p className="text-xs text-ptr-brown-light mt-1">
-                    Visible to your Director &amp; Range Officer while this task is active.
-                  </p>
-                )}
-              </div>
-            )}
             <p className="text-xs text-ptr-brown-light">
               {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
