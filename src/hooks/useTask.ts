@@ -101,6 +101,7 @@ export function useTask(id: string | undefined) {
         if (error) throw error;
       }
 
+      let newCoAssignees: string[] = [];
       if (data.coAssigneeIds !== undefined) {
         const { error: delErr } = await supabase.from('task_assignees').delete().eq('task_id', id);
         if (delErr) throw delErr;
@@ -111,6 +112,28 @@ export function useTask(id: string | undefined) {
             .from('task_assignees')
             .insert(coAssigneeIds.map((userId) => ({ task_id: id, user_id: userId })));
           if (insErr) throw insErr;
+        }
+        newCoAssignees = coAssigneeIds.filter((uid) => !task?.coAssigneeIds.includes(uid));
+      }
+
+      // Reassigning the primary assignee or adding a co-assignee previously
+      // sent nothing — notify whoever is newly on the hook for this task.
+      if (task && currentUser) {
+        const newAssignee =
+          data.assigneeId !== undefined && data.assigneeId !== task.assigneeId ? data.assigneeId : null;
+        const recipients = [...new Set([...(newAssignee ? [newAssignee] : []), ...newCoAssignees])]
+          .filter((userId) => userId !== currentUser.id);
+        if (recipients.length > 0) {
+          const { error: notifyErr } = await supabase.from('notifications').insert(
+            recipients.map((userId) => ({
+              user_id: userId,
+              type: 'task_assigned' as NotificationType,
+              title: 'Task Assigned To You',
+              message: `${currentUser.name} assigned you "${data.title ?? task.title}"`,
+              task_id: id,
+            })),
+          );
+          if (notifyErr) console.error('notification insert failed', notifyErr);
         }
       }
 

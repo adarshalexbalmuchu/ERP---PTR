@@ -651,15 +651,17 @@ create trigger notifications_push_trigger
   after insert on notifications
   for each row execute function notify_push_on_notification_insert();
 
--- Notifies the director(s) and whichever range officer(s) hold the
--- incident's range the moment it's reported. SECURITY DEFINER is
--- load-bearing here, not just convenience: the reporter is very often a
--- guard, and a guard's own RLS can't see other users' officer_ranges rows
--- (needed to find a MULTI-range officer) or other profiles' range_id —
--- resolving recipients from the client would silently miss people. This
--- runs as the table owner instead, so it sees every candidate regardless
--- of who's reporting. The three-way UNION also de-duplicates automatically
--- (UNION, not UNION ALL) if an officer somehow matches more than one arm.
+-- Notifies the director(s) and every user stationed in (or holding charge
+-- of) the incident's range the moment it's reported — director, range
+-- officer, guard, range office, and tiger cell alike, not just the
+-- director/range-officer pair. SECURITY DEFINER is load-bearing here, not
+-- just convenience: the reporter is very often a guard, and a guard's own
+-- RLS can't see other users' officer_ranges rows (needed to find a
+-- MULTI-range officer) or other profiles' range_id — resolving recipients
+-- from the client would silently miss people. This runs as the table owner
+-- instead, so it sees every candidate regardless of who's reporting. The
+-- three-way UNION also de-duplicates automatically (UNION, not UNION ALL)
+-- if someone somehow matches more than one arm.
 create or replace function notify_on_incident_insert()
 returns trigger language plpgsql security definer
 set search_path = '' as $$
@@ -675,7 +677,7 @@ begin
       where role = 'director' and id <> new.reported_by
     union
     select id as user_id from public.profiles
-      where role = 'range_officer' and range_id = new.range_id and id <> new.reported_by
+      where range_id = new.range_id and id <> new.reported_by
     union
     select user_id from public.officer_ranges
       where range_id = new.range_id and user_id <> new.reported_by
@@ -1063,7 +1065,10 @@ create policy "notifications_read" on notifications
 create policy "notifications_insert" on notifications
   for insert with check (
     (select auth.uid()) is not null
-    and exists (select 1 from tasks where tasks.id = notifications.task_id)
+    and (
+      exists (select 1 from tasks where tasks.id = notifications.task_id)
+      or exists (select 1 from incidents where incidents.id = notifications.incident_id)
+    )
   );
 
 create policy "notifications_update" on notifications

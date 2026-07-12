@@ -155,6 +155,7 @@ export function useTasks() {
 
       // Replace the co-assignee roster wholesale — simplest correct way to
       // reconcile an arbitrary add/remove set from the multi-select picker.
+      let newCoAssignees: string[] = [];
       if (data.coAssigneeIds !== undefined) {
         const { error: delErr } = await supabase.from('task_assignees').delete().eq('task_id', id);
         if (delErr) throw delErr;
@@ -165,6 +166,26 @@ export function useTasks() {
             .from('task_assignees')
             .insert(coAssigneeIds.map((userId) => ({ task_id: id, user_id: userId })));
           if (insErr) throw insErr;
+        }
+        newCoAssignees = coAssigneeIds.filter((uid) => !before?.coAssigneeIds.includes(uid));
+      }
+
+      // Reassigning the primary assignee or adding a co-assignee previously
+      // sent nothing — the person only found out by stumbling onto the task
+      // later. Notify whoever is newly on the hook for it.
+      if (before && currentUser) {
+        const newAssignee =
+          data.assigneeId !== undefined && data.assigneeId !== before.assigneeId ? data.assigneeId : null;
+        const recipients = [...new Set([...(newAssignee ? [newAssignee] : []), ...newCoAssignees])]
+          .filter((userId) => userId !== currentUser.id);
+        if (recipients.length > 0) {
+          await insertNotifications(
+            recipients,
+            'task_assigned',
+            'Task Assigned To You',
+            `${currentUser.name} assigned you "${data.title ?? before.title}" · Due ${formatDate(data.dueDate ?? before.dueDate)}`,
+            id,
+          );
         }
       }
 
