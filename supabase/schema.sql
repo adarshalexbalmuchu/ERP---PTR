@@ -1156,33 +1156,35 @@ create policy "daily_reports_director" on daily_reports
 create policy "daily_reports_read" on daily_reports
   for select using ((select get_my_role()) = 'range_officer' or (select is_field_role()));
 
--- incidents: every signed-in user can read every incident reserve-wide —
--- conflict data is operationally relevant reserve-wide, not just to whoever
--- reported it or their own range. Writes stay scoped: director full;
--- officer full within their range; guard/range_office/tiger_cell can only
--- report (insert) their own.
-create policy "incidents_read_all" on incidents
-  for select using ((select auth.uid()) is not null);
-
+-- incidents: the full log is management-only — director sees every
+-- incident reserve-wide, range_officer sees every incident within their
+-- own range(s). guard/range_office/tiger_cell (is_field_role()) can only
+-- read incidents THEY personally reported, and can only insert (report),
+-- never update/delete.
 create policy "incidents_director" on incidents
   for all using ((select get_my_role()) = 'director');
 
 create policy "incidents_officer" on incidents
   for all using ((select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[]));
 
+create policy "incidents_field_read_own" on incidents
+  for select using ((select is_field_role()) and reported_by = (select auth.uid()));
+
 create policy "incidents_guard_insert" on incidents
   for insert with check ((select is_field_role()) and reported_by = (select auth.uid()));
 
--- incident_photos: read follows incidents_read_all — every signed-in user
--- can see photos on any incident, reserve-wide (matches that incidents
--- themselves are readable reserve-wide; scoping this to the viewer's own
--- range broke for Tiger Cell, who hold no range at all). Writes stay
--- scoped: guards can only attach photos to incidents THEY reported (not any
--- incident in their range) and can't delete photos once uploaded — matching
--- that guards can't edit or delete their incident reports either. Deletion
--- is management-only.
-create policy "incident_photos_read_all" on incident_photos
-  for select using ((select auth.uid()) is not null);
+-- incident_photos: read follows the same scoping as incidents above —
+-- director and range_officer (within their range) see photos on every
+-- incident they can see; guard/range_office/tiger_cell only see photos on
+-- incidents THEY reported. Writes stay scoped: guards can only attach
+-- photos to incidents THEY reported (not any incident in their range) and
+-- can't delete photos once uploaded — matching that guards can't edit or
+-- delete their incident reports either. Deletion is management-only.
+create policy "incident_photos_field_read_own" on incident_photos
+  for select using (
+    (select is_field_role()) and
+    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.reported_by = (select auth.uid()))
+  );
 
 create policy "incident_photos_director" on incident_photos
   for all using ((select get_my_role()) = 'director');
