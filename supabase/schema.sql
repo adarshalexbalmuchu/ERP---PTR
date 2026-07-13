@@ -1157,47 +1157,57 @@ create policy "daily_reports_read" on daily_reports
   for select using ((select get_my_role()) = 'range_officer' or (select is_field_role()));
 
 -- incidents: the full log is management-only — director sees every
--- incident reserve-wide, range_officer sees every incident within their
--- own range(s). guard/range_office/tiger_cell (is_field_role()) can only
--- read incidents THEY personally reported, and can only insert (report),
--- never update/delete.
+-- incident reserve-wide, and so does tiger_cell (Tiger Cell holds no
+-- single range, same as director, so this isn't range-scoped) EXCEPT one
+-- specific excluded profile (id below), who despite holding the tiger_cell
+-- role is deliberately carved out and treated as an ordinary field
+-- reporter — a named-person exception per product decision, not a role
+-- rule (see internal records for who/why). If that profile is ever
+-- deleted and recreated, this id must be updated to match. range_officer
+-- no longer gets range-wide incident visibility (that moved to
+-- tiger_cell) — range_officer, guard, range_office, and the excluded
+-- profile can only read/insert incidents THEY personally reported, never
+-- update/delete.
 create policy "incidents_director" on incidents
   for all using ((select get_my_role()) = 'director');
 
-create policy "incidents_officer" on incidents
-  for all using ((select get_my_role()) = 'range_officer' and range_id = any ((select get_my_range_ids())::uuid[]));
-
-create policy "incidents_field_read_own" on incidents
-  for select using ((select is_field_role()) and reported_by = (select auth.uid()));
-
-create policy "incidents_guard_insert" on incidents
-  for insert with check ((select is_field_role()) and reported_by = (select auth.uid()));
-
--- incident_photos: read follows the same scoping as incidents above —
--- director and range_officer (within their range) see photos on every
--- incident they can see; guard/range_office/tiger_cell only see photos on
--- incidents THEY reported. Writes stay scoped: guards can only attach
--- photos to incidents THEY reported (not any incident in their range) and
--- can't delete photos once uploaded — matching that guards can't edit or
--- delete their incident reports either. Deletion is management-only.
-create policy "incident_photos_field_read_own" on incident_photos
-  for select using (
-    (select is_field_role()) and
-    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.reported_by = (select auth.uid()))
+create policy "incidents_tiger_cell" on incidents
+  for all using (
+    (select get_my_role()) = 'tiger_cell'
+    and (select auth.uid()) <> '237e1f9b-cf77-4b83-ae43-7641af75f67f'::uuid -- excluded profile, see incidents_tiger_cell comment above
   );
 
+create policy "incidents_read_own" on incidents
+  for select using (
+    ((select is_field_role()) or (select get_my_role()) = 'range_officer')
+    and reported_by = (select auth.uid())
+  );
+
+create policy "incidents_report_insert" on incidents
+  for insert with check (
+    ((select is_field_role()) or (select get_my_role()) = 'range_officer')
+    and reported_by = (select auth.uid())
+  );
+
+-- incident_photos: read/write follows the same scoping as incidents above.
 create policy "incident_photos_director" on incident_photos
   for all using ((select get_my_role()) = 'director');
 
-create policy "incident_photos_officer" on incident_photos
+create policy "incident_photos_tiger_cell" on incident_photos
   for all using (
-    (select get_my_role()) = 'range_officer' and
-    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.range_id = any ((select get_my_range_ids())::uuid[]))
+    (select get_my_role()) = 'tiger_cell'
+    and (select auth.uid()) <> '237e1f9b-cf77-4b83-ae43-7641af75f67f'::uuid -- excluded profile, see incidents_tiger_cell comment above
   );
 
-create policy "incident_photos_guard_insert" on incident_photos
+create policy "incident_photos_read_own" on incident_photos
+  for select using (
+    ((select is_field_role()) or (select get_my_role()) = 'range_officer') and
+    exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.reported_by = (select auth.uid()))
+  );
+
+create policy "incident_photos_report_insert" on incident_photos
   for insert with check (
-    (select is_field_role()) and
+    ((select is_field_role()) or (select get_my_role()) = 'range_officer') and
     uploaded_by = (select auth.uid()) and
     exists (select 1 from incidents i where i.id = incident_photos.incident_id and i.reported_by = (select auth.uid()))
   );
@@ -1312,11 +1322,18 @@ create policy "incident_photos_download" on storage.objects
     )
   );
 
--- Delete is management-only, same as the incident_photos table policy.
+-- Delete is management-only, same as the incident_photos table policy —
+-- director or tiger_cell (excluding the excluded profile, see incidents_tiger_cell above).
 create policy "incident_photos_object_delete" on storage.objects
   for delete using (
     bucket_id = 'incident-photos'
-    and (select public.get_my_role()) in ('director', 'range_officer')
+    and (
+      (select public.get_my_role()) = 'director'
+      or (
+        (select public.get_my_role()) = 'tiger_cell'
+        and (select auth.uid()) <> '237e1f9b-cf77-4b83-ae43-7641af75f67f'::uuid
+      )
+    )
     and exists (
       select 1 from public.incidents i
       where i.id::text = (storage.foldername(name))[1]

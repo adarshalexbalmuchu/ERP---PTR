@@ -257,6 +257,13 @@ function ReportForm({
   );
 }
 
+// Named-person exception, not a role rule — one specific profile holds the
+// tiger_cell role but is deliberately excluded from full incident-log
+// access (see incidents_tiger_cell in supabase/schema.sql; internal
+// records have who/why). If that profile is ever deleted and recreated,
+// this id must be updated to match.
+const RESTRICTED_TIGER_CELL_USER_ID = '237e1f9b-cf77-4b83-ae43-7641af75f67f';
+
 export default function IncidentLog() {
   const currentUser = useStore((s) => s.currentUser);
   const { incidents, isLoading, deleteIncident, removePhoto } = useIncidents();
@@ -272,7 +279,8 @@ export default function IncidentLog() {
   // single range.
   const hasNoFixedRange = currentUser?.role === 'director' || currentUser?.role === 'tiger_cell';
   const lockRange = !hasNoFixedRange && !isMultiRange;
-  const canManage = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
+  const canManage = currentUser?.role === 'director' ||
+    (currentUser?.role === 'tiger_cell' && currentUser.id !== RESTRICTED_TIGER_CELL_USER_ID);
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this incident report? This cannot be undone.')) {
