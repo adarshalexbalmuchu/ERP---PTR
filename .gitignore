@@ -29,6 +29,9 @@ dev-dist
 .env.local
 .env.*.local
 
+# Holds a live Supabase access token in plaintext - never commit
+.mcp.json
+
 # Supabase CLI local state
 supabase/.temp
 
