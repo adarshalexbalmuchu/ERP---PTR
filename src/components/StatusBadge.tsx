@@ -5,25 +5,22 @@ interface Props {
   size?: 'sm' | 'md';
 }
 
-// A neutral pill with a small status dot rather than a fully-colored
-// background — keeps the palette calm while still color-coding at a
-// glance. Only genuinely urgent states (handled by the separate
-// "Overdue" flag elsewhere) get a loud color.
+// A small status dot + plain label — no pill, no border. Colour is a quiet
+// cue; the label carries the meaning. Only overdue (handled separately) is
+// ever loud.
 const CONFIG: Record<TaskStatus, { label: string; dot: string }> = {
-  NotStarted: { label: 'Not Started', dot: 'bg-status-notstarted' },
-  InProgress: { label: 'In Progress', dot: 'bg-status-progress' },
-  Completed: { label: 'Completed', dot: 'bg-status-completed' },
-  Archived: { label: 'Archived', dot: 'bg-status-archived' },
+  NotStarted: { label: 'Not started', dot: 'bg-n-60' },
+  InProgress: { label: 'In progress', dot: 'bg-signal-amber' },
+  Completed: { label: 'Completed', dot: 'bg-signal-green' },
+  Archived: { label: 'Archived', dot: 'bg-n-50' },
 };
 
 export default function StatusBadge({ status, size = 'md' }: Props) {
-  const config = CONFIG[status];
-  const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
+  const config = CONFIG[status] ?? { label: String(status ?? '—'), dot: 'bg-n-50' };
+  const text = size === 'sm' ? 'text-xs' : 'text-13';
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 font-medium rounded-full whitespace-nowrap bg-white border border-ptr-cream-dark text-ptr-brown ${sizeClass}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${config.dot}`} />
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-n-90 ${text}`}>
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${config.dot}`} />
       {config.label}
     </span>
   );

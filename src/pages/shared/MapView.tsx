@@ -118,10 +118,10 @@ export default function MapView() {
   }, []);
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="border-b border-ptr-brown/10 pb-4">
-        <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">Field Map</h1>
-        <p className="text-[13px] text-ptr-brown-light mt-1">
+    <div className="px-4 sm:px-6 py-5 mx-auto w-full max-w-[1440px] space-y-4">
+      <div>
+        <h1 className="text-xl font-semibold text-n-100">Range map</h1>
+        <p className="text-13 text-n-80 mt-0.5">
           Geotagged incidents and patrol activity {loading && '· loading…'}
         </p>
       </div>

@@ -2,6 +2,7 @@ import { History } from 'lucide-react';
 import { useAuditLog } from '../../hooks/useAuditLog';
 import { useUsers } from '../../hooks/useUsers';
 import EmptyState from '../../components/EmptyState';
+import { Page, PageHeading } from '../../components/layout/Page';
 import { formatDateTime } from '../../utils/formatters';
 
 const ACTION_LABELS: Record<string, string> = {
@@ -15,13 +16,8 @@ export default function AuditLog() {
   const { users } = useUsers();
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="border-b border-ptr-brown/10 pb-4">
-        <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">Audit Log</h1>
-        <p className="text-[13px] text-ptr-brown-light mt-1">
-          Who reassigned, changed, or deleted tasks {isLoading && '· loading…'}
-        </p>
-      </div>
+    <Page className="space-y-4">
+      <PageHeading title="System audit" meta={<>Who reassigned, changed, or deleted tasks {isLoading && '· loading…'}</>} />
 
       {!isLoading && entries.length === 0 ? (
         <EmptyState
@@ -30,7 +26,7 @@ export default function AuditLog() {
           description="Reassignments, status changes, and deletions will appear here."
         />
       ) : (
-        <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
+        <div className="card divide-y divide-n-20 overflow-hidden">
           {entries.map((entry) => {
             const actor = users.find((u) => u.id === entry.actorId);
             return (
@@ -40,19 +36,19 @@ export default function AuditLog() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-ptr-brown">
+                    <span className="text-13 font-medium text-n-100">
                       {actor?.name ?? 'Unknown'} · {ACTION_LABELS[entry.action] ?? entry.action}
                     </span>
-                    <span className="text-xs text-ptr-brown-light">{formatDateTime(entry.createdAt)}</span>
+                    <span className="text-xs text-n-70">{formatDateTime(entry.createdAt)}</span>
                   </div>
-                  <div className="text-xs text-ptr-brown-light mt-0.5">"{entry.taskTitle}"</div>
-                  <p className="text-sm text-ptr-brown mt-1">{entry.detail}</p>
+                  <div className="text-xs text-n-70 mt-0.5">"{entry.taskTitle}"</div>
+                  <p className="text-13 text-n-90 mt-1">{entry.detail}</p>
                 </div>
               </div>
             );
           })}
         </div>
       )}
-    </div>
+    </Page>
   );
 }

@@ -7,8 +7,6 @@ import GovHeader from '../components/GovHeader';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 import ptrLogo from '../assets/ptr-logo.png';
 
-const GOV_FONT = "'IBM Plex Sans', 'Poppins', system-ui, sans-serif";
-
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
   if (role === 'range_officer') return '/officer';
@@ -48,7 +46,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-ptr-cream" style={{ fontFamily: GOV_FONT }}>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-n-10">
       <div className="lg:hidden">
         <GovHeader />
       </div>
@@ -121,20 +119,11 @@ export default function Login() {
       </div>
 
       {/* Right panel */}
-      <div
-        className="flex-1 flex items-center justify-center p-4 lg:p-10"
-        style={{
-          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(42,39,36,0.035) 1px, transparent 0)',
-          backgroundSize: '18px 18px',
-        }}
-      >
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-10 bg-n-10">
         <div className="w-full max-w-md">
-          <div
-            className="bg-white rounded-xl border border-ptr-brown/15 p-9"
-            style={{ boxShadow: '0 1px 2px rgba(15,46,30,0.05), 0 8px 24px -8px rgba(15,46,30,0.10)' }}
-          >
-            <h2 className="text-lg font-bold text-ptr-brown tracking-tight">Secure Login</h2>
-            <p className="text-xs text-ptr-brown-light mt-1 mb-6">
+          <div className="bg-white rounded-md border border-n-30 shadow-card p-8">
+            <h2 className="text-lg font-semibold text-n-100">Secure login</h2>
+            <p className="text-13 text-n-80 mt-1 mb-6">
               Sign in with your registered credentials to continue.
             </p>
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -146,7 +135,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   autoComplete="email"
-                  className="w-full px-3.5 py-3 border border-ptr-brown/25 rounded-md text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
+                  className="w-full px-3.5 py-3 border border-n-40 rounded text-n-100 placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-ptr-accent/30 focus:border-ptr-accent transition-all min-h-[48px] bg-white"
                   style={{ fontSize: '16px' }}
                   required
                 />
@@ -160,7 +149,7 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     autoComplete="current-password"
-                    className="w-full px-3.5 py-3 pr-10 border border-ptr-brown/25 rounded-md text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/25 focus:border-ptr-green transition-all min-h-[48px] bg-white"
+                    className="w-full px-3.5 py-3 pr-10 border border-n-40 rounded text-n-100 placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-ptr-accent/30 focus:border-ptr-accent transition-all min-h-[48px] bg-white"
                     style={{ fontSize: '16px' }}
                     required
                   />

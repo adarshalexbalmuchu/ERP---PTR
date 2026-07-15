@@ -27,6 +27,7 @@ import CommentThread from '../../components/CommentThread';
 import AttachmentList from '../../components/AttachmentList';
 import TaskForm from '../../components/TaskForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { CommandBar } from '../../components/layout/Slots';
 import { isFieldRole } from '../../types';
 
 function ProgressBar({ value }: { value: number }) {
@@ -157,38 +158,35 @@ export default function TaskDetailPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
+    <>
+      {canManage && (
+        <CommandBar>
+          <button onClick={() => setEditOpen(true)} className="btn-subtle"><Edit2 className="w-4 h-4" />Edit</button>
+          <button onClick={() => setDeleteOpen(true)} className="btn-subtle"><Trash2 className="w-4 h-4" />Delete</button>
+        </CommandBar>
+      )}
+      <div className="px-4 sm:px-6 py-5 max-w-4xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-xl hover:bg-ptr-cream-dark transition-colors flex-shrink-0 mt-0.5"
+          className="w-9 h-9 flex items-center justify-center rounded hover:bg-n-20 transition-colors flex-shrink-0 mt-0.5"
           aria-label="Go back"
         >
-          <ArrowLeft className="w-5 h-5 text-ptr-brown" />
+          <ArrowLeft className="w-5 h-5 text-n-90" />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-ptr-brown leading-snug">{task.title}</h1>
-          <div className="flex items-center flex-wrap gap-2 mt-2">
+          <h1 className="text-xl font-semibold text-n-100 leading-snug">{task.title}</h1>
+          <div className="flex items-center flex-wrap gap-3 mt-2">
             <StatusBadge status={task.status} />
             <PriorityBadge priority={task.priority} />
             {overdue && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-200">
-                Overdue
+              <span className="inline-flex items-center gap-1.5 text-13 font-semibold text-signal-red">
+                <span className="w-2 h-2 rounded-full bg-signal-red" />Overdue
               </span>
             )}
           </div>
         </div>
-        {canManage && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => setEditOpen(true)} className="p-2 rounded-xl hover:bg-ptr-cream transition-colors" title="Edit">
-              <Edit2 className="w-4 h-4 text-ptr-brown-light" />
-            </button>
-            <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-xl hover:bg-red-50 transition-colors" title="Delete">
-              <Trash2 className="w-4 h-4 text-red-500" />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Progress */}
@@ -269,7 +267,7 @@ export default function TaskDetailPage() {
                       placeholder="Describe what was done..."
                       rows={2}
                       maxLength={2000}
-                      className="input-field resize-none text-sm"
+                      className="input-field resize-none"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -296,7 +294,7 @@ export default function TaskDetailPage() {
 
       {/* Manager actions for Completed tasks */}
       {canManage && task.status === 'Completed' && (
-        <div className="card p-5 border-l-4 border-l-status-progress">
+        <div className="card p-5 border-l-4 border-l-signal-amber">
           <h3 className="text-sm font-semibold text-ptr-brown mb-3">Task completed — awaiting your review</h3>
           {showRequestChanges ? (
             <div className="space-y-3">
@@ -306,7 +304,7 @@ export default function TaskDetailPage() {
                 placeholder="Describe what needs to be revised..."
                 rows={3}
                 maxLength={2000}
-                className="input-field resize-none text-sm"
+                className="input-field resize-none"
               />
               <div className="flex gap-2">
                 <button
@@ -341,7 +339,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.status === 'Archived' && canManage && (
-        <div className="card p-4 border-l-4 border-l-status-archived flex items-center gap-3">
+        <div className="card p-4 border-l-4 border-l-n-40 flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-ptr-brown-light flex-shrink-0" />
           <span className="text-sm font-medium text-ptr-brown-light">Task archived</span>
         </div>
@@ -460,6 +458,7 @@ export default function TaskDetailPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteOpen(false)}
       />
-    </div>
+      </div>
+    </>
   );
 }

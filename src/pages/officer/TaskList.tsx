@@ -1,22 +1,59 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Pencil, Eye } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Pencil, Search, X } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import { uploadTaskAttachment } from '../../lib/attachments';
-import { isOverdue } from '../../utils/overdue';
-import { groupTasksByBatch } from '../../utils/groupTasksByBatch';
-import { formatDate } from '../../utils/formatters';
-import StatusBadge from '../../components/StatusBadge';
-import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
+import TaskTable from '../../components/TaskTable';
 import EmptyState from '../../components/EmptyState';
 import Select from '../../components/Select';
-import type { Task, TaskStatus, TaskPriority } from '../../types';
+import { CommandBar, ContextPanel } from '../../components/layout/Slots';
+import { Page, PageHeading } from '../../components/layout/Page';
+import type { Task } from '../../types';
 import { isFieldRole } from '../../types';
+
+const STATUS_OPTS = [
+  { value: '', label: 'All statuses' },
+  { value: 'NotStarted', label: 'Not started' },
+  { value: 'InProgress', label: 'In progress' },
+  { value: 'Completed', label: 'Completed' },
+  { value: 'Archived', label: 'Archived' },
+];
+const PRIORITY_OPTS = [
+  { value: '', label: 'All priorities' },
+  { value: 'Critical', label: 'Critical' },
+  { value: 'High', label: 'High' },
+  { value: 'Medium', label: 'Medium' },
+  { value: 'Low', label: 'Low' },
+];
+
+function FilterGroup({ label, options, value, onChange }: { label: string; options: { value: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="mb-4">
+      <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">{label}</div>
+      <div className="space-y-0.5">
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value || 'all'}
+              onClick={() => onChange(o.value)}
+              className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${
+                active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function OfficerTaskList() {
   const navigate = useNavigate();
@@ -24,15 +61,26 @@ export default function OfficerTaskList() {
   const { tasks, createTask, updateTask } = useTasks();
   const { users } = useUsers();
   const { ranges, areas } = useRanges();
+  const { activeRangeId: myRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
+
+  const [params, setParams] = useSearchParams();
+  const search = params.get('q') ?? '';
+  const filterStatus = params.get('status') ?? '';
+  const filterPriority = params.get('priority') ?? '';
+  const filterArea = params.get('area') ?? '';
+
+  const setParam = (key: string, val: string) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (val) next.set(key, val); else next.delete(key);
+      return next;
+    }, { replace: true });
+  };
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [filterArea, setFilterArea] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const { activeRangeId: myRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
   const myTasks = tasks.filter((t) => t.rangeId === myRangeId);
   const myGuards = users.filter((u) => isFieldRole(u.role) && u.rangeId === myRangeId);
   const myAreas = areas.filter((a) => a.rangeId === myRangeId);
@@ -50,143 +98,74 @@ export default function OfficerTaskList() {
     return true;
   });
 
-  const groups = groupTasksByBatch(filtered);
+  const selectedTasks = filtered.filter((t) => selectedIds.includes(t.id));
+  const hasFilters = !!(search || filterStatus || filterPriority || filterArea);
+
+  const handleEdit = (task: Task) => { setEditingTask(task); setFormOpen(true); };
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
-        <div>
-          <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">Range Tasks</h1>
-          <p className="text-[13px] text-ptr-brown-light mt-1">{myTasks.length} tasks in your range</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isMultiRange && (
-            <Select
-              value={myRangeId}
-              onChange={(e) => setActiveRangeId(e.target.value)}
-              className="input-field select-field !w-auto text-sm"
-              aria-label="Switch range"
-            >
+    <>
+      <CommandBar>
+        <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />New task</button>
+        <button onClick={() => selectedTasks.length === 1 && handleEdit(selectedTasks[0])} disabled={selectedTasks.length !== 1} className="btn-subtle"><Pencil className="w-4 h-4" />Edit</button>
+        {isMultiRange && (
+          <>
+            <span className="w-px h-5 bg-n-30 mx-1" />
+            <Select value={myRangeId} onChange={(e) => setActiveRangeId(e.target.value)} className="input-field select-field !w-auto !min-h-[32px] text-13" aria-label="Switch range">
               {rangeIds.map((id) => {
                 const r = ranges.find((rr) => rr.id === id);
                 return <option key={id} value={id}>{r?.name ?? 'Range'}</option>;
               })}
             </Select>
-          )}
-          <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Task</span>
-          </button>
-        </div>
-      </div>
+          </>
+        )}
+        {selectedIds.length > 0 && (
+          <>
+            <span className="w-px h-5 bg-n-30 mx-1" />
+            <span className="text-13 text-n-80 whitespace-nowrap">{selectedIds.length} selected</span>
+            <button onClick={() => setSelectedIds([])} className="btn-subtle">Clear</button>
+          </>
+        )}
+      </CommandBar>
 
-      {/* Filters */}
-      <div className="card p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="col-span-2 lg:col-span-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ptr-brown-light" />
-          <input
-            type="text"
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="input-field pl-9"
-          />
+      <ContextPanel>
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-n-70" />
+            <input value={search} onChange={(e) => setParam('q', e.target.value)} placeholder="Search tasks…" className="input-field pl-8 !min-h-[34px] text-13" style={{ fontSize: '16px' }} />
+          </div>
         </div>
-        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field select-field">
-          <option value="">All Statuses</option>
-          {(['NotStarted', 'InProgress', 'Completed', 'Archived'] as TaskStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {s === 'NotStarted' ? 'Not Started' : s === 'InProgress' ? 'In Progress' : s}
-            </option>
-          ))}
-        </Select>
-        <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field select-field">
-          <option value="">All Priorities</option>
-          {(['Critical', 'High', 'Medium', 'Low'] as TaskPriority[]).map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </Select>
-        <Select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-field select-field">
-          <option value="">All Areas</option>
-          {myAreas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </Select>
-      </div>
+        <FilterGroup label="Status" options={STATUS_OPTS} value={filterStatus} onChange={(v) => setParam('status', v)} />
+        <FilterGroup label="Priority" options={PRIORITY_OPTS} value={filterPriority} onChange={(v) => setParam('priority', v)} />
+        {myAreas.length > 0 && (
+          <FilterGroup label="Area / zone" options={[{ value: '', label: 'All areas' }, ...myAreas.map((a) => ({ value: a.id, label: a.name }))]} value={filterArea} onChange={(v) => setParam('area', v)} />
+        )}
+      </ContextPanel>
 
-      <p className="text-xs text-ptr-brown-light">{filtered.length} task{filtered.length !== 1 ? 's' : ''}</p>
-
-      {filtered.length === 0 ? (
-        <EmptyState title="No tasks found" description="Try adjusting your filters or create a new task." />
-      ) : (
-        <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
-          {groups.map((group) => {
-            const first = group.tasks[0];
-            const anyOverdue = group.tasks.some(isOverdue);
-            return (
-              <div key={group.key} className="p-3 hover:bg-ptr-cream/50 transition-colors">
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="text-sm font-medium text-ptr-brown truncate">{first.title}</span>
-                  {group.tasks.length > 1 && (
-                    <span className="text-xs bg-ptr-green/10 text-ptr-green rounded-full px-2 py-0.5 font-medium flex-shrink-0">
-                      {group.tasks.length} assignees
-                    </span>
-                  )}
-                  {anyOverdue && (
-                    <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 font-medium flex-shrink-0">
-                      Overdue
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  {group.tasks.map((task) => {
-                    const assignee = users.find((u) => u.id === task.assigneeId);
-                    const area = myAreas.find((a) => a.id === task.areaId);
-                    const overdue = isOverdue(task);
-                    return (
-                      <div key={task.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-white/70 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap text-xs">
-                            <span className="font-medium text-ptr-brown">{assignee?.name ?? '—'}</span>
-                            {area && <><span className="text-ptr-brown-light">·</span><span className="text-ptr-brown-light">{area.name}</span></>}
-                            <span className="text-ptr-brown-light">·</span>
-                            <span className={overdue ? 'text-red-600 font-medium' : 'text-ptr-brown-light'}>{formatDate(task.dueDate)}</span>
-                          </div>
-                          {/* Progress bar */}
-                          <div className="mt-1.5 h-1 w-32 bg-ptr-cream-dark rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-ptr-green rounded-full"
-                              style={{ width: `${task.completionPercentage}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <PriorityBadge priority={task.priority} size="sm" />
-                          <StatusBadge status={task.status} size="sm" />
-                          <div className="flex items-center gap-1.5 ml-1">
-                            <button
-                              onClick={() => navigate(`/officer/tasks/${task.id}`)}
-                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                              title="View"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => { setEditingTask(task); setFormOpen(true); }}
-                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+      <Page className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <PageHeading title="Task registry" meta={`${filtered.length} task${filtered.length !== 1 ? 's' : ''} in ${ranges.find((r) => r.id === myRangeId)?.name ?? 'your range'}${hasFilters ? ' · filtered' : ''}`} />
+          {hasFilters && <button onClick={() => setParams({}, { replace: true })} className="btn-subtle flex-shrink-0"><X className="w-3.5 h-3.5" />Clear filters</button>}
         </div>
-      )}
+
+        {filtered.length === 0 ? (
+          <EmptyState title="No tasks found" description="Try adjusting your filters or create a new task." />
+        ) : (
+          <div className="card overflow-hidden">
+            <TaskTable
+              tasks={filtered}
+              users={users}
+              ranges={ranges}
+              onOpen={(t) => navigate(`/officer/tasks/${t.id}`)}
+              onEdit={handleEdit}
+              selectable
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              showRange={false}
+            />
+          </div>
+        )}
+      </Page>
 
       {formOpen && currentUser && (
         <TaskForm
@@ -196,16 +175,11 @@ export default function OfficerTaskList() {
             if (editingTask) {
               updateTask.mutate({ id: editingTask.id, ...data });
             } else {
-              // Multiple assignees create one independent task per person —
-              // the same attachments are uploaded to each of their tasks.
               const rows = await createTask.mutateAsync(data);
               for (const row of rows) {
                 for (const file of files) {
-                  try {
-                    await uploadTaskAttachment(row.id, currentUser.id, file);
-                  } catch (err) {
-                    alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
-                  }
+                  try { await uploadTaskAttachment(row.id, currentUser.id, file); }
+                  catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
                 }
               }
             }
@@ -218,6 +192,6 @@ export default function OfficerTaskList() {
           defaultRangeId={myRangeId}
         />
       )}
-    </div>
+    </>
   );
 }

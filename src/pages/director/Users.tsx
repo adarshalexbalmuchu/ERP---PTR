@@ -3,6 +3,8 @@ import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import Select from '../../components/Select';
+import { CommandBar, ContextPanel } from '../../components/layout/Slots';
+import { Page, PageHeading } from '../../components/layout/Page';
 import type { User, Role } from '../../types';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -253,68 +255,66 @@ export default function DirectorUsers() {
     }
   };
 
+  const ROLE_FILTERS: { value: string; label: string }[] = [
+    { value: '', label: 'All roles' },
+    { value: 'director', label: 'Director' },
+    { value: 'range_officer', label: 'Range officer' },
+    { value: 'guard', label: 'Guard / field staff' },
+    { value: 'range_office', label: 'Range office' },
+    { value: 'tiger_cell', label: 'Tiger cell' },
+  ];
+
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
-        <div>
-          <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">User Management</h1>
-          <p className="text-[13px] text-ptr-brown-light mt-1">{users.length} users in system</p>
+    <>
+      <CommandBar>
+        <button onClick={() => { setEditing(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />Add user</button>
+      </CommandBar>
+
+      <ContextPanel>
+        <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Role</div>
+        <div className="space-y-0.5">
+          {ROLE_FILTERS.map((o) => {
+            const active = o.value === filterRole;
+            return (
+              <button key={o.value || 'all'} onClick={() => setFilterRole(o.value)} className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'}`}>{o.label}</button>
+            );
+          })}
         </div>
-        <button onClick={() => { setEditing(null); setFormOpen(true); }} className="btn-primary flex-shrink-0">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Add User</span>
-        </button>
-      </div>
+      </ContextPanel>
 
-      <div className="flex items-center gap-3">
-        <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="input-field select-field w-48">
-          <option value="">All Roles</option>
-          <option value="director">Director</option>
-          <option value="range_officer">Range Officer</option>
-          <option value="guard">Guard / Field Staff</option>
-          <option value="range_office">Range Office</option>
-          <option value="tiger_cell">Tiger Cell</option>
-        </Select>
-      </div>
+      <Page className="space-y-4">
+        <PageHeading title="Personnel" meta={`${filtered.length} of ${users.length} staff`} />
 
-      <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
-        {filtered.map((user) => {
-          const range = ranges.find((r) => r.id === user.rangeId);
-          return (
-            <div key={user.id} className="flex items-center gap-3 p-3 hover:bg-ptr-cream/50 transition-colors">
-              <div className="w-9 h-9 rounded-full bg-ptr-green/20 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-ptr-green">{user.avatarInitials}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-ptr-brown">{user.name}</div>
-                <div className="text-xs text-ptr-brown-light truncate">
-                  {user.designation} {range ? `· ${range.name}` : ''}
+        <div className="card divide-y divide-n-20 overflow-hidden">
+          {filtered.map((user) => {
+            const range = ranges.find((r) => r.id === user.rangeId);
+            return (
+              <div key={user.id} className="group flex items-center gap-3 px-4 py-2.5 hover:bg-n-10 transition-colors">
+                <div className="w-9 h-9 rounded-full bg-ptr-green/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-semibold text-ptr-green">{user.avatarInitials}</span>
                 </div>
-                <div className="text-xs text-ptr-brown-light/70">{user.email}</div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${ROLE_COLORS[user.role]}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-13 font-medium text-n-100 truncate">{user.name}</div>
+                  <div className="text-xs text-n-70 truncate">
+                    {user.designation}{range ? ` · ${range.name}` : ''} · {user.email}
+                  </div>
+                </div>
+                <span className={`text-xs font-medium rounded px-2 py-0.5 flex-shrink-0 ${ROLE_COLORS[user.role]}`}>
                   {ROLE_LABELS[user.role]}
                 </span>
-                <button
-                  onClick={() => { setEditing(user); setFormOpen(true); }}
-                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                  title="Edit"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(user)}
-                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-red-50 text-ptr-brown-light hover:text-red-600 transition-colors"
-                  title="Delete"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setEditing(user); setFormOpen(true); }} className="w-8 h-8 flex items-center justify-center rounded text-n-70 hover:bg-n-20 hover:text-n-100 transition-colors" title="Edit">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(user)} className="w-8 h-8 flex items-center justify-center rounded text-n-70 hover:bg-signal-red-bg hover:text-signal-red transition-colors" title="Delete">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </Page>
 
       {formOpen && (
         <UserFormModal
@@ -325,6 +325,6 @@ export default function DirectorUsers() {
           saving={editing ? updateUser.isPending : createUser.isPending}
         />
       )}
-    </div>
+    </>
   );
 }

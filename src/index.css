@@ -6,75 +6,88 @@
   * {
     box-sizing: border-box;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     margin: 0;
-    font-family: 'IBM Plex Sans', 'Poppins', system-ui, sans-serif;
-    background-color: #F5F1E8;
-    color: #2A2724;
+    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+    /* Continuous white product surface; the app chrome paints its own greys. */
+    background-color: #ffffff;
+    color: #201f1e;
+    font-size: 14px;
+    line-height: 1.45;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
   }
   #root {
     min-height: 100vh;
   }
+  /* Sentence-case, tightly-tracked headings — no uppercase letter-spacing. */
   h1, h2, h3, h4 {
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
     line-height: 1.25;
+    font-weight: 600;
   }
   h1 {
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
     line-height: 1.2;
   }
 }
 
 @layer components {
+  /* Overlays — the one place a real shadow is warranted. */
   .modal-overlay {
-    @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4;
-    animation: fadeIn 0.15s ease-out;
+    @apply fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4;
+    animation: fadeIn 0.12s ease-out;
   }
   .modal-panel {
-    @apply bg-white rounded-lg shadow-xl border border-ptr-cream-dark w-full max-w-2xl max-h-[90vh] overflow-y-auto;
-    animation: scaleIn 0.15s ease-out;
+    @apply bg-white rounded-md shadow-pop border border-n-30 w-full max-w-2xl max-h-[90vh] overflow-y-auto;
+    animation: scaleIn 0.12s ease-out;
   }
+
+  /* Buttons — compact 32px Fluent height, flat, 4px radius. */
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-ptr-green text-white font-semibold rounded hover:bg-ptr-green-light transition-colors min-h-[44px] text-sm tracking-tight;
+    @apply inline-flex items-center justify-center gap-2 h-8 px-3.5 bg-ptr-green text-white font-semibold rounded text-13 hover:bg-ptr-green-light active:bg-ptr-green-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-ptr-brown font-semibold rounded hover:bg-ptr-cream transition-colors min-h-[44px] text-sm tracking-tight;
+    @apply inline-flex items-center justify-center gap-2 h-8 px-3.5 bg-white border border-n-40 text-n-90 font-semibold rounded text-13 hover:bg-n-20 active:bg-n-30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-danger {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 text-red-700 font-semibold rounded hover:bg-red-100 transition-colors min-h-[44px] text-sm tracking-tight;
+    @apply inline-flex items-center justify-center gap-2 h-8 px-3.5 bg-white border border-n-40 text-signal-red font-semibold rounded text-13 hover:bg-signal-red-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  /* font-size is 16px (not text-sm's 14px) specifically to stop iOS
-     Safari's auto-zoom-on-focus, which triggers on any input/select/
-     textarea below that threshold. */
+  /* Toolbar/command-bar action — borderless until hovered. */
+  .btn-subtle {
+    @apply inline-flex items-center justify-center gap-2 h-8 px-2.5 bg-transparent text-n-90 font-medium rounded text-13 hover:bg-n-20 active:bg-n-30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+  }
+
+  /* Inputs — font-size stays 16px to stop iOS Safari's focus auto-zoom
+     (any field below 16px triggers it); height is comfortable for touch. */
   .input-field {
-    @apply w-full px-3 py-2 border border-ptr-cream-dark rounded text-ptr-brown focus:outline-none focus:ring-2 focus:ring-ptr-green/30 focus:border-ptr-green transition-all min-h-[44px] bg-white;
+    @apply w-full min-h-[36px] px-3 py-1.5 bg-white border border-n-40 rounded text-n-100 placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-ptr-accent/30 focus:border-ptr-accent transition-colors;
     font-size: 16px;
   }
   .input-error {
-    @apply border-red-400 focus:ring-red-200 focus:border-red-400;
+    @apply border-signal-red focus:ring-signal-red/25 focus:border-signal-red;
   }
   .select-field {
     @apply appearance-none bg-no-repeat pr-9 cursor-pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B6356' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-    background-position: right 0.75rem center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23605E5C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
     background-size: 16px;
   }
-  /* Flat, attached-to-the-page surfaces: 1px border, minimal elevation —
-     no floating-card look (enterprise/government direction). */
+
+  /* Flat grouping surface — a single hairline, no elevation. Used sparingly;
+     the dashboard prefers continuous white with dividers over boxed cards. */
   .card {
-    @apply bg-white rounded border border-ptr-cream-dark;
-    box-shadow: 0 1px 2px rgba(15, 46, 30, 0.04);
+    @apply bg-white rounded-md border border-n-30;
   }
-  .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded text-sm font-medium transition-all min-h-[44px];
-  }
-  .sidebar-link.active {
-    @apply bg-ptr-green text-white;
-  }
-  .sidebar-link:not(.active) {
-    @apply text-ptr-brown-light hover:bg-ptr-cream hover:text-ptr-brown;
+
+  /* Focus-visible ring for keyboard users on custom controls. */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/40 focus-visible:ring-offset-1;
   }
 }
 
@@ -82,38 +95,37 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: scale(1); }
 }
-
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
+  from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes slideRight {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
-
 .animate-slide-down {
-  animation: slideDown 0.15s ease-out;
+  animation: slideDown 0.12s ease-out;
 }
 
-/* Scrollbar styling */
+/* Thin, neutral scrollbars. */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #F5F1E8;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D1C9BA;
-  border-radius: 3px;
+  background: #d2d0ce;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #B5AA98;
+  background: #b6b3b0;
+  background-clip: content-box;
 }

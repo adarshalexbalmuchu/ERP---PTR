@@ -27,8 +27,8 @@ function passwordProblem(pw: string): string | null {
 function SectionCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="card p-5 space-y-4">
-      <h2 className="flex items-center gap-2 text-sm font-bold text-ptr-brown uppercase tracking-[0.06em]">
-        {icon}
+      <h2 className="flex items-center gap-2 text-13 font-semibold text-n-90">
+        <span className="text-n-70">{icon}</span>
         {title}
       </h2>
       {children}
@@ -123,14 +123,14 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
-      <div className="border-b border-ptr-brown/10 pb-4">
-        <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">My Profile</h1>
-        <p className="text-[13px] text-ptr-brown-light mt-1">Manage your contact number and password</p>
+    <div className="px-4 sm:px-6 py-5 max-w-2xl mx-auto space-y-5">
+      <div>
+        <h1 className="text-xl font-semibold text-n-100">My profile</h1>
+        <p className="text-13 text-n-80 mt-0.5">Manage your contact number and password</p>
       </div>
 
       {/* Identity — read-only. Service record details are managed centrally. */}
-      <SectionCard title="Service Details" icon={<ShieldCheck className="w-4 h-4" />}>
+      <SectionCard title="Service details" icon={<ShieldCheck className="w-4 h-4" />}>
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-ptr-green/10 flex items-center justify-center text-lg font-bold text-ptr-green flex-shrink-0">
             {currentUser.avatarInitials}
@@ -163,7 +163,7 @@ export default function Profile() {
       </SectionCard>
 
       {/* Phone — the one detail staff keep current themselves */}
-      <SectionCard title="Contact Number" icon={<Phone className="w-4 h-4" />}>
+      <SectionCard title="Contact number" icon={<Phone className="w-4 h-4" />}>
         <form onSubmit={savePhone} className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5" htmlFor="profile-phone">
@@ -182,7 +182,7 @@ export default function Profile() {
           </div>
           <div className="flex items-center gap-3">
             <button type="submit" className="btn-primary" disabled={phoneStatus === 'saving'}>
-              {phoneStatus === 'saving' ? 'Saving…' : 'Save Number'}
+              {phoneStatus === 'saving' ? 'Saving…' : 'Save number'}
             </button>
             {phoneStatus === 'saved' && (
               <span className="flex items-center gap-1 text-sm text-ptr-green font-medium">
@@ -242,7 +242,7 @@ export default function Profile() {
       </SectionCard>
 
       {/* Password */}
-      <SectionCard title="Change Password" icon={<KeyRound className="w-4 h-4" />}>
+      <SectionCard title="Change password" icon={<KeyRound className="w-4 h-4" />}>
         <form onSubmit={changePassword} className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-ptr-brown mb-1.5" htmlFor="pw-current">
@@ -302,7 +302,7 @@ export default function Profile() {
           {pwStatus === 'error' && <p className="text-xs text-red-600">{pwError}</p>}
           <div className="flex items-center gap-3">
             <button type="submit" className="btn-primary" disabled={pwStatus === 'saving'}>
-              {pwStatus === 'saving' ? 'Updating…' : 'Update Password'}
+              {pwStatus === 'saving' ? 'Updating…' : 'Update password'}
             </button>
             {pwStatus === 'saved' && (
               <span className="flex items-center gap-1 text-sm text-ptr-green font-medium">

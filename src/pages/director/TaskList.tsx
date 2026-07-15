@@ -1,21 +1,57 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { uploadTaskAttachment } from '../../lib/attachments';
-import { isOverdue } from '../../utils/overdue';
-import { groupTasksByBatch } from '../../utils/groupTasksByBatch';
-import { formatDate } from '../../utils/formatters';
-import StatusBadge from '../../components/StatusBadge';
-import PriorityBadge from '../../components/PriorityBadge';
 import TaskForm from '../../components/TaskForm';
+import TaskTable from '../../components/TaskTable';
 import EmptyState from '../../components/EmptyState';
-import Select from '../../components/Select';
-import type { Task, TaskStatus, TaskPriority } from '../../types';
+import { CommandBar, ContextPanel } from '../../components/layout/Slots';
+import { Page, PageHeading } from '../../components/layout/Page';
+import type { Task } from '../../types';
 import { isFieldRole } from '../../types';
+
+const STATUS_OPTS: { value: string; label: string }[] = [
+  { value: '', label: 'All statuses' },
+  { value: 'NotStarted', label: 'Not started' },
+  { value: 'InProgress', label: 'In progress' },
+  { value: 'Completed', label: 'Completed' },
+  { value: 'Archived', label: 'Archived' },
+];
+const PRIORITY_OPTS: { value: string; label: string }[] = [
+  { value: '', label: 'All priorities' },
+  { value: 'Critical', label: 'Critical' },
+  { value: 'High', label: 'High' },
+  { value: 'Medium', label: 'Medium' },
+  { value: 'Low', label: 'Low' },
+];
+
+function FilterGroup({ label, options, value, onChange }: { label: string; options: { value: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="mb-4">
+      <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">{label}</div>
+      <div className="space-y-0.5">
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value || 'all'}
+              onClick={() => onChange(o.value)}
+              className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${
+                active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function DirectorTaskList() {
   const navigate = useNavigate();
@@ -24,12 +60,23 @@ export default function DirectorTaskList() {
   const { users } = useUsers();
   const { ranges } = useRanges();
 
+  const [params, setParams] = useSearchParams();
+  const search = params.get('q') ?? '';
+  const filterStatus = params.get('status') ?? '';
+  const filterPriority = params.get('priority') ?? '';
+  const filterRange = params.get('range') ?? '';
+
+  const setParam = (key: string, val: string) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (val) next.set(key, val); else next.delete(key);
+      return next;
+    }, { replace: true });
+  };
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [search, setSearch] = useState('');
-  const [filterRange, setFilterRange] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filtered = tasks.filter((t) => {
     if (filterRange && t.rangeId !== filterRange) return false;
@@ -44,137 +91,94 @@ export default function DirectorTaskList() {
     return true;
   });
 
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-    setFormOpen(true);
-  };
+  const selectedTasks = filtered.filter((t) => selectedIds.includes(t.id));
+  const hasFilters = !!(search || filterStatus || filterPriority || filterRange);
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this task? This cannot be undone.')) {
-      deleteTask.mutate(id);
+  const handleEdit = (task: Task) => { setEditingTask(task); setFormOpen(true); };
+  const handleDelete = (task: Task) => {
+    if (confirm(`Delete "${task.title}"? This cannot be undone.`)) deleteTask.mutate(task.id);
+  };
+  const handleBulkDelete = () => {
+    if (selectedTasks.length === 0) return;
+    if (confirm(`Delete ${selectedTasks.length} selected task${selectedTasks.length > 1 ? 's' : ''}? This cannot be undone.`)) {
+      selectedTasks.forEach((t) => deleteTask.mutate(t.id));
+      setSelectedIds([]);
     }
   };
-
-  const groups = groupTasksByBatch(filtered);
+  const clearFilters = () => setParams({}, { replace: true });
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
-        <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">All Tasks</h1>
-        <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary flex-shrink-0">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">New Task</span>
+    <>
+      <CommandBar>
+        <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />New task</button>
+        <button
+          onClick={() => selectedTasks.length === 1 && handleEdit(selectedTasks[0])}
+          disabled={selectedTasks.length !== 1}
+          className="btn-subtle"
+        >
+          <Pencil className="w-4 h-4" />Edit
         </button>
-      </div>
+        <button onClick={handleBulkDelete} disabled={selectedTasks.length === 0} className="btn-subtle">
+          <Trash2 className="w-4 h-4" />Delete
+        </button>
+        {selectedIds.length > 0 && (
+          <>
+            <span className="w-px h-5 bg-n-30 mx-1" />
+            <span className="text-13 text-n-80 whitespace-nowrap">{selectedIds.length} selected</span>
+            <button onClick={() => setSelectedIds([])} className="btn-subtle">Clear</button>
+          </>
+        )}
+      </CommandBar>
 
-      {/* Filters */}
-      <div className="card p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="col-span-2 lg:col-span-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ptr-brown-light" />
-          <input
-            type="text"
-            placeholder="Search title or assignee…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="input-field pl-9"
-          />
+      <ContextPanel>
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-n-70" />
+            <input
+              value={search}
+              onChange={(e) => setParam('q', e.target.value)}
+              placeholder="Search tasks…"
+              className="input-field pl-8 !min-h-[34px] text-13"
+              style={{ fontSize: '16px' }}
+            />
+          </div>
         </div>
-        <Select value={filterRange} onChange={(e) => setFilterRange(e.target.value)} className="input-field select-field">
-          <option value="">All Ranges</option>
-          {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </Select>
-        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field select-field">
-          <option value="">All Statuses</option>
-          {(['NotStarted', 'InProgress', 'Completed', 'Archived'] as TaskStatus[]).map((s) => (
-            <option key={s} value={s}>{s === 'NotStarted' ? 'Not Started' : s === 'InProgress' ? 'In Progress' : s}</option>
-          ))}
-        </Select>
-        <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="input-field select-field">
-          <option value="">All Priorities</option>
-          {(['Critical', 'High', 'Medium', 'Low'] as TaskPriority[]).map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </Select>
-      </div>
+        <FilterGroup label="Status" options={STATUS_OPTS} value={filterStatus} onChange={(v) => setParam('status', v)} />
+        <FilterGroup label="Priority" options={PRIORITY_OPTS} value={filterPriority} onChange={(v) => setParam('priority', v)} />
+        <FilterGroup
+          label="Range"
+          options={[{ value: '', label: 'All ranges' }, ...ranges.map((r) => ({ value: r.id, label: r.name }))]}
+          value={filterRange}
+          onChange={(v) => setParam('range', v)}
+        />
+      </ContextPanel>
 
-      {/* Count */}
-      <p className="text-xs text-ptr-brown-light">{filtered.length} task{filtered.length !== 1 ? 's' : ''} found</p>
-
-      {/* List */}
-      {filtered.length === 0 ? (
-        <EmptyState title="No tasks found" description="Try adjusting your filters or create a new task." />
-      ) : (
-        <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
-          {groups.map((group) => {
-            const first = group.tasks[0];
-            const anyOverdue = group.tasks.some(isOverdue);
-            return (
-              <div key={group.key} className="p-3 hover:bg-ptr-cream/50 transition-colors">
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="text-sm font-medium text-ptr-brown truncate">{first.title}</span>
-                  {group.tasks.length > 1 && (
-                    <span className="text-xs bg-ptr-green/10 text-ptr-green rounded-full px-2 py-0.5 font-medium flex-shrink-0">
-                      {group.tasks.length} assignees
-                    </span>
-                  )}
-                  {anyOverdue && (
-                    <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 font-medium flex-shrink-0">
-                      Overdue
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  {group.tasks.map((task) => {
-                    const assignee = users.find((u) => u.id === task.assigneeId);
-                    const range = ranges.find((r) => r.id === task.rangeId);
-                    const overdue = isOverdue(task);
-                    return (
-                      <div key={task.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-white/70 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap text-xs">
-                            <span className="font-medium text-ptr-brown">{assignee?.name ?? '—'}</span>
-                            <span className="text-ptr-brown-light">·</span>
-                            <span className="text-ptr-brown-light">{range?.name ?? '—'}</span>
-                            <span className="text-ptr-brown-light">·</span>
-                            <span className={overdue ? 'text-red-600 font-medium' : 'text-ptr-brown-light'}>{formatDate(task.dueDate)}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <PriorityBadge priority={task.priority} size="sm" />
-                          <StatusBadge status={task.status} size="sm" />
-                          <div className="flex items-center gap-1.5 ml-1">
-                            <button
-                              onClick={() => navigate(`/director/tasks/${task.id}`)}
-                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                              title="View"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(task)}
-                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-ptr-cream text-ptr-brown-light hover:text-ptr-brown transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(task.id)}
-                              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-red-50 text-ptr-brown-light hover:text-red-600 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+      <Page className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <PageHeading title="Task registry" meta={`${filtered.length} task${filtered.length !== 1 ? 's' : ''}${hasFilters ? ' · filtered' : ''}`} />
+          {hasFilters && (
+            <button onClick={clearFilters} className="btn-subtle flex-shrink-0"><X className="w-3.5 h-3.5" />Clear filters</button>
+          )}
         </div>
-      )}
+
+        {filtered.length === 0 ? (
+          <EmptyState title="No tasks found" description="Try adjusting your filters or create a new task." />
+        ) : (
+          <div className="card overflow-hidden">
+            <TaskTable
+              tasks={filtered}
+              users={users}
+              ranges={ranges}
+              onOpen={(t) => navigate(`/director/tasks/${t.id}`)}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              selectable
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+            />
+          </div>
+        )}
+      </Page>
 
       {formOpen && currentUser && (
         <TaskForm
@@ -184,16 +188,11 @@ export default function DirectorTaskList() {
             if (editingTask) {
               updateTask.mutate({ id: editingTask.id, ...data });
             } else {
-              // Multiple assignees create one independent task per person —
-              // the same attachments are uploaded to each of their tasks.
               const rows = await createTask.mutateAsync(data);
               for (const row of rows) {
                 for (const file of files) {
-                  try {
-                    await uploadTaskAttachment(row.id, currentUser.id, file);
-                  } catch (err) {
-                    alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
-                  }
+                  try { await uploadTaskAttachment(row.id, currentUser.id, file); }
+                  catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
                 }
               }
             }
@@ -206,6 +205,6 @@ export default function DirectorTaskList() {
           ranges={ranges}
         />
       )}
-    </div>
+    </>
   );
 }

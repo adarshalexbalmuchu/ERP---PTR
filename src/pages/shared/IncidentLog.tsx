@@ -7,6 +7,8 @@ import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import Select from '../../components/Select';
+import { CommandBar, ContextPanel } from '../../components/layout/Slots';
+import { Page, PageHeading } from '../../components/layout/Page';
 import { formatDateTime } from '../../utils/formatters';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
 import { INCIDENT_CATEGORIES, formatIncidentType, isOtherIncidentType } from '../../lib/incidentTypes';
@@ -295,32 +297,38 @@ export default function IncidentLog() {
   });
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-end justify-between gap-4 border-b border-ptr-brown/10 pb-4">
-        <div>
-          <h1 className="text-lg md:text-xl font-bold text-ptr-brown uppercase tracking-[0.06em]">Incident Log</h1>
-          <p className="text-[13px] text-ptr-brown-light mt-1">Human-wildlife conflict &amp; field observations</p>
-        </div>
-        <button onClick={() => setFormOpen(true)} className="btn-primary flex-shrink-0">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Report Incident</span>
-        </button>
-      </div>
+    <>
+      <CommandBar>
+        <button onClick={() => setFormOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Report incident</button>
+      </CommandBar>
 
-      <div className="card p-4 grid grid-cols-2 gap-3">
-        <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field">
-          <option value="">All Types</option>
-          {INCIDENT_CATEGORIES.map((group) => (
-            <optgroup key={group.id} label={group.label}>
-              {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
-            </optgroup>
-          ))}
-        </Select>
-        <Select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} className="input-field select-field">
-          <option value="">All Severities</option>
-          {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </Select>
-      </div>
+      <ContextPanel>
+        <div className="mb-4">
+          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Type</div>
+          <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field !min-h-[34px] text-13">
+            <option value="">All types</option>
+            {INCIDENT_CATEGORIES.map((group) => (
+              <optgroup key={group.id} label={group.label}>
+                {group.options.map((o) => <option key={o.type} value={o.type}>{o.label}</option>)}
+              </optgroup>
+            ))}
+          </Select>
+        </div>
+        <div className="mb-4">
+          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Severity</div>
+          <div className="space-y-0.5">
+            {[{ value: '', label: 'All severities' }, ...SEVERITIES.map((s) => ({ value: s, label: s }))].map((o) => {
+              const active = o.value === filterSeverity;
+              return (
+                <button key={o.value || 'all'} onClick={() => setFilterSeverity(o.value)} className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'}`}>{o.label}</button>
+              );
+            })}
+          </div>
+        </div>
+      </ContextPanel>
+
+      <Page className="space-y-4">
+        <PageHeading title="Incident reports" meta="Human–wildlife conflict & field observations" />
 
       {!isLoading && filtered.length === 0 ? (
         <EmptyState
@@ -329,7 +337,7 @@ export default function IncidentLog() {
           description="Report a human-wildlife conflict or field observation to get started."
         />
       ) : (
-        <div className="card divide-y divide-ptr-cream-dark overflow-hidden">
+        <div className="card divide-y divide-n-20 overflow-hidden">
           {filtered.map((incident) => {
             const range = ranges.find((r) => r.id === incident.rangeId);
             const area = areas.find((a) => a.id === incident.areaId);
@@ -403,6 +411,7 @@ export default function IncidentLog() {
           })}
         </div>
       )}
+      </Page>
 
       {formOpen && currentUser && (
         <ReportForm
@@ -413,6 +422,6 @@ export default function IncidentLog() {
           allowedRangeIds={hasNoFixedRange ? undefined : rangeIds}
         />
       )}
-    </div>
+    </>
   );
 }
