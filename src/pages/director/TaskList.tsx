@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Download, Search, X, ChevronDown, MoreHorizontal, UserCog, CircleDashed, CalendarClock,
   Inbox, UserCheck, PenLine, Circle, Clock, CheckCircle2, MapPin,
@@ -8,6 +9,7 @@ import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import { exportCsv } from '../../utils/exportCsv';
@@ -15,6 +17,7 @@ import { uploadTaskAttachment } from '../../lib/attachments';
 import TaskForm from '../../components/TaskForm';
 import TaskTable from '../../components/TaskTable';
 import TaskDetailPanel from '../../components/TaskDetailPanel';
+import MobileTaskList from '../mobile/MobileTaskList';
 import { Menu, MenuItem, MenuLabel, MenuDivider, MenuPanel } from '../../components/ui/Menu';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { PanelSection, PanelItem } from '../../components/layout/PanelNav';
@@ -31,10 +34,13 @@ const STATUS_SET: { value: TaskStatus; label: string }[] = [
 
 export default function DirectorTaskList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
   const { tasks, isLoading: tasksLoading, createTask, updateTask, deleteTask } = useTasks();
   const { users } = useUsers();
-  const { ranges } = useRanges();
+  const { ranges, areas } = useRanges();
+  const [mobileFormOpen, setMobileFormOpen] = useState(false);
 
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
@@ -110,6 +116,44 @@ export default function DirectorTaskList() {
   };
 
   const assignableUsers = users.filter((u) => isFieldRole(u.role));
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileTaskList
+          title="Task registry"
+          tasks={tasks}
+          users={users}
+          ranges={ranges}
+          areas={areas}
+          loading={tasksLoading && tasks.length === 0}
+          onOpen={(t) => navigate(`/director/tasks/${t.id}`)}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+          onNewTask={() => setMobileFormOpen(true)}
+        />
+        {mobileFormOpen && currentUser && (
+          <TaskForm
+            isOpen={mobileFormOpen}
+            onClose={() => setMobileFormOpen(false)}
+            onSave={async (data, files) => {
+              const rows = await createTask.mutateAsync(data);
+              for (const row of rows) {
+                for (const file of files) {
+                  try { await uploadTaskAttachment(row.id, currentUser.id, file); }
+                  catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                }
+              }
+              setMobileFormOpen(false);
+            }}
+            assignableUsers={assignableUsers}
+            initialData={null}
+            currentUserId={currentUser.id}
+            ranges={ranges}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>

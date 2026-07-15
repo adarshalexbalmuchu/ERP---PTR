@@ -23,6 +23,7 @@ const MapView = lazy(() => import('./pages/shared/MapView'));
 const AuditLog = lazy(() => import('./pages/shared/AuditLog'));
 const Profile = lazy(() => import('./pages/shared/Profile'));
 const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
+const GuardTaskList = lazy(() => import('./pages/guard/TaskList'));
 
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
@@ -180,6 +181,7 @@ export default function App() {
               }
             >
               <Route index element={<GuardMyTasks />} />
+              <Route path="tasks" element={<GuardTaskList />} />
               <Route path="tasks/:id" element={<TaskDetailPage />} />
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />

@@ -28,6 +28,8 @@ import AttachmentList from '../../components/AttachmentList';
 import TaskForm from '../../components/TaskForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { CommandBar } from '../../components/layout/Slots';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import MobileTaskDetail from '../mobile/MobileTaskDetail';
 import { isFieldRole } from '../../types';
 
 function ProgressBar({ value }: { value: number }) {
@@ -75,6 +77,7 @@ export default function TaskDetailPage() {
   const navigate = useNavigate();
 
   const currentUser = useStore((s) => s.currentUser);
+  const isMobile = useIsMobile();
   const {
     task,
     isLoading,
@@ -83,6 +86,7 @@ export default function TaskDetailPage() {
     startTask,
     completeTask,
     archiveTask,
+    reopenTask,
     requestChanges,
     addComment,
     addTaskUpdate,
@@ -117,6 +121,26 @@ export default function TaskDetailPage() {
         <p className="text-ptr-brown font-medium mb-2">Task not found</p>
         <button onClick={() => navigate(back)} className="btn-secondary text-sm">← Back</button>
       </div>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <MobileTaskDetail
+        task={task}
+        currentUser={currentUser}
+        users={users}
+        ranges={ranges}
+        areas={areas}
+        startTask={startTask}
+        completeTask={completeTask}
+        archiveTask={archiveTask}
+        reopenTask={reopenTask}
+        requestChanges={requestChanges}
+        addComment={addComment}
+        addTaskUpdate={addTaskUpdate}
+        uploadAttachment={uploadAttachment}
+      />
     );
   }
 

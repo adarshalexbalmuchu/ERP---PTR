@@ -19,9 +19,11 @@ import {
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocationSharing } from '../hooks/useLiveLocation';
+import { useIsMobile } from '../hooks/useIsMobile';
 import NotificationBell from './NotificationBell';
 import GlobalSearch from './GlobalSearch';
 import Footer from './Footer';
+import MobileShell from './mobile/MobileShell';
 import { SlotProvider, CommandBarSlot, ContextPanelSlot } from './layout/Slots';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 
@@ -441,8 +443,22 @@ function GuardLayout() {
   );
 }
 
+function roleBase(role: string | undefined): string {
+  if (role === 'director') return '/director';
+  if (role === 'range_officer') return '/officer';
+  return '/guard';
+}
+
 export default function Layout() {
   const currentUser = useStore((s) => s.currentUser);
+  const isMobile = useIsMobile();
+
+  // Below 768px every role shares the same bottom-nav shell (Home / Tasks /
+  // Incidents / Map / More) — the desktop icon-rail/drawer chrome below is
+  // untouched and only ever mounts at >=768px.
+  if (isMobile) {
+    return <MobileShell base={roleBase(currentUser?.role)} role={currentUser?.role ?? 'guard'} />;
+  }
 
   if (currentUser?.role === 'director') {
     return (

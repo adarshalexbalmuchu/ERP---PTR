@@ -27,34 +27,41 @@ export function SlotProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function useSlots() {
-  const ctx = useContext(SlotContext);
-  if (!ctx) throw new Error('Slot components must render inside <SlotProvider>');
-  return ctx;
+// Fails soft (returns null) rather than throwing when there's no provider —
+// a page written for the desktop admin shell (which always wraps
+// SlotProvider) can still mount under the mobile shell (which doesn't; it
+// has no command bar/contextual panel to portal into) without crashing the
+// whole route. Pages should still add a proper mobile branch where the
+// slot content actually matters, but a missed one degrades gracefully
+// instead of white-screening.
+function useSlots(): SlotValue | null {
+  return useContext(SlotContext);
 }
 
 /** Registers the DOM node the command bar renders into (used by the shell). */
 export function CommandBarSlot({ className }: { className?: string }) {
-  const { setCommandEl } = useSlots();
-  return <div ref={setCommandEl} className={className} />;
+  const ctx = useSlots();
+  if (!ctx) return null;
+  return <div ref={ctx.setCommandEl} className={className} />;
 }
 
 /** Registers the DOM node the contextual panel renders into (used by the shell). */
 export function ContextPanelSlot({ className }: { className?: string }) {
-  const { setPanelEl } = useSlots();
-  return <div ref={setPanelEl} className={className} />;
+  const ctx = useSlots();
+  if (!ctx) return null;
+  return <div ref={ctx.setPanelEl} className={className} />;
 }
 
 /** Page-side: portal action buttons into the workspace command bar. */
 export function CommandBar({ children }: { children: ReactNode }) {
-  const { commandEl } = useSlots();
-  if (!commandEl) return null;
-  return createPortal(children, commandEl);
+  const ctx = useSlots();
+  if (!ctx?.commandEl) return null;
+  return createPortal(children, ctx.commandEl);
 }
 
 /** Page-side: portal views/filters into the contextual navigation panel. */
 export function ContextPanel({ children }: { children: ReactNode }) {
-  const { panelEl } = useSlots();
-  if (!panelEl) return null;
-  return createPortal(children, panelEl);
+  const ctx = useSlots();
+  if (!ctx?.panelEl) return null;
+  return createPortal(children, ctx.panelEl);
 }

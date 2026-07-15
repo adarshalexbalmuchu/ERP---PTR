@@ -22,6 +22,8 @@ import { Menu, MenuItem } from '../../components/ui/Menu';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { PanelSection, PanelItem } from '../../components/layout/PanelNav';
 import { Page, PageHeading, SectionTitle } from '../../components/layout/Page';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import AdminHome from '../mobile/AdminHome';
 import type { Task } from '../../types';
 import { isFieldRole } from '../../types';
 
@@ -76,6 +78,7 @@ function healthOf(total: number, overdue: number, active: number): { label: stri
 export default function DirectorDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
   const { users } = useUsers();
   const { ranges } = useRanges();
@@ -148,6 +151,8 @@ export default function DirectorDashboard() {
     Range: r.rangeName, Completed: r.completed, Active: r.inProgressCount, Overdue: r.overdue, Total: r.total,
     Progress: `${r.total > 0 ? Math.round((r.completed / r.total) * 100) : 0}%`,
   })));
+
+  if (isMobile) return <AdminHome />;
 
   return (
     <>

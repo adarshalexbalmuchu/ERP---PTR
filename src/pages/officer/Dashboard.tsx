@@ -18,6 +18,8 @@ import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { Page, PageHeading, SectionTitle } from '../../components/layout/Page';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import OfficerHome from '../mobile/OfficerHome';
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -37,6 +39,7 @@ function Metric({ label, value, sub, tone = 'default', onClick }: { label: strin
 
 export default function OfficerDashboard() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
   const { tasks, createTask } = useTasks();
   const { users } = useUsers();
@@ -81,6 +84,8 @@ export default function OfficerDashboard() {
       })}
     </Select>
   );
+
+  if (isMobile) return <OfficerHome />;
 
   return (
     <>

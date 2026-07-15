@@ -6,6 +6,14 @@
   * {
     box-sizing: border-box;
   }
+  :root {
+    /* Fixed, explicit height for the mobile bottom nav — MobileShell sets
+       this same value on both the nav's own height and the main content
+       area's bottom padding, so the two can never drift out of sync and
+       leave <main>'s normal-flow box overlapping the fixed nav's hit-test
+       region on short pages. */
+    --ptr-bottom-nav-h: 64px;
+  }
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -134,6 +142,13 @@
 }
 .animate-drawer-right {
   animation: slideLeftIn 0.16s ease-out;
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-sheet-up {
+  animation: sheetUp 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Thin, neutral scrollbars. */

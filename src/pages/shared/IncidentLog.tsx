@@ -14,6 +14,8 @@ import TaskForm from '../../components/TaskForm';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { PanelSection, PanelItem } from '../../components/layout/PanelNav';
 import { Page, PageHeading } from '../../components/layout/Page';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import MobileIncidentList from '../mobile/MobileIncidentList';
 import { formatDateTime } from '../../utils/formatters';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
@@ -281,6 +283,7 @@ const RESTRICTED_TIGER_CELL_USER_ID = '237e1f9b-cf77-4b83-ae43-7641af75f67f';
 
 export default function IncidentLog() {
   const currentUser = useStore((s) => s.currentUser);
+  const isMobile = useIsMobile();
   const { incidents, isLoading, deleteIncident, removePhoto } = useIncidents();
   const { ranges, areas } = useRanges();
   const { createTask } = useTasks();
@@ -309,6 +312,19 @@ export default function IncidentLog() {
       deleteIncident.mutate(id);
     }
   };
+
+  if (isMobile) {
+    if (!currentUser) return null;
+    return (
+      <MobileIncidentList
+        currentUserId={currentUser.id}
+        defaultRangeId={hasNoFixedRange ? '' : activeRangeId}
+        lockRange={lockRange && !!activeRangeId}
+        allowedRangeIds={hasNoFixedRange ? undefined : rangeIds}
+        autoOpenWizard={params.get('report') === '1'}
+      />
+    );
+  }
 
   const isHigh = (s: string) => s === 'High' || s === 'Critical';
   const filtered = incidents.filter((i) => {

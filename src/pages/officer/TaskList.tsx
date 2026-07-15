@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Download, Search, X, ChevronDown, UserCog, CircleDashed, CalendarClock,
   Inbox, UserCheck, PenLine, Circle, Clock, CheckCircle2, MapPin,
@@ -9,6 +10,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import { exportCsv } from '../../utils/exportCsv';
@@ -16,6 +18,7 @@ import { uploadTaskAttachment } from '../../lib/attachments';
 import TaskForm from '../../components/TaskForm';
 import TaskTable from '../../components/TaskTable';
 import TaskDetailPanel from '../../components/TaskDetailPanel';
+import MobileTaskList from '../mobile/MobileTaskList';
 import Select from '../../components/Select';
 import { Menu, MenuItem, MenuLabel, MenuPanel } from '../../components/ui/Menu';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
@@ -33,11 +36,14 @@ const STATUS_SET: { value: TaskStatus; label: string }[] = [
 
 export default function OfficerTaskList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
   const { tasks, isLoading: tasksLoading, createTask, updateTask } = useTasks();
   const { users } = useUsers();
   const { ranges, areas } = useRanges();
   const { activeRangeId: myRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
+  const [mobileFormOpen, setMobileFormOpen] = useState(false);
 
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
@@ -100,6 +106,45 @@ export default function OfficerTaskList() {
   const doExport = () => exportCsv(`ptr-tasks-${new Date().toISOString().slice(0, 10)}.csv`, filtered.map((t) => ({
     Task: t.title, Assignee: users.find((u) => u.id === t.assigneeId)?.name ?? '', Priority: t.priority, Status: t.status, Due: formatDate(t.dueDate), Progress: `${t.completionPercentage}%`,
   })));
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileTaskList
+          title="Task registry"
+          tasks={myTasks}
+          users={users}
+          ranges={ranges}
+          areas={myAreas}
+          showRangeFilter={false}
+          loading={tasksLoading && tasks.length === 0}
+          onOpen={(t) => navigate(`/officer/tasks/${t.id}`)}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+          onNewTask={() => setMobileFormOpen(true)}
+        />
+        {mobileFormOpen && currentUser && (
+          <TaskForm
+            isOpen={mobileFormOpen}
+            onClose={() => setMobileFormOpen(false)}
+            onSave={async (data, files) => {
+              const rows = await createTask.mutateAsync(data);
+              for (const row of rows) {
+                for (const file of files) {
+                  try { await uploadTaskAttachment(row.id, currentUser.id, file); }
+                  catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                }
+              }
+              setMobileFormOpen(false);
+            }}
+            assignableUsers={myGuards}
+            initialData={null}
+            currentUserId={currentUser.id}
+            defaultRangeId={myRangeId}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>

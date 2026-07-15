@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate, formatDueRelative } from '../../utils/formatters';
 import StatusBadge from '../../components/StatusBadge';
 import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
+import FieldHome from '../mobile/FieldHome';
 import type { Task } from '../../types';
 
 type Tab = 'active' | 'overdue' | 'completed' | 'all';
@@ -63,8 +65,11 @@ export default function GuardMyTasks() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
   const { tasks } = useTasks();
+  const isMobile = useIsMobile();
 
   const [tab, setTab] = useState<Tab>('active');
+
+  if (isMobile) return <FieldHome />;
 
   const myTasks = tasks.filter((t) => t.assigneeId === currentUser?.id || t.coAssigneeIds.includes(currentUser?.id ?? ''));
 

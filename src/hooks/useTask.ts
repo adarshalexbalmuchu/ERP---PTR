@@ -219,6 +219,38 @@ export function useTask(id: string | undefined) {
     onSuccess: invalidate,
   });
 
+  // Re-opens a closed (Archived) task — e.g. the reviewer realizes more
+  // field work is actually needed after approving it. Puts it back exactly
+  // where "submit for review" left it (InProgress), a transition the schema
+  // already allows (requestChanges does the same Completed -> InProgress
+  // move); no new status value or migration required.
+  const reopenTask = useMutation({
+    mutationFn: async () => {
+      if (!id || !task || !currentUser) throw new Error('No task id');
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'InProgress' })
+        .eq('id', id);
+      if (error) throw error;
+      const recipients = [...new Set([task.assigneeId, ...task.coAssigneeIds])]
+        .filter((userId) => userId !== currentUser.id);
+      if (recipients.length > 0) {
+        const { error: notifyErr } = await supabase.from('notifications').insert(
+          recipients.map((userId) => ({
+            user_id: userId,
+            type: 'task_updated' as NotificationType,
+            title: 'Task Reopened',
+            message: `${currentUser.name} reopened "${task.title}" for further work`,
+            task_id: id,
+          })),
+        );
+        if (notifyErr) console.error('notification insert failed', notifyErr);
+      }
+      await logTaskAction(task, currentUser.id, 'status', 'Reopened');
+    },
+    onSuccess: invalidate,
+  });
+
   const requestChanges = useMutation({
     mutationFn: async (note: string) => {
       if (!id || !currentUser || !task) throw new Error('No task id');
@@ -335,6 +367,7 @@ export function useTask(id: string | undefined) {
     startTask,
     completeTask,
     archiveTask,
+    reopenTask,
     requestChanges,
     addComment,
     addTaskUpdate,

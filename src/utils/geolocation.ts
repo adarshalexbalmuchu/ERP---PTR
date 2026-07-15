@@ -1,6 +1,8 @@
 export interface Coords {
   lat: number;
   lng: number;
+  /** Horizontal accuracy radius in metres, when the device reports one. */
+  accuracy?: number;
 }
 
 // Distinguishes *why* a capture failed so callers can tell a user "location
@@ -29,7 +31,7 @@ export function getCurrentPosition(timeoutMs = 15_000): Promise<GeolocationResul
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ coords: { lat: pos.coords.latitude, lng: pos.coords.longitude }, failureReason: null }),
+      (pos) => resolve({ coords: { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }, failureReason: null }),
       (err) => {
         const failureReason: GeolocationFailureReason =
           err.code === err.PERMISSION_DENIED ? 'permission_denied'

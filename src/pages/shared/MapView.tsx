@@ -10,6 +10,8 @@ import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
 import { formatIncidentType } from '../../lib/incidentTypes';
 import type { IncidentSeverity } from '../../types';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import MobileMapView from '../mobile/MobileMapView';
 
 // Approximate center of Palamau Tiger Reserve, Jharkhand.
 const PTR_CENTER: [number, number] = [23.87, 84.19];
@@ -55,6 +57,7 @@ const SEVERITY_COLOR: Record<IncidentSeverity, string> = {
 };
 
 export default function MapView() {
+  const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
   const canSeeLiveLocations = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
   const { incidents, patrolPoints, loading } = useMapPoints();
@@ -116,6 +119,8 @@ export default function MapView() {
       mapRef.current?.remove();
     };
   }, []);
+
+  if (isMobile) return <MobileMapView />;
 
   return (
     <div className="px-4 sm:px-6 py-5 mx-auto w-full max-w-[1440px] space-y-4">
