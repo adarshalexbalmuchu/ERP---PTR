@@ -13,6 +13,9 @@ interface Props {
   initialData?: Task | null;
   currentUserId: string;
   defaultRangeId?: string;
+  /** Seeds title/description/priority on a fresh (non-edit) form — used for
+      "Create follow-up task" from an incident. Ignored when initialData is set. */
+  prefill?: { title?: string; description?: string; priority?: TaskPriority };
   /**
    * Directors assign tasks to any staff reserve-wide, so there's no range
    * picker in this form — a task's range is silently resolved (from the
@@ -55,6 +58,7 @@ export default function TaskForm({
   initialData,
   currentUserId,
   defaultRangeId,
+  prefill,
   ranges = [],
   onUploadAttachment,
   onRemoveAttachment,
@@ -74,20 +78,21 @@ export default function TaskForm({
 
   useEffect(() => {
     if (isOpen) {
-      setTitle(initialData?.title ?? '');
-      setDescription(initialData?.description ?? '');
+      setTitle(initialData?.title ?? prefill?.title ?? '');
+      setDescription(initialData?.description ?? prefill?.description ?? '');
       setAssigneeIds(
         initialData ? [initialData.assigneeId, ...initialData.coAssigneeIds] : [],
       );
       setAssigneeSearch('');
       setAssigneeDropdownOpen(false);
-      setPriority(initialData?.priority ?? 'Medium');
+      setPriority(initialData?.priority ?? prefill?.priority ?? 'Medium');
       setCategory(initialData?.category ?? 'Patrol');
       setCategoryOther(initialData?.categoryOther ?? '');
       setDueDate(initialData?.dueDate ? initialData.dueDate.substring(0, 10) : '');
       setErrors({});
       setPendingFiles([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialData, defaultRangeId]);
 
   useEffect(() => {

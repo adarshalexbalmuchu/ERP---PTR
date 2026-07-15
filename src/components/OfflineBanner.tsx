@@ -28,8 +28,9 @@ export default function OfflineBanner() {
 
   return (
     <div
-      className={`px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 ${
-        isOnline ? 'bg-amber-500 text-white' : 'bg-red-600 text-white'
+      role="status"
+      className={`px-4 py-1.5 text-13 font-medium flex items-center justify-center gap-2 ${
+        isOnline ? 'bg-signal-amber text-white' : 'bg-signal-red text-white'
       }`}
     >
       {isOnline ? (
@@ -40,7 +41,7 @@ export default function OfflineBanner() {
       ) : (
         <>
           <WifiOff className="w-3.5 h-3.5" />
-          You're offline — {pendingCount > 0 ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} will sync when reconnected` : 'changes will be saved and synced automatically'}
+          Offline — {pendingCount > 0 ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} queued, will sync when reconnected` : 'changes are saved locally and will sync automatically'}
         </>
       )}
     </div>

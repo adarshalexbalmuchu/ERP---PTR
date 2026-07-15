@@ -1,19 +1,31 @@
 import { useState, useEffect, useMemo, type ChangeEvent, type FormEvent } from 'react';
-import { AlertTriangle, Plus, X, MapPin, Trash2, Camera, ImagePlus } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { AlertTriangle, Plus, X, MapPin, Trash2, Camera, ImagePlus, ClipboardPlus, Search } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useIncidents } from '../../hooks/useIncidents';
 import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
+import { useTasks } from '../../hooks/useTasks';
+import { useUsers } from '../../hooks/useUsers';
 import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import Select from '../../components/Select';
+import TaskForm from '../../components/TaskForm';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { PanelSection, PanelItem } from '../../components/layout/PanelNav';
 import { Page, PageHeading } from '../../components/layout/Page';
 import { formatDateTime } from '../../utils/formatters';
+import { uploadTaskAttachment } from '../../lib/attachments';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
 import { INCIDENT_CATEGORIES, formatIncidentType, isOtherIncidentType } from '../../lib/incidentTypes';
-import type { IncidentType, IncidentSeverity } from '../../types';
+import type { IncidentType, IncidentSeverity, Incident, TaskPriority } from '../../types';
+import { isFieldRole } from '../../types';
+
+// Incidents don't carry a task priority — map the reporter's severity call
+// onto the nearest task priority so a follow-up task opens pre-triaged.
+const SEVERITY_TO_PRIORITY: Record<IncidentSeverity, TaskPriority> = {
+  Low: 'Low', Medium: 'Medium', High: 'High', Critical: 'Critical',
+};
 
 const SEVERITIES: IncidentSeverity[] = ['Low', 'Medium', 'High', 'Critical'];
 
@@ -271,9 +283,14 @@ export default function IncidentLog() {
   const currentUser = useStore((s) => s.currentUser);
   const { incidents, isLoading, deleteIncident, removePhoto } = useIncidents();
   const { ranges, areas } = useRanges();
+  const { createTask } = useTasks();
+  const { users } = useUsers();
   const [formOpen, setFormOpen] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
+  const [followUpFor, setFollowUpFor] = useState<Incident | null>(null);
+  const [params, setParams] = useSearchParams();
+  const search = params.get('q') ?? '';
 
   const { activeRangeId, rangeIds, isMultiRange } = useOfficerRanges();
   // Directors and Tiger Cell staff aren't posted to one range, so they pick
@@ -284,6 +301,8 @@ export default function IncidentLog() {
   const lockRange = !hasNoFixedRange && !isMultiRange;
   const canManage = currentUser?.role === 'director' ||
     (currentUser?.role === 'tiger_cell' && currentUser.id !== RESTRICTED_TIGER_CELL_USER_ID);
+  const canCreateTask = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
+  const assignableUsers = users.filter((u) => isFieldRole(u.role) && (!followUpFor || u.rangeId === followUpFor.rangeId));
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this incident report? This cannot be undone.')) {
@@ -296,6 +315,10 @@ export default function IncidentLog() {
     if (filterType && i.type !== filterType) return false;
     if (filterSeverity === 'high') { if (!isHigh(i.severity)) return false; }
     else if (filterSeverity && i.severity !== filterSeverity) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!formatIncidentType(i).toLowerCase().includes(q) && !i.description.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
   const highCount = incidents.filter((i) => isHigh(i.severity)).length;
@@ -308,6 +331,18 @@ export default function IncidentLog() {
       </CommandBar>
 
       <ContextPanel>
+        <div className="mb-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-n-70" />
+            <input
+              value={search}
+              onChange={(e) => setParams((p) => { const n = new URLSearchParams(p); e.target.value ? n.set('q', e.target.value) : n.delete('q'); return n; }, { replace: true })}
+              placeholder="Filter these results…"
+              className="input-field pl-8 !min-h-[34px] text-13"
+              style={{ fontSize: '16px' }}
+            />
+          </div>
+        </div>
         <PanelSection label="Views">
           <PanelItem label="All incidents" active={!filterSeverity && !filterType} count={incidents.length} onClick={() => { setFilterSeverity(''); setFilterType(''); }} />
           <PanelItem label="High severity" active={filterSeverity === 'high'} count={highCount} countTone="amber" onClick={() => setFilterSeverity('high')} />
@@ -354,6 +389,16 @@ export default function IncidentLog() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-ptr-brown-light">{formatDateTime(incident.incidentDate)}</span>
+                    {canCreateTask && (
+                      <button
+                        onClick={() => setFollowUpFor(incident)}
+                        className="p-1 rounded-lg hover:bg-n-20 text-ptr-brown-light hover:text-ptr-brown transition-colors"
+                        title="Create follow-up task"
+                        aria-label="Create follow-up task"
+                      >
+                        <ClipboardPlus className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {canManage && (
                       <button
                         onClick={() => handleDelete(incident.id)}
@@ -424,6 +469,32 @@ export default function IncidentLog() {
           defaultRangeId={hasNoFixedRange ? '' : activeRangeId}
           lockRange={lockRange && !!activeRangeId}
           allowedRangeIds={hasNoFixedRange ? undefined : rangeIds}
+        />
+      )}
+
+      {followUpFor && currentUser && (
+        <TaskForm
+          isOpen={!!followUpFor}
+          onClose={() => setFollowUpFor(null)}
+          onSave={async (data, files) => {
+            const rows = await createTask.mutateAsync(data);
+            for (const row of rows) {
+              for (const file of files) {
+                try { await uploadTaskAttachment(row.id, currentUser.id, file); }
+                catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+              }
+            }
+            setFollowUpFor(null);
+          }}
+          assignableUsers={assignableUsers}
+          initialData={null}
+          currentUserId={currentUser.id}
+          defaultRangeId={followUpFor.rangeId}
+          prefill={{
+            title: `Follow-up: ${formatIncidentType(followUpFor)}`,
+            description: `Linked to incident reported ${formatDateTime(followUpFor.incidentDate)}:\n${followUpFor.description}`,
+            priority: SEVERITY_TO_PRIORITY[followUpFor.severity],
+          }}
         />
       )}
     </>

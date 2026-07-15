@@ -11,7 +11,6 @@ import {
   Map as MapIcon,
   History,
   UserCircle,
-  Search,
   HelpCircle,
   ChevronDown,
   PanelLeftClose,
@@ -21,6 +20,7 @@ import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocationSharing } from '../hooks/useLiveLocation';
 import NotificationBell from './NotificationBell';
+import GlobalSearch from './GlobalSearch';
 import Footer from './Footer';
 import { SlotProvider, CommandBarSlot, ContextPanelSlot } from './layout/Slots';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
@@ -132,33 +132,11 @@ function GlobalHeader({
 }) {
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const handleLogout = async () => {
     await logoutFromSupabase();
     navigate('/login', { replace: true });
   };
-
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
-    navigate(`${base}/tasks${q ? `?q=${encodeURIComponent(q)}` : ''}`);
-  };
-
-  // Ctrl/Cmd+K or "/" focuses global search (ignored while typing in a field).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing)) {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   return (
     <header
@@ -186,23 +164,9 @@ function GlobalHeader({
       </div>
 
       {/* Center — global search */}
-      <form onSubmit={submitSearch} className="hidden md:flex flex-1 justify-center px-4">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60 peer-focus:text-n-70" />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tasks, incidents, personnel and ranges"
-            aria-label="Search tasks, incidents, personnel and ranges"
-            className="peer w-full h-8 pl-8 pr-12 rounded bg-white/12 hover:bg-white/16 focus:bg-white text-13 text-white focus:text-n-100 placeholder:text-white/60 focus:placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
-            style={{ fontSize: '16px' }}
-          />
-          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-0.5 px-1.5 h-5 rounded border border-white/25 peer-focus:border-n-30 text-[10px] font-medium text-white/60 peer-focus:text-n-60 pointer-events-none select-none">
-            Ctrl K
-          </kbd>
-        </div>
-      </form>
+      <div className="hidden md:flex flex-1 justify-center px-4">
+        <GlobalSearch base={base} />
+      </div>
 
       {/* Right — actions */}
       <div className="flex items-center gap-0.5 ml-auto md:ml-0">
@@ -214,9 +178,7 @@ function GlobalHeader({
         >
           <HelpCircle className="w-5 h-5" />
         </a>
-        <div className="text-n-100">
-          <NotificationBell />
-        </div>
+        <NotificationBell />
         <UserMenu onLogout={handleLogout} />
       </div>
     </header>

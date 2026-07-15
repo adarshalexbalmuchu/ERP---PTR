@@ -9,15 +9,38 @@ import type { Notification } from '../types';
 
 const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; className: string }> = {
   task_assigned: { icon: ClipboardList, className: 'bg-ptr-green/10 text-ptr-green' },
-  task_updated: { icon: RefreshCw, className: 'bg-ptr-brown/10 text-ptr-brown' },
-  task_completed: { icon: CheckCircle2, className: 'bg-ptr-green/10 text-ptr-green' },
-  changes_requested: { icon: AlertCircle, className: 'bg-amber-100 text-amber-700' },
-  task_archived: { icon: Archive, className: 'bg-ptr-brown/10 text-ptr-brown-light' },
-  task_due_soon: { icon: Clock, className: 'bg-amber-100 text-amber-700' },
-  task_due_today: { icon: Clock, className: 'bg-amber-100 text-amber-700' },
-  task_overdue: { icon: AlertTriangle, className: 'bg-red-100 text-red-600' },
-  incident_reported: { icon: AlertTriangle, className: 'bg-red-100 text-red-600' },
+  task_updated: { icon: RefreshCw, className: 'bg-n-20 text-n-80' },
+  task_completed: { icon: CheckCircle2, className: 'bg-signal-amber/10 text-signal-amber' },
+  changes_requested: { icon: AlertCircle, className: 'bg-signal-amber/10 text-signal-amber' },
+  task_archived: { icon: Archive, className: 'bg-n-20 text-n-70' },
+  task_due_soon: { icon: Clock, className: 'bg-signal-amber/10 text-signal-amber' },
+  task_due_today: { icon: Clock, className: 'bg-signal-amber/10 text-signal-amber' },
+  task_overdue: { icon: AlertTriangle, className: 'bg-signal-red-bg text-signal-red' },
+  incident_reported: { icon: AlertTriangle, className: 'bg-signal-red-bg text-signal-red' },
 };
+
+// Four groups, in display order — "requires action" surfaces first and is
+// the only group that ever drives the bell's badge count (a restrained
+// signal: routine assignment/system chatter shouldn't demand attention).
+type NotifGroup = 'action' | 'assignments' | 'incidents' | 'system';
+const GROUP_OF: Record<Notification['type'], NotifGroup> = {
+  changes_requested: 'action',
+  task_overdue: 'action',
+  task_due_today: 'action',
+  task_due_soon: 'action',
+  task_completed: 'action', // awaiting the reviewer's approval
+  task_assigned: 'assignments',
+  incident_reported: 'incidents',
+  task_updated: 'system',
+  task_archived: 'system',
+};
+const GROUP_LABEL: Record<NotifGroup, string> = {
+  action: 'Requires action',
+  assignments: 'Assignments',
+  incidents: 'Incidents',
+  system: 'System',
+};
+const GROUP_ORDER: NotifGroup[] = ['action', 'assignments', 'incidents', 'system'];
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -37,7 +60,11 @@ export default function NotificationBell() {
     () => localStorage.getItem('ptr-push-prompt-dismissed') === '1',
   );
 
+  // Restrained badge: only notifications that actually need action move the
+  // needle, not every unread row (routine assignments/system chatter don't).
+  const actionableUnreadCount = notifications.filter((n) => !n.read && GROUP_OF[n.type] === 'action').length;
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const grouped = GROUP_ORDER.map((g) => ({ group: g, items: notifications.filter((n) => GROUP_OF[n.type] === g).slice(0, 6) })).filter((g) => g.items.length > 0);
   const showPushPrompt = push.status === 'unsubscribed' && push.permission !== 'denied' && !promptDismissed;
   const showIOSInstallHint = push.needsIOSInstall && !promptDismissed;
 
@@ -84,37 +111,36 @@ export default function NotificationBell() {
       <button
         ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
-        className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-ptr-cream transition-colors"
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded hover:bg-n-20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/40"
+        title="Notifications"
+        aria-label={`Notifications${actionableUnreadCount > 0 ? ` (${actionableUnreadCount} need action)` : unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
-        <Bell className="w-5 h-5 text-ptr-brown" />
-        {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium leading-none">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
+        <Bell className="w-5 h-5" />
+        {actionableUnreadCount > 0 && (
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-signal-red ring-2 ring-white" aria-hidden="true" />
         )}
       </button>
 
       {open && (
         <div
-          className="fixed right-2 w-80 max-w-[calc(100vw-1rem)] bg-white rounded-2xl shadow-xl border border-ptr-cream-dark z-50 overflow-hidden animate-slide-down"
+          className="fixed right-2 w-80 max-w-[calc(100vw-1rem)] bg-white rounded-md shadow-pop border border-n-30 z-50 overflow-hidden animate-slide-down"
           style={{ top: panelTop }}
         >
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-ptr-cream-dark">
-            <h3 className="text-sm font-semibold text-ptr-brown">Notifications</h3>
+          <div className="flex items-center justify-between gap-2 px-4 h-11 border-b border-n-30">
+            <h3 className="text-13 font-semibold text-n-100">Notifications</h3>
             <div className="flex items-center gap-3 flex-shrink-0">
               {unreadCount > 0 && (
                 <button
                   onClick={() => markAllRead.mutate()}
-                  className="text-xs text-ptr-green font-medium flex items-center gap-1"
+                  className="text-13 text-ptr-accent font-medium flex items-center gap-1 hover:underline"
                 >
-                  <Check className="w-3 h-3" />
+                  <Check className="w-3.5 h-3.5" />
                   Mark all read
                 </button>
               )}
               <button
                 onClick={() => setOpen(false)}
-                className="p-1 rounded-full hover:bg-ptr-cream transition-colors text-ptr-brown-light"
+                className="w-7 h-7 flex items-center justify-center rounded hover:bg-n-20 transition-colors text-n-70"
                 aria-label="Close notifications"
               >
                 <X className="w-4 h-4" />
@@ -122,18 +148,18 @@ export default function NotificationBell() {
             </div>
           </div>
           {showIOSInstallHint && (
-            <div className="flex items-start gap-2.5 px-4 py-3 bg-ptr-green/5 border-b border-ptr-cream-dark">
+            <div className="flex items-start gap-2.5 px-4 py-3 bg-ptr-green/5 border-b border-n-30">
               <BellRing className="w-4 h-4 text-ptr-green flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-ptr-brown">Get notified on this device</p>
-                <p className="text-xs text-ptr-brown-light mt-0.5">
+                <p className="text-xs font-semibold text-n-100">Get notified on this device</p>
+                <p className="text-xs text-n-70 mt-0.5">
                   On iPhone/iPad, first add this app to your Home Screen (Share button &rarr; Add to Home
                   Screen), then open it from there to turn on notifications.
                 </p>
               </div>
               <button
                 onClick={dismissPushPrompt}
-                className="p-0.5 rounded text-ptr-brown-light/60 hover:text-ptr-brown-light flex-shrink-0"
+                className="p-0.5 rounded text-n-60 hover:text-n-90 flex-shrink-0"
                 aria-label="Dismiss"
               >
                 <X className="w-3.5 h-3.5" />
@@ -141,14 +167,14 @@ export default function NotificationBell() {
             </div>
           )}
           {showPushPrompt && (
-            <div className="flex items-start gap-2.5 px-4 py-3 bg-ptr-green/5 border-b border-ptr-cream-dark">
+            <div className="flex items-start gap-2.5 px-4 py-3 bg-ptr-green/5 border-b border-n-30">
               <BellRing className="w-4 h-4 text-ptr-green flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-ptr-brown">Get notified on this device</p>
-                <p className="text-xs text-ptr-brown-light mt-0.5">
+                <p className="text-xs font-semibold text-n-100">Get notified on this device</p>
+                <p className="text-xs text-n-70 mt-0.5">
                   Turn on notifications to see task updates even when the app isn&rsquo;t open.
                 </p>
-                {push.error && <p className="text-xs text-red-600 mt-1">{push.error}</p>}
+                {push.error && <p className="text-xs text-signal-red mt-1">{push.error}</p>}
                 <button
                   onClick={() => void push.enable()}
                   disabled={push.loading}
@@ -159,7 +185,7 @@ export default function NotificationBell() {
               </div>
               <button
                 onClick={dismissPushPrompt}
-                className="p-0.5 rounded text-ptr-brown-light/60 hover:text-ptr-brown-light flex-shrink-0"
+                className="p-0.5 rounded text-n-60 hover:text-n-90 flex-shrink-0"
                 aria-label="Dismiss"
               >
                 <X className="w-3.5 h-3.5" />
@@ -167,49 +193,56 @@ export default function NotificationBell() {
             </div>
           )}
           {push.permission === 'denied' && push.status === 'unsubscribed' && (
-            <div className="px-4 py-2 bg-ptr-brown/5 border-b border-ptr-cream-dark">
-              <p className="text-xs text-ptr-brown-light">
+            <div className="px-4 py-2 bg-n-10 border-b border-n-30">
+              <p className="text-xs text-n-70">
                 Notifications are blocked for this site. Enable them in your browser or device settings to
                 get alerts here.
               </p>
             </div>
           )}
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="py-8 text-center text-sm text-ptr-brown-light">
+              <div className="py-8 text-center text-13 text-n-70">
                 No notifications yet
               </div>
             ) : (
-              notifications.slice(0, 15).map((notif) => {
-                const { icon: NotifIcon, className: notifClassName } = NOTIF_STYLE[notif.type];
-                return (
-                <button
-                  key={notif.id}
-                  onClick={() => handleNotifClick(notif)}
-                  className={`w-full text-left px-4 py-3 hover:bg-ptr-cream transition-colors border-b border-ptr-cream-dark last:border-0 ${
-                    !notif.read ? 'bg-ptr-green/5' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${notifClassName}`}>
-                      <NotifIcon className="w-3.5 h-3.5" />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <div className="text-xs font-semibold text-ptr-brown truncate">{notif.title}</div>
-                        {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-ptr-green flex-shrink-0" />}
-                      </div>
-                      <div className="text-xs text-ptr-brown-light mt-0.5 line-clamp-2">
-                        {notif.message}
-                      </div>
-                      <div className="text-xs text-ptr-brown-light/70 mt-1">
-                        {formatRelative(notif.createdAt)}
-                      </div>
-                    </div>
+              grouped.map(({ group, items }) => (
+                <div key={group}>
+                  <div className="px-4 pt-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70 bg-n-10 sticky top-0">
+                    {GROUP_LABEL[group]}
                   </div>
-                </button>
-                );
-              })
+                  {items.map((notif) => {
+                    const { icon: NotifIcon, className: notifClassName } = NOTIF_STYLE[notif.type];
+                    return (
+                      <button
+                        key={notif.id}
+                        onClick={() => handleNotifClick(notif)}
+                        className={`w-full text-left px-4 py-2.5 hover:bg-n-10 transition-colors border-b border-n-20 last:border-0 ${
+                          !notif.read ? 'bg-ptr-green/[0.04]' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${notifClassName}`}>
+                            <NotifIcon className="w-3.5 h-3.5" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <div className="text-13 font-semibold text-n-100 truncate">{notif.title}</div>
+                              {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-ptr-green flex-shrink-0" aria-hidden="true" />}
+                            </div>
+                            <div className="text-13 text-n-80 mt-0.5 line-clamp-2">
+                              {notif.message}
+                            </div>
+                            <div className="text-xs text-n-70 mt-1">
+                              {formatRelative(notif.createdAt)}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))
             )}
           </div>
         </div>
