@@ -1,3 +1,4 @@
+import { Circle, CircleDashed, CheckCircle2, Archive, type LucideIcon } from 'lucide-react';
 import type { TaskStatus } from '../types';
 
 interface Props {
@@ -5,22 +6,23 @@ interface Props {
   size?: 'sm' | 'md';
 }
 
-// A small status dot + plain label — no pill, no border. Colour is a quiet
-// cue; the label carries the meaning. Only overdue (handled separately) is
-// ever loud.
-const CONFIG: Record<TaskStatus, { label: string; dot: string }> = {
-  NotStarted: { label: 'Not started', dot: 'bg-n-60' },
-  InProgress: { label: 'In progress', dot: 'bg-signal-amber' },
-  Completed: { label: 'Completed', dot: 'bg-signal-green' },
-  Archived: { label: 'Archived', dot: 'bg-n-50' },
+// Status is carried by an icon + label, never colour alone (accessibility).
+// Colour is a secondary cue and stays quiet except where it matters.
+const CONFIG: Record<TaskStatus, { label: string; Icon: LucideIcon; cls: string }> = {
+  NotStarted: { label: 'Not started', Icon: Circle, cls: 'text-n-60' },
+  InProgress: { label: 'In progress', Icon: CircleDashed, cls: 'text-signal-amber' },
+  Completed: { label: 'Completed', Icon: CheckCircle2, cls: 'text-signal-green' },
+  Archived: { label: 'Archived', Icon: Archive, cls: 'text-n-60' },
 };
 
 export default function StatusBadge({ status, size = 'md' }: Props) {
-  const config = CONFIG[status] ?? { label: String(status ?? '—'), dot: 'bg-n-50' };
+  const config = CONFIG[status] ?? { label: String(status ?? '—'), Icon: Circle, cls: 'text-n-60' };
+  const { Icon } = config;
   const text = size === 'sm' ? 'text-xs' : 'text-13';
+  const ic = size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4';
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-n-90 ${text}`}>
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${config.dot}`} />
+      <Icon className={`${ic} flex-shrink-0 ${config.cls}`} />
       {config.label}
     </span>
   );

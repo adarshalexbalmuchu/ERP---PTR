@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronRight } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
 import { useUsers } from '../../hooks/useUsers';
@@ -13,6 +13,7 @@ import { isOverdue } from '../../utils/overdue';
 import Select from '../../components/Select';
 import StatusBadge from '../../components/StatusBadge';
 import TaskTable from '../../components/TaskTable';
+import TaskDetailPanel from '../../components/TaskDetailPanel';
 import TaskForm from '../../components/TaskForm';
 import EmptyState from '../../components/EmptyState';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
@@ -22,15 +23,15 @@ function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function Metric({ label, value, sub, tone = 'default' }: { label: string; value: number | string; sub: string; tone?: 'default' | 'red' | 'amber' | 'green' }) {
+function Metric({ label, value, sub, tone = 'default', onClick }: { label: string; value: number | string; sub: string; tone?: 'default' | 'red' | 'amber' | 'green'; onClick?: () => void }) {
   const valueClass =
     tone === 'red' ? 'text-signal-red' : tone === 'amber' ? 'text-signal-amber' : tone === 'green' ? 'text-signal-green' : 'text-n-100';
   return (
-    <div className="px-4 py-3.5">
+    <button onClick={onClick} className="group text-left px-4 py-3.5 hover:bg-n-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ptr-accent/40">
       <div className={`text-[26px] leading-none font-semibold tabular-nums ${valueClass}`}>{value}</div>
-      <div className="text-13 font-medium text-n-90 mt-1.5">{label}</div>
+      <div className="text-13 font-medium text-n-90 mt-1.5 flex items-center gap-1">{label}<ChevronRight className="w-3.5 h-3.5 text-n-50 opacity-0 group-hover:opacity-100 transition-opacity" /></div>
       <div className="text-xs text-n-70 mt-0.5">{sub}</div>
-    </div>
+    </button>
   );
 }
 
@@ -43,6 +44,7 @@ export default function OfficerDashboard() {
   const { activeRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
 
   const myRange = ranges.find((r) => r.id === activeRangeId);
   const myTasks = tasks.filter((t) => t.rangeId === activeRangeId);
@@ -101,12 +103,12 @@ export default function OfficerDashboard() {
 
         {/* Overview strip */}
         <section id="overview">
-          <div className="card grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-n-30">
-            <Metric label="Total tasks" value={totalTasks} sub="This range" />
-            <Metric label="In progress" value={inProgress} sub="Currently active" />
-            <Metric label="Overdue" value={overdueCount} sub="Past due date" tone={overdueCount > 0 ? 'red' : 'default'} />
-            <Metric label="Awaiting review" value={awaitingReview} sub="Completed, unreviewed" tone={awaitingReview > 0 ? 'amber' : 'default'} />
-            <Metric label="Completion" value={`${completionRate}%`} sub={`${completed} completed`} tone="green" />
+          <div className="card grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-n-30 overflow-hidden">
+            <Metric label="Total tasks" value={totalTasks} sub="This range" onClick={() => navigate('/officer/tasks')} />
+            <Metric label="In progress" value={inProgress} sub="Currently active" onClick={() => navigate('/officer/tasks?status=InProgress')} />
+            <Metric label="Overdue" value={overdueCount} sub="Open · past due" tone={overdueCount > 0 ? 'red' : 'default'} onClick={() => navigate('/officer/tasks?view=overdue')} />
+            <Metric label="Awaiting review" value={awaitingReview} sub="Completed, unreviewed" tone={awaitingReview > 0 ? 'amber' : 'default'} onClick={() => navigate('/officer/tasks?view=review')} />
+            <Metric label="Completion" value={`${completionRate}%`} sub={`${completed} of ${totalTasks} tasks`} tone="green" onClick={() => navigate('/officer/tasks?status=Archived')} />
           </div>
         </section>
 
@@ -139,7 +141,7 @@ export default function OfficerDashboard() {
               {priorityTasks.length === 0 ? (
                 <EmptyState title="No high-priority tasks" description="All critical work is under control." />
               ) : (
-                <TaskTable tasks={priorityTasks} users={users} onOpen={(t) => navigate(`/officer/tasks/${t.id}`)} showRange={false} showProgress={false} />
+                <TaskTable tasks={priorityTasks} users={users} onOpen={(t) => setPanelTaskId(t.id)} showRange={false} showProgress={false} />
               )}
             </div>
           </section>
@@ -171,6 +173,8 @@ export default function OfficerDashboard() {
           </section>
         )}
       </Page>
+
+      <TaskDetailPanel taskId={panelTaskId} onClose={() => setPanelTaskId(null)} onOpenFull={(id) => navigate(`/officer/tasks/${id}`)} />
 
       {formOpen && currentUser && (
         <TaskForm

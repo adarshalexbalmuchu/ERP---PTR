@@ -8,6 +8,7 @@ import PriorityBadge from '../../components/PriorityBadge';
 import EmptyState from '../../components/EmptyState';
 import Select from '../../components/Select';
 import { CommandBar, ContextPanel } from '../../components/layout/Slots';
+import { PanelSection, PanelItem } from '../../components/layout/PanelNav';
 import { Page, PageHeading } from '../../components/layout/Page';
 import { formatDateTime } from '../../utils/formatters';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
@@ -290,11 +291,15 @@ export default function IncidentLog() {
     }
   };
 
+  const isHigh = (s: string) => s === 'High' || s === 'Critical';
   const filtered = incidents.filter((i) => {
     if (filterType && i.type !== filterType) return false;
-    if (filterSeverity && i.severity !== filterSeverity) return false;
+    if (filterSeverity === 'high') { if (!isHigh(i.severity)) return false; }
+    else if (filterSeverity && i.severity !== filterSeverity) return false;
     return true;
   });
+  const highCount = incidents.filter((i) => isHigh(i.severity)).length;
+  const criticalCount = incidents.filter((i) => i.severity === 'Critical').length;
 
   return (
     <>
@@ -303,8 +308,18 @@ export default function IncidentLog() {
       </CommandBar>
 
       <ContextPanel>
-        <div className="mb-4">
-          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Type</div>
+        <PanelSection label="Views">
+          <PanelItem label="All incidents" active={!filterSeverity && !filterType} count={incidents.length} onClick={() => { setFilterSeverity(''); setFilterType(''); }} />
+          <PanelItem label="High severity" active={filterSeverity === 'high'} count={highCount} countTone="amber" onClick={() => setFilterSeverity('high')} />
+          <PanelItem label="Critical" active={filterSeverity === 'Critical'} count={criticalCount} countTone="red" onClick={() => setFilterSeverity('Critical')} />
+        </PanelSection>
+        <PanelSection label="Severity">
+          {SEVERITIES.map((s) => (
+            <PanelItem key={s} label={s} active={filterSeverity === s} count={incidents.filter((i) => i.severity === s).length} onClick={() => setFilterSeverity(s)} />
+          ))}
+        </PanelSection>
+        <div className="px-1">
+          <div className="px-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Type</div>
           <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input-field select-field !min-h-[34px] text-13">
             <option value="">All types</option>
             {INCIDENT_CATEGORIES.map((group) => (
@@ -313,17 +328,6 @@ export default function IncidentLog() {
               </optgroup>
             ))}
           </Select>
-        </div>
-        <div className="mb-4">
-          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Severity</div>
-          <div className="space-y-0.5">
-            {[{ value: '', label: 'All severities' }, ...SEVERITIES.map((s) => ({ value: s, label: s }))].map((o) => {
-              const active = o.value === filterSeverity;
-              return (
-                <button key={o.value || 'all'} onClick={() => setFilterSeverity(o.value)} className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'}`}>{o.label}</button>
-              );
-            })}
-          </div>
         </div>
       </ContextPanel>
 

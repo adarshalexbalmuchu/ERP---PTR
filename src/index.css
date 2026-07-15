@@ -91,6 +91,24 @@
   }
 }
 
+/* One consistent icon family + weight everywhere (Lucide). CSS stroke-width
+   overrides Lucide's inline 2px presentation attribute, giving the lighter
+   1.75px Fluent-style line across the whole app in a single rule. */
+.lucide {
+  stroke-width: 1.75px;
+}
+
+/* Loading skeleton shimmer — calm, no bounce. */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.skeleton {
+  background-color: #EDEBE9;
+  border-radius: 4px;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -107,8 +125,15 @@
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
+@keyframes slideLeftIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
 .animate-slide-down {
   animation: slideDown 0.12s ease-out;
+}
+.animate-drawer-right {
+  animation: slideLeftIn 0.16s ease-out;
 }
 
 /* Thin, neutral scrollbars. */

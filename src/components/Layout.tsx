@@ -14,6 +14,8 @@ import {
   Search,
   HelpCircle,
   ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,7 +27,7 @@ import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 
 type Section = { key: string; to: string; label: string; icon: React.ReactNode };
 
-const iconCls = 'w-[18px] h-[18px] flex-shrink-0';
+const iconCls = 'w-5 h-5 flex-shrink-0';
 
 function directorSections(): Section[] {
   return [
@@ -131,6 +133,7 @@ function GlobalHeader({
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const handleLogout = async () => {
     await logoutFromSupabase();
@@ -142,6 +145,20 @@ function GlobalHeader({
     const q = query.trim();
     navigate(`${base}/tasks${q ? `?q=${encodeURIComponent(q)}` : ''}`);
   };
+
+  // Ctrl/Cmd+K or "/" focuses global search (ignored while typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing)) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <header
@@ -163,22 +180,27 @@ function GlobalHeader({
           <div className="text-13 font-semibold text-white leading-tight truncate">Palamau Tiger Reserve</div>
         </div>
         <span className="text-13 font-semibold text-white xs:hidden">PTR</span>
-        <span className="hidden lg:block text-xs text-white/55 border-l border-white/20 pl-2.5 ml-1 truncate">
-          Field Operations Management System
+        <span className="hidden lg:block text-xs text-white/60 border-l border-white/20 pl-2.5 ml-1 truncate">
+          Field Operations
         </span>
       </div>
 
       {/* Center — global search */}
       <form onSubmit={submitSearch} className="hidden md:flex flex-1 justify-center px-4">
         <div className="relative w-full max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60 peer-focus:text-n-70" />
           <input
+            ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tasks…"
-            className="w-full h-8 pl-8 pr-3 rounded bg-white/12 hover:bg-white/16 focus:bg-white text-13 text-white focus:text-n-100 placeholder:text-white/60 focus:placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
+            placeholder="Search tasks, incidents, personnel and ranges"
+            aria-label="Search tasks, incidents, personnel and ranges"
+            className="peer w-full h-8 pl-8 pr-12 rounded bg-white/12 hover:bg-white/16 focus:bg-white text-13 text-white focus:text-n-100 placeholder:text-white/60 focus:placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
             style={{ fontSize: '16px' }}
           />
+          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-0.5 px-1.5 h-5 rounded border border-white/25 peer-focus:border-n-30 text-[10px] font-medium text-white/60 peer-focus:text-n-60 pointer-events-none select-none">
+            Ctrl K
+          </kbd>
         </div>
       </form>
 
@@ -203,7 +225,7 @@ function GlobalHeader({
 
 function IconRail({ sections, currentSection }: { sections: Section[]; currentSection: string }) {
   return (
-    <nav className="hidden lg:flex flex-col items-center w-12 flex-shrink-0 bg-n-20 border-r border-n-30 py-1.5 gap-0.5">
+    <nav aria-label="Primary" className="hidden lg:flex flex-col items-center w-12 flex-shrink-0 bg-n-20 border-r border-n-30 py-1.5 gap-0.5">
       {sections.map((s) => {
         const active = s.key === currentSection;
         return (
@@ -211,16 +233,18 @@ function IconRail({ sections, currentSection }: { sections: Section[]; currentSe
             key={s.key}
             to={s.to}
             title={s.label}
-            className="group relative w-10 h-10 flex items-center justify-center rounded"
+            aria-label={s.label}
+            className="group relative w-10 h-10 flex items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/50"
           >
+            {/* 3px dark-green left indicator on the active section */}
             <span
-              className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full transition-opacity ${
-                active ? 'bg-ptr-green opacity-100' : 'opacity-0'
+              className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ptr-green transition-opacity ${
+                active ? 'opacity-100' : 'opacity-0'
               }`}
             />
             <span
-              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-                active ? 'text-ptr-green bg-ptr-green/10' : 'text-n-80 group-hover:bg-n-30 group-hover:text-n-100'
+              className={`w-9 h-9 flex items-center justify-center rounded transition-colors ${
+                active ? 'text-ptr-green-dark bg-ptr-green/12' : 'text-n-80 group-hover:bg-n-30 group-hover:text-n-100'
               }`}
             >
               {s.icon}
@@ -237,8 +261,19 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(() => {
+    try { return localStorage.getItem('ptr-panel-collapsed') === '1'; } catch { return false; }
+  });
 
   const currentSection = sectionForPath(location.pathname, base);
+
+  const togglePanel = () => {
+    setPanelCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem('ptr-panel-collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setNavOpen(false); }, [location.pathname]);
@@ -270,11 +305,20 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
         <aside
           className={`bg-n-10 border-r border-n-30 flex flex-col z-40
             fixed top-12 bottom-0 left-0 w-[280px] transition-transform duration-150
-            lg:static lg:top-0 lg:w-[220px] lg:translate-x-0 lg:transition-none
+            lg:static lg:top-0 lg:translate-x-0 lg:transition-[width] lg:duration-150 lg:overflow-hidden
+            ${panelCollapsed ? 'lg:w-0 lg:border-r-0' : 'lg:w-[220px]'}
             ${navOpen ? 'translate-x-0 shadow-pop' : '-translate-x-full lg:translate-x-0'}`}
         >
-          <div className="flex items-center justify-between px-4 h-11 border-b border-n-30 flex-shrink-0">
+          <div className="flex items-center justify-between px-4 h-11 border-b border-n-30 flex-shrink-0 lg:w-[220px]">
             <h2 className="text-13 font-semibold text-n-100">{SECTION_TITLES[currentSection] ?? 'Menu'}</h2>
+            <button
+              onClick={togglePanel}
+              className="hidden lg:flex w-8 h-8 -mr-1.5 items-center justify-center rounded text-n-70 hover:bg-n-20 hover:text-n-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/40"
+              title="Collapse panel"
+              aria-label="Collapse navigation panel"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
             <button
               onClick={() => setNavOpen(false)}
               className="lg:hidden w-8 h-8 -mr-1.5 flex items-center justify-center rounded text-n-70 hover:bg-n-20"
@@ -304,7 +348,7 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
           </nav>
 
           {/* Page-provided views/filters portal in here. */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto lg:w-[220px]">
             <ContextPanelSlot className="p-3" />
           </div>
         </aside>
@@ -313,6 +357,17 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Command bar */}
           <div className="flex-shrink-0 h-11 bg-white border-b border-n-30 flex items-center gap-1 px-2 sm:px-3 overflow-x-auto">
+            {panelCollapsed && (
+              <button
+                onClick={togglePanel}
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded text-n-70 hover:bg-n-20 hover:text-n-100 transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/40"
+                title="Expand panel"
+                aria-label="Expand navigation panel"
+              >
+                <PanelLeftOpen className="w-4 h-4" />
+              </button>
+            )}
+            {panelCollapsed && <span className="hidden lg:block w-px h-5 bg-n-30 mx-1 flex-shrink-0" />}
             <CommandBarSlot className="flex items-center gap-1 min-w-max" />
           </div>
 
