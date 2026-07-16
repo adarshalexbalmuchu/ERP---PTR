@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Download, Search, X, ChevronDown, UserCog, CircleDashed, CalendarClock,
-  Inbox, UserCheck, PenLine, Circle, Clock, CheckCircle2, MapPin,
+  Inbox, UserCheck, PenLine, Circle, Clock, CheckCircle2, MapPin, Filter, RefreshCw,
 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTasks } from '../../hooks/useTasks';
@@ -11,10 +11,12 @@ import { useUsers } from '../../hooks/useUsers';
 import { useRanges } from '../../hooks/useRanges';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { usePanelToggle } from '../../contexts/PanelToggleContext';
 import { isOverdue } from '../../utils/overdue';
 import { formatDate } from '../../utils/formatters';
 import { exportCsv } from '../../utils/exportCsv';
 import { uploadTaskAttachment } from '../../lib/attachments';
+import { describeBulkOutcome } from '../../lib/mutationVerification';
 import TaskForm from '../../components/TaskForm';
 import TaskTable from '../../components/TaskTable';
 import TaskDetailPanel from '../../components/TaskDetailPanel';
@@ -39,11 +41,12 @@ export default function OfficerTaskList() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
-  const { tasks, isLoading: tasksLoading, createTask, updateTask } = useTasks();
+  const { tasks, isLoading: tasksLoading, createTask, updateTask, bulkUpdateTasks } = useTasks();
   const { users } = useUsers();
   const { ranges, areas } = useRanges();
   const { activeRangeId: myRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
   const [mobileFormOpen, setMobileFormOpen] = useState(false);
+  const panelToggle = usePanelToggle();
 
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
@@ -100,12 +103,29 @@ export default function OfficerTaskList() {
   const noViewFilter = !status && !view && !assignee && !creator && !area && !priority;
 
   const handleEdit = (task: Task) => { setEditingTask(task); setFormOpen(true); };
-  const bulkStatus = (s: TaskStatus) => { selectedTasks.forEach((t) => updateTask.mutate({ id: t.id, status: s })); setSelectedIds([]); };
-  const bulkAssign = (userId: string) => { selectedTasks.forEach((t) => updateTask.mutate({ id: t.id, assigneeId: userId })); setSelectedIds([]); };
-  const bulkDue = () => { if (!dueDraft) return; const iso = new Date(dueDraft + 'T00:00:00').toISOString(); selectedTasks.forEach((t) => updateTask.mutate({ id: t.id, dueDate: iso })); setSelectedIds([]); setDueDraft(''); };
-  const doExport = () => exportCsv(`ptr-tasks-${new Date().toISOString().slice(0, 10)}.csv`, filtered.map((t) => ({
+  const runBulkUpdate = async (ids: string[], patch: Parameters<typeof bulkUpdateTasks.mutateAsync>[0]['patch']) => {
+    setSelectedIds([]);
+    try {
+      const result = await bulkUpdateTasks.mutateAsync({ ids, patch });
+      alert(describeBulkOutcome(result, ids.length, 'tasks'));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update the selected tasks.');
+    }
+  };
+  const bulkStatus = (s: TaskStatus) => void runBulkUpdate(selectedIds, { status: s });
+  const bulkAssign = (userId: string) => void runBulkUpdate(selectedIds, { assigneeId: userId });
+  const bulkDue = () => {
+    if (!dueDraft) return;
+    const iso = new Date(dueDraft + 'T00:00:00').toISOString();
+    void runBulkUpdate(selectedIds, { dueDate: iso });
+    setDueDraft('');
+  };
+  const toExportRows = (rows: Task[]) => rows.map((t) => ({
     Task: t.title, Assignee: users.find((u) => u.id === t.assigneeId)?.name ?? '', Priority: t.priority, Status: t.status, Due: formatDate(t.dueDate), Progress: `${t.completionPercentage}%`,
-  })));
+  }));
+  const doExport = () => exportCsv(`ptr-tasks-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(filtered));
+  const doExportSelected = () => exportCsv(`ptr-tasks-selected-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(selectedTasks));
+  const doRefresh = () => queryClient.invalidateQueries({ queryKey: ['tasks'] });
 
   if (isMobile) {
     return (
@@ -149,43 +169,42 @@ export default function OfficerTaskList() {
   return (
     <>
       <CommandBar>
-        <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />New task</button>
-        <span className="w-px h-5 bg-n-30 mx-1" />
         {hasSel ? (
-          <Menu ariaLabel="Assign selected" button={<><UserCog className="w-4 h-4" />Assign<ChevronDown className="w-3.5 h-3.5 opacity-60" /></>}>
-            <MenuLabel>Reassign {selectedTasks.length} task{selectedTasks.length > 1 ? 's' : ''} to</MenuLabel>
-            {myGuards.map((u) => <MenuItem key={u.id} label={u.name} onClick={() => bulkAssign(u.id)} />)}
-          </Menu>
-        ) : <button disabled className="btn-subtle"><UserCog className="w-4 h-4" />Assign</button>}
-        {hasSel ? (
-          <Menu ariaLabel="Change status" button={<><CircleDashed className="w-4 h-4" />Status<ChevronDown className="w-3.5 h-3.5 opacity-60" /></>}>
-            <MenuLabel>Set status</MenuLabel>
-            {STATUS_SET.map((s) => <MenuItem key={s.value} label={s.label} onClick={() => bulkStatus(s.value)} />)}
-          </Menu>
-        ) : <button disabled className="btn-subtle"><CircleDashed className="w-4 h-4" />Status</button>}
-        {hasSel ? (
-          <Menu ariaLabel="Set due date" width="w-60" button={<><CalendarClock className="w-4 h-4" />Due date<ChevronDown className="w-3.5 h-3.5 opacity-60" /></>}>
-            <MenuPanel>
-              <label className="block text-xs text-n-70 mb-1">New due date for {selectedTasks.length} task{selectedTasks.length > 1 ? 's' : ''}</label>
-              <input type="date" value={dueDraft} onChange={(e) => setDueDraft(e.target.value)} className="input-field !min-h-[34px]" style={{ fontSize: '16px' }} />
-              <button onClick={bulkDue} disabled={!dueDraft} className="btn-primary w-full mt-2">Apply</button>
-            </MenuPanel>
-          </Menu>
-        ) : <button disabled className="btn-subtle"><CalendarClock className="w-4 h-4" />Due date</button>}
-        <button onClick={doExport} className="btn-subtle"><Download className="w-4 h-4" />Export</button>
+          <>
+            <span className="text-13 font-semibold text-n-90 whitespace-nowrap">{selectedIds.length} selected</span>
+            <span className="w-px h-5 bg-n-30 mx-1" />
+            <Menu ariaLabel="Assign selected" button={<><UserCog className="w-4 h-4" />Assign<ChevronDown className="w-3.5 h-3.5 opacity-60" /></>}>
+              <MenuLabel>Reassign {selectedTasks.length} task{selectedTasks.length > 1 ? 's' : ''} to</MenuLabel>
+              {myGuards.map((u) => <MenuItem key={u.id} label={u.name} onClick={() => bulkAssign(u.id)} />)}
+            </Menu>
+            <Menu ariaLabel="Change status" button={<><CircleDashed className="w-4 h-4" />Status<ChevronDown className="w-3.5 h-3.5 opacity-60" /></>}>
+              <MenuLabel>Set status</MenuLabel>
+              {STATUS_SET.map((s) => <MenuItem key={s.value} label={s.label} onClick={() => bulkStatus(s.value)} />)}
+            </Menu>
+            <Menu ariaLabel="Set due date" width="w-60" button={<><CalendarClock className="w-4 h-4" />Due date<ChevronDown className="w-3.5 h-3.5 opacity-60" /></>}>
+              <MenuPanel>
+                <label className="block text-xs text-n-70 mb-1">New due date for {selectedTasks.length} task{selectedTasks.length > 1 ? 's' : ''}</label>
+                <input type="date" value={dueDraft} onChange={(e) => setDueDraft(e.target.value)} className="input-field !min-h-[34px]" style={{ fontSize: '16px' }} />
+                <button onClick={bulkDue} disabled={!dueDraft} className="btn-primary w-full mt-2">Apply</button>
+              </MenuPanel>
+            </Menu>
+            <button onClick={doExportSelected} className="btn-subtle"><Download className="w-4 h-4" />Export selected</button>
+            <button onClick={() => setSelectedIds([])} className="btn-subtle">Clear selection</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => { setEditingTask(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />New task</button>
+            <button onClick={() => panelToggle?.toggle()} className="btn-subtle"><Filter className="w-4 h-4" />Filter</button>
+            <button onClick={doRefresh} className="btn-subtle"><RefreshCw className="w-4 h-4" />Refresh</button>
+            <button onClick={doExport} className="btn-subtle"><Download className="w-4 h-4" />Export</button>
+          </>
+        )}
         {isMultiRange && (
           <>
             <span className="w-px h-5 bg-n-30 mx-1" />
             <Select value={myRangeId} onChange={(e) => setActiveRangeId(e.target.value)} className="input-field select-field !w-auto !min-h-[32px] text-13" aria-label="Switch range">
               {rangeIds.map((id) => { const r = ranges.find((rr) => rr.id === id); return <option key={id} value={id}>{r?.name ?? 'Range'}</option>; })}
             </Select>
-          </>
-        )}
-        {hasSel && (
-          <>
-            <span className="w-px h-5 bg-n-30 mx-1" />
-            <span className="text-13 text-n-80 whitespace-nowrap">{selectedIds.length} selected</span>
-            <button onClick={() => setSelectedIds([])} className="btn-subtle">Clear</button>
           </>
         )}
       </CommandBar>

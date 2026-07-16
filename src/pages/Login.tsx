@@ -77,7 +77,7 @@ export default function Login() {
               <div className="text-[13px] font-bold tracking-[0.09em] uppercase text-white">
                 Government of Jharkhand
               </div>
-              <div className="text-[11px] text-white/55 tracking-wide mt-1 leading-snug max-w-[13rem]">
+              <div className="text-[11px] text-white/50 tracking-wide mt-1 leading-snug max-w-[13rem]">
                 Department of Forest,
                 <br />
                 Environment &amp; Climate Change
@@ -101,7 +101,7 @@ export default function Login() {
 
             <div className="border-t border-white/10 mt-6 mb-5 w-14" />
 
-            <p className="text-white/55 text-[13px] leading-relaxed max-w-sm">
+            <p className="text-white/50 text-[13px] leading-relaxed max-w-sm">
               Internal platform for patrol management, incident reporting, wildlife monitoring, task assignment, and
               reserve administration.
             </p>
@@ -113,7 +113,7 @@ export default function Login() {
               <span className="uppercase tracking-[0.08em]">Government Network</span>
               <span className="tracking-wide">Version 2.1.0</span>
             </div>
-            <div className="uppercase tracking-[0.08em] text-white/35">Authorized Personnel Only</div>
+            <div className="uppercase tracking-[0.08em] text-white/40">Authorized Personnel Only</div>
           </div>
         </div>
       </div>

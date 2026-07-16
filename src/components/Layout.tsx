@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,7 +12,6 @@ import {
   Map as MapIcon,
   History,
   UserCircle,
-  HelpCircle,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
@@ -21,10 +21,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLocationSharing } from '../hooks/useLiveLocation';
 import { useIsMobile } from '../hooks/useIsMobile';
 import NotificationBell from './NotificationBell';
+import HelpMenu from './HelpMenu';
 import GlobalSearch from './GlobalSearch';
 import Footer from './Footer';
 import MobileShell from './mobile/MobileShell';
 import { SlotProvider, CommandBarSlot, ContextPanelSlot } from './layout/Slots';
+import { PanelToggleContext } from '../contexts/PanelToggleContext';
+import { Z } from '../lib/floating';
 import jharkhandEmblem from '../assets/jharkhand-emblem.png';
 
 type Section = { key: string; to: string; label: string; icon: React.ReactNode };
@@ -75,23 +78,48 @@ function UserMenu({ onLogout }: { onLogout: () => void }) {
   const currentUser = useStore((s) => s.currentUser);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 8 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const base = currentUser?.role === 'director' ? '/director' : '/officer';
 
   useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPos({ top: rect.bottom + 6, right: Math.max(8, window.innerWidth - rect.right) });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [open]);
+
+  const close = () => { setOpen(false); triggerRef.current?.focus(); };
+
+  useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') close(); }
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, []);
 
+  // Avatar + chevron sit inside a single <button> — one coherent control,
+  // not two separate hit targets that happen to sit next to each other.
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 h-9 pl-1.5 pr-1 rounded hover:bg-white/10 transition-colors"
+        className="flex items-center gap-2 h-9 pl-1.5 pr-1 rounded hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+        title="Account menu"
         aria-label="Account menu"
+        aria-haspopup="menu"
         aria-expanded={open}
       >
         <span className="w-7 h-7 rounded-full bg-white/15 text-white flex items-center justify-center text-xs font-semibold">
@@ -99,13 +127,20 @@ function UserMenu({ onLogout }: { onLogout: () => void }) {
         </span>
         <ChevronDown className="w-3.5 h-3.5 text-white/70 hidden sm:block" />
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-md shadow-pop border border-n-30 py-1 z-50 animate-slide-down">
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          role="menu"
+          aria-label="Account menu"
+          className="fixed w-60 bg-white rounded-md shadow-pop border border-n-30 py-1 animate-slide-down"
+          style={{ top: pos.top, right: pos.right, zIndex: Z.dropdown }}
+        >
           <div className="px-3 py-2.5 border-b border-n-30">
             <div className="text-13 font-semibold text-n-100 truncate">{currentUser?.name}</div>
             <div className="text-xs text-n-80 truncate">{currentUser?.designation}</div>
           </div>
           <button
+            role="menuitem"
             onClick={() => { setOpen(false); navigate(`${base}/profile`); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-13 text-n-90 hover:bg-n-20 transition-colors"
           >
@@ -113,15 +148,17 @@ function UserMenu({ onLogout }: { onLogout: () => void }) {
             My profile
           </button>
           <button
+            role="menuitem"
             onClick={() => { setOpen(false); onLogout(); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-13 text-signal-red hover:bg-signal-red-bg transition-colors"
           >
             <LogOut className="w-4 h-4" />
             Log out
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 
@@ -172,14 +209,7 @@ function GlobalHeader({
 
       {/* Right — actions */}
       <div className="flex items-center gap-0.5 ml-auto md:ml-0">
-        <a
-          href="mailto:tigercell.ptr@jharkhand.gov.in?subject=PTR%20Field%20Operations%20—%20Support"
-          className="w-10 h-10 hidden sm:flex items-center justify-center rounded hover:bg-white/10 transition-colors"
-          title="Help & support"
-          aria-label="Help and support"
-        >
-          <HelpCircle className="w-5 h-5" />
-        </a>
+        <HelpMenu />
         <NotificationBell />
         <UserMenu onLogout={handleLogout} />
       </div>
@@ -208,7 +238,7 @@ function IconRail({ sections, currentSection }: { sections: Section[]; currentSe
             />
             <span
               className={`w-9 h-9 flex items-center justify-center rounded transition-colors ${
-                active ? 'text-ptr-green-dark bg-ptr-green/12' : 'text-n-80 group-hover:bg-n-30 group-hover:text-n-100'
+                active ? 'text-ptr-green-dark bg-ptr-green/10' : 'text-n-80 group-hover:bg-n-30 group-hover:text-n-100'
               }`}
             >
               {s.icon}
@@ -239,6 +269,13 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
     });
   };
 
+  // A page's command-bar "Filter" button only ever opens the panel (never
+  // collapses it) — closing is still the dedicated PanelLeftClose control.
+  const openPanel = () => {
+    setPanelCollapsed(false);
+    try { localStorage.setItem('ptr-panel-collapsed', '0'); } catch { /* ignore */ }
+  };
+
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setNavOpen(false); }, [location.pathname]);
 
@@ -248,6 +285,7 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
   };
 
   return (
+    <PanelToggleContext.Provider value={{ collapsed: panelCollapsed, toggle: openPanel }}>
     <div className="h-dvh flex flex-col bg-white overflow-hidden">
       <GlobalHeader onToggleNav={() => setNavOpen(true)} base={base} />
 
@@ -356,6 +394,7 @@ function AdminLayout({ sections, base }: { sections: Section[]; base: string }) 
         </button>
       )}
     </div>
+    </PanelToggleContext.Provider>
   );
 }
 
@@ -386,6 +425,7 @@ function GuardLayout() {
   );
 
   return (
+    <SlotProvider>
     <div className="min-h-dvh bg-white flex flex-col">
       <div className="sticky top-0 z-30">
         {/* Compact green identity header */}
@@ -416,6 +456,14 @@ function GuardLayout() {
             {currentUser?.designation && <span className="text-n-70"> · {currentUser.designation}</span>}
           </p>
         </div>
+        {/* Contextual command bar — same slot/portal system AdminLayout uses,
+            so pages like IncidentLog get their bulk-action toolbar here too.
+            The slot div itself (not a wrapper) carries the sizing, so
+            `empty:` genuinely reflects whether a page portalled anything
+            into it — pages that never call <CommandBar> (e.g. guard's own
+            task list) get a true zero-height, borderless node and look
+            exactly as before. */}
+        <CommandBarSlot className="empty:h-0 empty:border-0 empty:overflow-hidden h-11 bg-white border-b border-n-30 flex items-center gap-1 px-3 overflow-x-auto" />
       </div>
 
       <main className="flex-1" style={{ paddingBottom: 'calc(3.75rem + env(safe-area-inset-bottom))' }}>
@@ -440,6 +488,7 @@ function GuardLayout() {
         </button>
       </nav>
     </div>
+    </SlotProvider>
   );
 }
 

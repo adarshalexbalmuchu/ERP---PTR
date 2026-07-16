@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, Children, isValidElement, type ReactNode, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, Children, isValidElement, type ReactNode, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
+import { computeFloatingPosition, Z } from '../lib/floating';
 
 interface FlatOption {
   value: string;
@@ -69,17 +71,50 @@ interface SelectProps {
 // positioned below the trigger, so the direction is predictable everywhere.
 export default function Select({ value, onChange, children, className = '', disabled, id, ...aria }: SelectProps) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const groups = readGroups(children);
   const selected = groups.flatMap((g) => g.options).find((o) => o.value === value);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target)) return;
+      if (listRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Portaled to document.body (see Menu.tsx) so the option list is never
+  // clipped by an ancestor's overflow and always renders above other layers.
+  // Positioning still prefers "below the trigger" per the original intent
+  // (predictable direction, no native-<select>-style upward surprises on
+  // mobile) — computeFloatingPosition only flips above when there truly
+  // isn't room below, which is a strict improvement, not a behavior change.
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return; }
+    const update = () => {
+      if (!triggerRef.current || !listRef.current) return;
+      const t = triggerRef.current.getBoundingClientRect();
+      const c = listRef.current.getBoundingClientRect();
+      const { top, left } = computeFloatingPosition(t, { width: t.width, height: c.height }, 'left');
+      setPos({ top, left, width: t.width });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (listRef.current) ro.observe(listRef.current);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
 
   // `select-field` painted a CSS background-image chevron on the native
   // element; this component renders its own chevron icon unconditionally
@@ -90,6 +125,7 @@ export default function Select({ value, onChange, children, className = '', disa
   return (
     <div className="relative" ref={boxRef}>
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         aria-label={aria['aria-label']}
@@ -106,8 +142,13 @@ export default function Select({ value, onChange, children, className = '', disa
         />
       </button>
 
-      {open && (
-        <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-ptr-cream-dark rounded-xl shadow-lg">
+      {open && createPortal(
+        <div
+          ref={listRef}
+          role="listbox"
+          style={{ position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: pos?.width, visibility: pos ? 'visible' : 'hidden', zIndex: Z.dropdown }}
+          className="max-h-64 overflow-y-auto bg-white border border-ptr-cream-dark rounded-xl shadow-lg"
+        >
           {groups.map((g, gi) => (
             <div key={g.label ?? `_${gi}`}>
               {g.label && (
@@ -130,7 +171,8 @@ export default function Select({ value, onChange, children, className = '', disa
               ))}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

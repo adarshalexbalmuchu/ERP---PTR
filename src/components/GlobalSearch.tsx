@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Search, ClipboardList, AlertTriangle, User, MapPin, CornerDownLeft } from 'lucide-react';
+import { Search, X, ClipboardList, AlertTriangle, User, MapPin, CornerDownLeft } from 'lucide-react';
 import { useGlobalSearchResults, SEARCH_GROUPS, type SearchResult } from '../hooks/useGlobalSearch';
+import { Z } from '../lib/floating';
 
 const GROUP_ICON: Record<SearchResult['kind'], React.ReactNode> = {
   status: <Search className="w-3.5 h-3.5" />,
@@ -18,6 +20,8 @@ export default function GlobalSearch({ base }: { base: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const [resultsPos, setResultsPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const { results, loading } = useGlobalSearchResults(base, query);
 
   // Ctrl/Cmd+K or "/" focuses search (ignored while typing elsewhere).
@@ -36,7 +40,12 @@ export default function GlobalSearch({ base }: { base: string }) {
   }, []);
 
   useEffect(() => {
-    const onDoc = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target)) return;
+      if (resultsRef.current?.contains(target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
@@ -46,6 +55,20 @@ export default function GlobalSearch({ base }: { base: string }) {
     if (query.trim().length >= 2) setOpen(true);
     else setOpen(false);
   }, [query, results]);
+
+  // Portaled to document.body (see Menu.tsx / floating.ts) so results are
+  // never clipped by the header and always render above the command bar.
+  useLayoutEffect(() => {
+    if (!open) { setResultsPos(null); return; }
+    const update = () => {
+      const rect = boxRef.current?.getBoundingClientRect();
+      if (rect) setResultsPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+  }, [open]);
 
   const flatOrder = SEARCH_GROUPS.flatMap((g) => results.filter((r) => r.kind === g.kind));
 
@@ -75,15 +98,33 @@ export default function GlobalSearch({ base }: { base: string }) {
         aria-expanded={open}
         aria-controls="global-search-results"
         autoComplete="off"
-        className="peer w-full h-8 pl-8 pr-12 rounded bg-white/12 hover:bg-white/16 focus:bg-white text-13 text-white focus:text-n-100 placeholder:text-white/60 focus:placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
+        className={`peer w-full h-8 pl-8 rounded bg-white/10 hover:bg-white/15 focus:bg-white text-13 text-white focus:text-n-100 placeholder:text-white/70 focus:placeholder:text-n-70 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors ${query ? 'pr-8' : 'pr-12'}`}
         style={{ fontSize: '16px' }}
       />
-      <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-0.5 px-1.5 h-5 rounded border border-white/25 peer-focus:border-n-30 text-[10px] font-medium text-white/60 peer-focus:text-n-60 pointer-events-none select-none z-10">
-        Ctrl K
-      </kbd>
+      {query ? (
+        <button
+          type="button"
+          onClick={() => { setQuery(''); inputRef.current?.focus(); }}
+          aria-label="Clear search"
+          title="Clear search"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded text-white/70 hover:text-white hover:bg-white/15 peer-focus:text-n-70 peer-focus:hover:bg-n-20 transition-colors z-10"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      ) : (
+        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-0.5 px-1.5 h-5 rounded border border-white/25 peer-focus:border-n-30 text-[10px] font-medium text-white/60 peer-focus:text-n-60 pointer-events-none select-none z-10">
+          Ctrl K
+        </kbd>
+      )}
 
-      {open && (
-        <div id="global-search-results" role="listbox" className="absolute top-full mt-1.5 left-0 right-0 bg-white rounded-md shadow-pop border border-n-30 py-1.5 max-h-[70vh] overflow-y-auto z-50 animate-slide-down">
+      {open && resultsPos && createPortal(
+        <div
+          ref={resultsRef}
+          id="global-search-results"
+          role="listbox"
+          style={{ position: 'fixed', top: resultsPos.top, left: resultsPos.left, width: resultsPos.width, zIndex: Z.dropdown }}
+          className="bg-white rounded-md shadow-pop border border-n-30 py-1.5 max-h-[70vh] overflow-y-auto animate-slide-down"
+        >
           {loading && results.length === 0 ? (
             <div className="px-3 py-6 text-center text-13 text-n-70">Searching…</div>
           ) : flatOrder.length === 0 ? (
@@ -119,7 +160,8 @@ export default function GlobalSearch({ base }: { base: string }) {
               );
             })
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { formatRelative } from '../utils/formatters';
+import { Z } from '../lib/floating';
 import type { Notification } from '../types';
 
 const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; className: string }> = {
@@ -45,6 +47,7 @@ const GROUP_ORDER: NotifGroup[] = ['action', 'assignments', 'incidents', 'system
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // The panel is position:fixed and pinned to the viewport's right edge (not
   // the bell's), so on a narrow phone it can't run off the left of the
@@ -73,14 +76,22 @@ export default function NotificationBell() {
     localStorage.setItem('ptr-push-prompt-dismissed', '1');
   };
 
+  const close = () => { setOpen(false); triggerRef.current?.focus(); };
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') close(); }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
   }, []);
 
   // Re-measure where the panel should drop from whenever it opens, and keep
@@ -114,6 +125,8 @@ export default function NotificationBell() {
         className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded hover:bg-n-20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/40"
         title="Notifications"
         aria-label={`Notifications${actionableUnreadCount > 0 ? ` (${actionableUnreadCount} need action)` : unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <Bell className="w-5 h-5" />
         {actionableUnreadCount > 0 && (
@@ -121,10 +134,11 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
-          className="fixed right-2 w-80 max-w-[calc(100vw-1rem)] bg-white rounded-md shadow-pop border border-n-30 z-50 overflow-hidden animate-slide-down"
-          style={{ top: panelTop }}
+          ref={panelRef}
+          className="fixed right-2 w-80 max-w-[calc(100vw-1rem)] bg-white rounded-md shadow-pop border border-n-30 overflow-hidden animate-slide-down"
+          style={{ top: panelTop, zIndex: Z.dropdown }}
         >
           <div className="flex items-center justify-between gap-2 px-4 h-11 border-b border-n-30">
             <h3 className="text-13 font-semibold text-n-100">Notifications</h3>
@@ -139,7 +153,7 @@ export default function NotificationBell() {
                 </button>
               )}
               <button
-                onClick={() => setOpen(false)}
+                onClick={close}
                 className="w-7 h-7 flex items-center justify-center rounded hover:bg-n-20 transition-colors text-n-70"
                 aria-label="Close notifications"
               >
@@ -245,7 +259,8 @@ export default function NotificationBell() {
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
