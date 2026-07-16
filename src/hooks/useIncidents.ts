@@ -4,8 +4,9 @@ import { supabase } from '../lib/supabase';
 import { mapIncident } from '../lib/mappers';
 import { uploadIncidentPhoto } from '../lib/incidentPhotos';
 import { getCurrentPosition, describeGeolocationFailure } from '../utils/geolocation';
+import { verifyAffectedRows, type VerifyAffectedRowsResult } from '../lib/mutationVerification';
 import useStore from '../store/useStore';
-import type { Incident, IncidentType, IncidentSeverity } from '../types';
+import type { Incident, IncidentType, IncidentSeverity, IncidentStatus } from '../types';
 
 type CreateIncidentData = {
   type: IncidentType;
@@ -43,7 +44,7 @@ export function useIncidents() {
     queryFn: async (): Promise<Incident[]> => {
       const { data, error } = await supabase
         .from('incidents')
-        .select('*, incident_photos(*), profiles(name)')
+        .select('*, incident_photos(*), profiles!incidents_reported_by_fkey(name), assignee:profiles!incidents_assigned_to_fkey(name)')
         .order('incident_date', { ascending: false });
       if (error) throw error;
       return Promise.all(data.map((row) => resolveIncidentPhotoUrls(mapIncident(row))));
@@ -123,5 +124,44 @@ export function useIncidents() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['incidents'] }),
   });
 
-  return { incidents, isLoading, reportIncident, deleteIncident, removePhoto };
+  // `.select('id')` is what makes this trustworthy: a bare `.update().in()`
+  // reports success even when RLS silently drops every row (0 matched, no
+  // Postgres error) — asking for the ids actually written is the only way
+  // to tell "nothing changed" from "everything changed".
+  const assignIncidents = useMutation({
+    mutationFn: async ({ ids, userId }: { ids: string[]; userId: string }): Promise<VerifyAffectedRowsResult> => {
+      const { data, error } = await supabase
+        .from('incidents')
+        .update({ assigned_to: userId, assigned_at: new Date().toISOString() })
+        .in('id', ids)
+        .select('id');
+      if (error) throw error;
+      return verifyAffectedRows({ requestedIds: ids, returnedRows: data, entityName: 'incident-assign' });
+    },
+    onSuccess: (result) => { if (result.updatedIds.length > 0) void queryClient.invalidateQueries({ queryKey: ['incidents'] }); },
+  });
+
+  const changeSeverity = useMutation({
+    mutationFn: async ({ ids, severity }: { ids: string[]; severity: IncidentSeverity }): Promise<VerifyAffectedRowsResult> => {
+      const { data, error } = await supabase.from('incidents').update({ severity }).in('id', ids).select('id');
+      if (error) throw error;
+      return verifyAffectedRows({ requestedIds: ids, returnedRows: data, entityName: 'incident-severity' });
+    },
+    onSuccess: (result) => { if (result.updatedIds.length > 0) void queryClient.invalidateQueries({ queryKey: ['incidents'] }); },
+  });
+
+  const setStatus = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: IncidentStatus }): Promise<VerifyAffectedRowsResult> => {
+      const { data, error } = await supabase
+        .from('incidents')
+        .update({ status, resolved_at: status === 'Resolved' ? new Date().toISOString() : null })
+        .in('id', ids)
+        .select('id');
+      if (error) throw error;
+      return verifyAffectedRows({ requestedIds: ids, returnedRows: data, entityName: 'incident-status' });
+    },
+    onSuccess: (result) => { if (result.updatedIds.length > 0) void queryClient.invalidateQueries({ queryKey: ['incidents'] }); },
+  });
+
+  return { incidents, isLoading, reportIncident, deleteIncident, removePhoto, assignIncidents, changeSeverity, setStatus };
 }

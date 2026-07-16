@@ -5,6 +5,7 @@ import type { Database, NotificationType } from '../lib/database.types';
 import { mapTask } from '../lib/mappers';
 import { logTaskChanges, logTaskDeletion } from '../lib/audit';
 import { formatDate } from '../utils/formatters';
+import { verifyAffectedRows, SINGLE_RECORD_NOT_UPDATED_MESSAGE, type VerifyAffectedRowsResult } from '../lib/mutationVerification';
 import useStore from '../store/useStore';
 import type { Task } from '../types';
 
@@ -149,8 +150,13 @@ export function useTasks() {
       if (data.completionPercentage !== undefined) patch.completion_percentage = data.completionPercentage;
 
       if (Object.keys(patch).length > 0) {
-        const { error } = await supabase.from('tasks').update(patch).eq('id', id);
+        const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select('id');
         if (error) throw error;
+        // `.update().eq()` reports success even when RLS silently drops the
+        // row (0 matched, no Postgres error) — verifying the row actually
+        // came back is what tells a real update apart from a quiet no-op.
+        const { outcome } = verifyAffectedRows({ requestedIds: [id], returnedRows: data, entityName: 'task' });
+        if (outcome !== 'complete') throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
       }
 
       // Replace the co-assignee roster wholesale — simplest correct way to
@@ -197,6 +203,20 @@ export function useTasks() {
     },
   });
 
+  // Shared bulk-update path for the Task Registry's multi-select toolbar
+  // (Assign / Change status / Set due date) — one place to run the
+  // per-task updateTask calls and verify what actually persisted, instead
+  // of each page re-implementing its own Promise.allSettled aggregation.
+  const bulkUpdateTasks = useMutation({
+    mutationFn: async ({ ids, patch }: { ids: string[]; patch: Partial<CreateTaskData> }): Promise<VerifyAffectedRowsResult> => {
+      const settled = await Promise.allSettled(ids.map((id) => updateTask.mutateAsync({ id, ...patch })));
+      const returnedRows = ids
+        .filter((_, i) => settled[i].status === 'fulfilled')
+        .map((id) => ({ id }));
+      return verifyAffectedRows({ requestedIds: ids, returnedRows, entityName: 'task-bulk' });
+    },
+  });
+
   const deleteTask = useMutation({
     mutationFn: async (taskId: string) => {
       const before = tasks.find((t) => t.id === taskId);
@@ -207,5 +227,5 @@ export function useTasks() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
-  return { tasks, isLoading, createTask, updateTask, deleteTask };
+  return { tasks, isLoading, createTask, updateTask, deleteTask, bulkUpdateTasks };
 }

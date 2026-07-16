@@ -144,6 +144,8 @@ export type IncidentType =
 
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 
+export type IncidentStatus = 'Open' | 'Resolved';
+
 export interface IncidentPhoto {
   id: string;
   path: string;
@@ -158,6 +160,7 @@ export interface Incident {
   /** Free-text label when type is one of the per-category "Other" catch-alls; undefined otherwise. */
   typeOther?: string;
   severity: IncidentSeverity;
+  status: IncidentStatus;
   description: string;
   rangeId: string;
   areaId?: string;
@@ -166,6 +169,11 @@ export interface Incident {
   reportedBy: string;
   /** The reporter's display name, joined in from profiles — undefined only if that profile row is unreadable/missing. */
   reporterName?: string;
+  assignedTo?: string;
+  /** The assignee's display name, joined in from profiles — undefined if unassigned or unreadable. */
+  assigneeName?: string;
+  assignedAt?: string;
+  resolvedAt?: string;
   incidentDate: string;
   createdAt: string;
   photos: IncidentPhoto[];

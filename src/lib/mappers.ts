@@ -124,6 +124,7 @@ export function mapIncident(
   row: IncidentRow & {
     incident_photos?: IncidentPhotoRow[];
     profiles?: { name: string } | null;
+    assignee?: { name: string } | null;
   },
 ): Incident {
   return {
@@ -131,6 +132,7 @@ export function mapIncident(
     type: row.type,
     typeOther: row.type_other ?? undefined,
     severity: row.severity,
+    status: row.status,
     description: row.description,
     rangeId: row.range_id,
     areaId: row.area_id ?? undefined,
@@ -138,6 +140,10 @@ export function mapIncident(
     lng: row.lng ?? undefined,
     reportedBy: row.reported_by,
     reporterName: row.profiles?.name ?? undefined,
+    assignedTo: row.assigned_to ?? undefined,
+    assigneeName: row.assignee?.name ?? undefined,
+    assignedAt: row.assigned_at ?? undefined,
+    resolvedAt: row.resolved_at ?? undefined,
     incidentDate: row.incident_date,
     createdAt: row.created_at,
     photos: (row.incident_photos ?? []).map(mapIncidentPhoto),

@@ -7,6 +7,7 @@ export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' |
 export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported';
 export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'conflict_other' | 'poaching_sign' | 'road_kill' | 'animal_injury' | 'tree_felling' | 'other' | 'wildlife_sighting' | 'sighting_other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
+export type IncidentStatus = 'Open' | 'Resolved';
 
 type Relationships = {
   foreignKeyName: string;
@@ -368,12 +369,16 @@ export interface Database {
           type: IncidentType;
           type_other: string | null;
           severity: IncidentSeverity;
+          status: IncidentStatus;
           description: string;
           range_id: string;
           area_id: string | null;
           lat: number | null;
           lng: number | null;
           reported_by: string;
+          assigned_to: string | null;
+          assigned_at: string | null;
+          resolved_at: string | null;
           incident_date: string;
           created_at: string;
         };
@@ -382,12 +387,16 @@ export interface Database {
           type: IncidentType;
           type_other?: string | null;
           severity?: IncidentSeverity;
+          status?: IncidentStatus;
           description: string;
           range_id: string;
           area_id?: string | null;
           lat?: number | null;
           lng?: number | null;
           reported_by: string;
+          assigned_to?: string | null;
+          assigned_at?: string | null;
+          resolved_at?: string | null;
           incident_date?: string;
         };
         Update: {
@@ -395,12 +404,16 @@ export interface Database {
           type?: IncidentType;
           type_other?: string | null;
           severity?: IncidentSeverity;
+          status?: IncidentStatus;
           description?: string;
           range_id?: string;
           area_id?: string | null;
           lat?: number | null;
           lng?: number | null;
           reported_by?: string;
+          assigned_to?: string | null;
+          assigned_at?: string | null;
+          resolved_at?: string | null;
           incident_date?: string;
         };
         Relationships: Relationships;
@@ -501,6 +514,7 @@ export interface Database {
       notification_type: NotificationType;
       incident_type: IncidentType;
       incident_severity: IncidentSeverity;
+      incident_status: IncidentStatus;
     };
   };
 }

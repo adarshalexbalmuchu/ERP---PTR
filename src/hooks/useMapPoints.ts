@@ -30,6 +30,7 @@ export function useMapPoints() {
         type: row.type as IncidentType,
         typeOther: row.type_other ?? undefined,
         severity: row.severity as IncidentSeverity,
+        status: row.status,
         description: row.description,
         rangeId: row.range_id,
         areaId: row.area_id ?? undefined,

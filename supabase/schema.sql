@@ -82,6 +82,10 @@ do $$ begin
   create type incident_severity as enum ('Low', 'Medium', 'High', 'Critical');
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  create type incident_status as enum ('Open', 'Resolved');
+exception when duplicate_object then null; end $$;
+
 -- ─────────────────────────────────────────────
 -- Tables
 -- ─────────────────────────────────────────────
@@ -302,6 +306,19 @@ create table if not exists incidents (
 -- database just adds it.
 alter table incidents add column if not exists type_other text;
 
+-- Incident response tracking: who is handling an incident and whether it
+-- has been resolved. status defaults to 'Open' so every existing row is
+-- treated as still open; assigned_to is nullable (an incident can sit
+-- unassigned). assigned_at/resolved_at record when each transition
+-- happened, mirroring the acknowledged_at/completed_at/archived_at pattern
+-- already used on tasks. UPDATE access is already covered by the existing
+-- "incidents_director" / "incidents_tiger_cell" management policies
+-- (for all) further down, so no new RLS policy is needed.
+alter table incidents add column if not exists status incident_status not null default 'Open';
+alter table incidents add column if not exists assigned_to uuid references profiles(id) on delete set null;
+alter table incidents add column if not exists assigned_at timestamptz;
+alter table incidents add column if not exists resolved_at timestamptz;
+
 -- Now that incidents exists, wire up notifications.incident_id (see the
 -- notifications table above) — an incident_reported notification points
 -- here instead of at a task.
@@ -357,6 +374,8 @@ create index if not exists task_updates_task_id_idx on task_updates(task_id);
 create index if not exists comments_task_id_idx     on comments(task_id);
 create index if not exists incidents_range_id_idx   on incidents(range_id);
 create index if not exists incidents_type_idx       on incidents(type);
+create index if not exists incidents_status_idx     on incidents(status);
+create index if not exists incidents_assigned_to_idx on incidents(assigned_to) where assigned_to is not null;
 create index if not exists incidents_date_idx       on incidents(incident_date);
 create index if not exists incident_photos_incident_id_idx on incident_photos(incident_id);
 create index if not exists audit_log_range_id_idx   on audit_log(range_id);
@@ -1378,3 +1397,4 @@ create or replace view task_range_stats
 
 grant select on task_dashboard_stats to authenticated;
 grant select on task_range_stats to authenticated;
+
