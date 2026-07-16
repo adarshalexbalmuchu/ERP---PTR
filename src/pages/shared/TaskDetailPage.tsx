@@ -28,6 +28,7 @@ import AttachmentList from '../../components/AttachmentList';
 import TaskForm from '../../components/TaskForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { CommandBar } from '../../components/layout/Slots';
+import { canManageTasks } from '../../lib/permissions';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import MobileTaskDetail from '../mobile/MobileTaskDetail';
 import { isFieldRole } from '../../types';
@@ -150,7 +151,7 @@ export default function TaskDetailPage() {
   const area = areas.find((a) => a.id === task.areaId);
   const overdue = isOverdue(task);
   const isAssignee = currentUser?.id === task.assigneeId || task.coAssigneeIds.includes(currentUser?.id ?? '');
-  const canManage = role === 'director' || role === 'range_officer';
+  const canManage = canManageTasks(role);
 
   const assignableUsers = users.filter((u) => isFieldRole(u.role));
 
@@ -455,7 +456,7 @@ export default function TaskDetailPage() {
             comments={task.comments}
             users={users}
             currentUser={currentUser}
-            onAddComment={(content) => addComment.mutate(content)}
+            onAddComment={(content) => addComment.mutateAsync(content)}
           />
         )}
       </div>

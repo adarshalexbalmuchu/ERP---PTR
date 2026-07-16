@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Calendar, User, Tag, Navigation, Send, CheckCircle2,
-  RotateCcw, Archive, AlertCircle, Paperclip, Check, RefreshCw, X,
+  RotateCcw, Archive, AlertCircle, Paperclip, Check, RefreshCw, X, Copy,
 } from 'lucide-react';
 import type { useTask } from '../../hooks/useTask';
 import StatusBadge from '../../components/StatusBadge';
@@ -13,6 +13,8 @@ import EvidenceCapture, { EMPTY_EVIDENCE, type CapturedEvidence } from '../../co
 import { isOverdue } from '../../utils/overdue';
 import { formatDate, formatDateTime, formatDueRelative, formatFileSize } from '../../utils/formatters';
 import { isFieldRole } from '../../types';
+import { canManageTasks } from '../../lib/permissions';
+import { getErrorMessage } from '../../lib/errors';
 import type { Task, User as UserT, Range, Area } from '../../types';
 
 type QueuedStatus = 'uploading' | 'uploaded' | 'failed';
@@ -66,7 +68,7 @@ export default function MobileTaskDetail({
   const commentsRef = useRef<HTMLDivElement>(null);
 
   const role = currentUser?.role;
-  const canManage = role === 'director' || role === 'range_officer';
+  const canManage = canManageTasks(role);
   const isAssignee = !!currentUser && (task.assigneeId === currentUser.id || task.coAssigneeIds.includes(currentUser.id));
   const assignee = users.find((u) => u.id === task.assigneeId);
   const coAssignees = task.coAssigneeIds.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean);
@@ -122,19 +124,43 @@ export default function MobileTaskDetail({
 
   const scrollToComments = () => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  // Every lifecycle action reports what actually happened — the mutations
+  // already verify affected rows (see useTask.ts), so a thrown error here
+  // means the database genuinely didn't change, not just a network blip.
+  const runLifecycle = async (mutate: () => Promise<unknown>, failureFallback: string) => {
+    try {
+      await mutate();
+    } catch (err) {
+      alert(getErrorMessage(err, failureFallback));
+    }
+  };
+  const anyLifecycleBusy = startTask.isPending || completeTask.isPending || archiveTask.isPending || reopenTask.isPending || requestChanges.isPending;
+
+  const copyTaskId = () => {
+    void navigator.clipboard?.writeText(task.id).catch(() => {});
+  };
+
+  // Rendered inside MobileShell's <main> (the app's single scroll owner) —
+  // no h-[calc(...)] / overflow-y-auto here, or this page would create a
+  // second, nested scrollbar. The sub-header and action bar use `sticky`
+  // instead of their own flex-shrink-0 rows in an independent flex column,
+  // so they still pin to the top/bottom of the shared scrollport.
   return (
-    <div className="flex flex-col h-[calc(100dvh-56px)]">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center gap-2 px-2 h-14 border-b border-n-30">
+    <div>
+      {/* Sub-header */}
+      <div className="sticky top-0 z-10 bg-white flex items-center gap-2 px-2 h-14 border-b border-n-30">
         <button onClick={() => navigate(-1)} className="w-11 h-11 flex items-center justify-center rounded-full text-n-90 active:bg-n-20" aria-label="Back">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="min-w-0 flex-1">
-          <div className="text-xs text-n-60 font-mono">#{task.id.slice(0, 8)}</div>
+        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+          <span className="text-13 text-n-90 font-mono">Task #{task.id.slice(0, 8).toUpperCase()}</span>
+          <button onClick={copyTaskId} className="w-7 h-7 flex items-center justify-center rounded text-n-70 active:bg-n-20 flex-shrink-0" aria-label="Copy task ID">
+            <Copy className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-4">
+      <div className="pb-4">
         <div className="px-4 pt-4">
           <h1 className="text-xl font-semibold text-n-100 leading-snug">{task.title}</h1>
           <div className="flex items-center flex-wrap gap-3 mt-2">
@@ -221,7 +247,7 @@ export default function MobileTaskDetail({
                   {att.previewUrl ? <img src={att.previewUrl} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" /> : <Paperclip className="w-4 h-4 text-n-70 flex-shrink-0" />}
                   <div className="min-w-0">
                     <div className="text-xs font-medium text-n-90 truncate">{att.name}</div>
-                    <div className="text-[11px] text-n-60">{formatFileSize(att.size)}</div>
+                    <div className="text-[11px] text-n-70">{formatFileSize(att.size)}</div>
                   </div>
                 </a>
               ))}
@@ -240,7 +266,7 @@ export default function MobileTaskDetail({
                   <div key={upd.id} className="bg-n-10 rounded p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-13 font-semibold text-n-90">{author?.name ?? 'Unknown'}</span>
-                      <span className="text-xs text-n-70">{upd.progressPercentage}% · {formatDateTime(upd.createdAt)}</span>
+                      <span className="text-xs text-n-80">{upd.progressPercentage}% · {formatDateTime(upd.createdAt)}</span>
                     </div>
                     <p className="text-13 text-n-90 mt-0.5">{upd.note}</p>
                   </div>
@@ -253,38 +279,77 @@ export default function MobileTaskDetail({
         {/* Comments */}
         <div ref={commentsRef} className="px-4 mt-4">
           <div className="text-xs font-semibold text-n-70 uppercase tracking-wide mb-2">Comments ({task.comments.length})</div>
-          {currentUser && <CommentThread comments={task.comments} users={users} currentUser={currentUser} onAddComment={(c) => addComment.mutate(c)} />}
+          {currentUser && <CommentThread comments={task.comments} users={users} currentUser={currentUser} onAddComment={(c) => addComment.mutateAsync(c)} />}
         </div>
       </div>
 
-      {/* Sticky bottom lifecycle action bar */}
-      <div className="flex-shrink-0 border-t border-n-30 bg-white p-3" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+      {/* Sticky bottom lifecycle action bar — pins to the bottom of <main>
+          (the shared scroll owner) via `sticky`, not its own fixed-height
+          flex row, so the rest of the page still scrolls fully above it. */}
+      <div className="sticky bottom-0 z-10 border-t border-n-30 bg-white p-3" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {isAssignee && isFieldRole(role) && task.status === 'NotStarted' && (
-          <button onClick={() => startTask.mutate()} className="btn-primary w-full h-12 text-[15px]"><CheckCircle2 className="w-5 h-5" />Accept &amp; start task</button>
+          <button
+            onClick={() => void runLifecycle(() => startTask.mutateAsync(), 'Could not start this task.')}
+            disabled={anyLifecycleBusy}
+            className="btn-primary w-full h-12 text-[15px] disabled:opacity-60"
+          >
+            {startTask.isPending ? <RefreshCw className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+            {startTask.isPending ? 'Starting…' : 'Accept & start task'}
+          </button>
         )}
         {isAssignee && isFieldRole(role) && task.status === 'InProgress' && (
           <div className="flex gap-2">
-            <button onClick={() => setEvidenceOpen(true)} className="btn-secondary flex-1 h-12 text-[15px]"><Paperclip className="w-4 h-4" />Add evidence</button>
-            <button onClick={() => completeTask.mutate()} className="btn-primary flex-1 h-12 text-[15px]"><Send className="w-4 h-4" />Submit for review</button>
+            {changesRequested && (
+              <button onClick={scrollToComments} className="btn-secondary flex-1 h-12 text-[15px]"><AlertCircle className="w-4 h-4" />View feedback</button>
+            )}
+            <button onClick={() => setEvidenceOpen(true)} className="btn-secondary flex-1 h-12 text-[15px]" disabled={anyLifecycleBusy}><Paperclip className="w-4 h-4" />Add evidence</button>
+            <button
+              onClick={() => void runLifecycle(() => completeTask.mutateAsync(), 'Could not submit this task for review.')}
+              disabled={anyLifecycleBusy}
+              className="btn-primary flex-1 h-12 text-[15px] disabled:opacity-60"
+            >
+              {completeTask.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {completeTask.isPending ? 'Submitting…' : changesRequested ? 'Resubmit for review' : 'Submit for review'}
+            </button>
           </div>
         )}
         {canManage && task.status === 'Completed' && !reviseOpen && (
           <div className="flex gap-2">
-            <button onClick={() => setReviseOpen(true)} className="btn-secondary flex-1 h-12 text-[15px]"><RotateCcw className="w-4 h-4" />Request changes</button>
-            <button onClick={() => archiveTask.mutate()} className="btn-primary flex-1 h-12 text-[15px]"><Archive className="w-4 h-4" />Approve &amp; close</button>
+            <button onClick={() => setReviseOpen(true)} disabled={anyLifecycleBusy} className="btn-secondary flex-1 h-12 text-[15px] disabled:opacity-60"><RotateCcw className="w-4 h-4" />Request changes</button>
+            <button
+              onClick={() => void runLifecycle(() => archiveTask.mutateAsync(), 'Could not approve and close this task.')}
+              disabled={anyLifecycleBusy}
+              className="btn-primary flex-1 h-12 text-[15px] disabled:opacity-60"
+            >
+              {archiveTask.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+              {archiveTask.isPending ? 'Closing…' : 'Approve & close'}
+            </button>
           </div>
         )}
         {canManage && task.status === 'Completed' && reviseOpen && (
           <div className="space-y-2">
             <textarea value={reviseNote} onChange={(e) => setReviseNote(e.target.value)} rows={2} placeholder="What needs to change?" className="input-field resize-none" style={{ fontSize: '16px' }} />
             <div className="flex gap-2">
-              <button onClick={() => setReviseOpen(false)} className="btn-secondary flex-1 h-11">Cancel</button>
-              <button onClick={() => { requestChanges.mutate(reviseNote.trim()); setReviseOpen(false); setReviseNote(''); }} className="btn-primary flex-1 h-11">Send back</button>
+              <button onClick={() => setReviseOpen(false)} disabled={requestChanges.isPending} className="btn-secondary flex-1 h-11">Cancel</button>
+              <button
+                onClick={() => void runLifecycle(async () => { await requestChanges.mutateAsync(reviseNote.trim()); setReviseOpen(false); setReviseNote(''); }, 'Could not send this back for changes.')}
+                disabled={requestChanges.isPending}
+                className="btn-primary flex-1 h-11 disabled:opacity-60"
+              >
+                {requestChanges.isPending ? 'Sending…' : 'Send back'}
+              </button>
             </div>
           </div>
         )}
         {canManage && task.status === 'Archived' && (
-          <button onClick={() => { if (confirm('Reopen this task for further work?')) reopenTask.mutate(); }} className="btn-secondary w-full h-12 text-[15px]"><RotateCcw className="w-4 h-4" />Reopen task</button>
+          <button
+            onClick={() => { if (confirm('Reopen this task for further work?')) void runLifecycle(() => reopenTask.mutateAsync(), 'Could not reopen this task.'); }}
+            disabled={anyLifecycleBusy}
+            className="btn-secondary w-full h-12 text-[15px] disabled:opacity-60"
+          >
+            {reopenTask.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            {reopenTask.isPending ? 'Reopening…' : 'Reopen task'}
+          </button>
         )}
         {noActionMessage && (
           <div className="text-center text-13 text-n-70 py-2">{noActionMessage}</div>

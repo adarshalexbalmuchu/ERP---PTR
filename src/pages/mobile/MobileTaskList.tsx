@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, Plus, WifiOff } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
+import { useMobileOverlay } from '../../contexts/MobileOverlayContext';
 import MobileTaskCard from '../../components/mobile/MobileTaskCard';
 import FilterChips from '../../components/mobile/FilterChips';
 import TaskFilterSheet, { EMPTY_TASK_FILTERS, type MobileTaskFilters } from '../../components/mobile/TaskFilterSheet';
 import PullToRefresh from '../../components/mobile/PullToRefresh';
 import { isOverdue } from '../../utils/overdue';
+import { PRIORITY_ORDER } from '../../components/PriorityBadge';
+import { matchesTaskSearch } from '../../utils/taskSearch';
 import type { Task, User, Range, Area } from '../../types';
 
 const PAGE_SIZE = 20;
@@ -45,10 +48,15 @@ export default function MobileTaskList({
 }) {
   const currentUser = useStore((s) => s.currentUser);
   const { isOnline } = useSyncStatus();
+  const overlay = useMobileOverlay();
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
   const [chip, setChip] = useState<Chip>('all');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<MobileTaskFilters>(EMPTY_TASK_FILTERS);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterOpenFallback, setFilterOpenFallback] = useState(false);
+  const filterOpen = overlay?.isOpen('filters') ?? filterOpenFallback;
+  const openFilters = () => (overlay ? overlay.open('filters', filterButtonRef.current) : setFilterOpenFallback(true));
+  const closeFilters = () => (overlay ? overlay.close('filters') : setFilterOpenFallback(false));
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? '—';
@@ -76,18 +84,14 @@ export default function MobileTaskList({
     if (filters.assigneeId && !(t.assigneeId === filters.assigneeId || t.coAssigneeIds.includes(filters.assigneeId))) return false;
     if (filters.status && t.status !== filters.status) return false;
     if (filters.priority && t.priority !== filters.priority) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!t.title.toLowerCase().includes(q) && !nameOf(t.assigneeId).toLowerCase().includes(q)) return false;
-    }
+    if (search && !matchesTaskSearch(t.title, nameOf(t.assigneeId), search)) return false;
     return true;
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    const order = { Critical: 0, High: 1, Medium: 2, Low: 3 };
     const aOverdue = isOverdue(a), bOverdue = isOverdue(b);
     if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
-    if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
+    if (PRIORITY_ORDER[a.priority] !== PRIORITY_ORDER[b.priority]) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
   const visible = sorted.slice(0, visibleCount);
@@ -123,9 +127,13 @@ export default function MobileTaskList({
             />
           </div>
           <button
-            onClick={() => setFilterOpen(true)}
-            className="relative w-10 h-10 flex-shrink-0 flex items-center justify-center rounded border border-n-40 text-n-80"
-            aria-label="Advanced filters"
+            ref={filterButtonRef}
+            onClick={openFilters}
+            className={`relative w-12 h-12 flex-shrink-0 flex items-center justify-center rounded border transition-colors ${
+              activeFilterCount > 0 ? 'border-ptr-green bg-ptr-green/10 text-ptr-green' : 'border-n-40 text-n-80'
+            }`}
+            aria-label="Filter tasks"
+            aria-expanded={filterOpen}
           >
             <SlidersHorizontal className="w-4 h-4" />
             {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-ptr-green text-white text-[10px] font-semibold flex items-center justify-center">{activeFilterCount}</span>}
@@ -187,7 +195,7 @@ export default function MobileTaskList({
 
       <TaskFilterSheet
         open={filterOpen}
-        onClose={() => setFilterOpen(false)}
+        onClose={closeFilters}
         filters={filters}
         onChange={(f) => { setFilters(f); resetPaging(); }}
         ranges={ranges}

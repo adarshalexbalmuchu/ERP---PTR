@@ -16,7 +16,6 @@
     "@tanstack/query-sync-storage-persister": "^5.101.2",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-query-persist-client": "^5.101.2",
-    "@types/leaflet": "^1.9.21",
     "browser-image-compression": "^2.0.2",
     "date-fns": "^4.4.0",
     "leaflet": "^1.9.4",
@@ -30,6 +29,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

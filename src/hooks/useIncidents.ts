@@ -5,6 +5,7 @@ import { mapIncident } from '../lib/mappers';
 import { uploadIncidentPhoto } from '../lib/incidentPhotos';
 import { getCurrentPosition, describeGeolocationFailure } from '../utils/geolocation';
 import { verifyAffectedRows, type VerifyAffectedRowsResult } from '../lib/mutationVerification';
+import { getErrorMessage } from '../lib/errors';
 import useStore from '../store/useStore';
 import type { Incident, IncidentType, IncidentSeverity, IncidentStatus } from '../types';
 
@@ -20,19 +21,22 @@ type CreateIncidentData = {
 const PHOTO_URL_TTL_SECONDS = 3600;
 
 // incident_photos.path stores the bare storage path (the bucket is
-// private); this swaps in a time-limited signed URL before the incident
-// reaches the UI, same approach used for task attachments.
-async function resolveIncidentPhotoUrls(incident: Incident): Promise<Incident> {
-  if (incident.photos.length === 0) return incident;
-  const paths = incident.photos.map((p) => p.path);
+// private); this swaps in time-limited signed URLs before the incidents
+// reach the UI, same approach used for task attachments. One signed-url
+// request across every photo in the list, not one per incident — the
+// Storage API already batches by path, so looping per-incident here would
+// just turn a single round trip into N.
+export async function resolveIncidentPhotoUrls(incidents: Incident[]): Promise<Incident[]> {
+  const allPaths = incidents.flatMap((i) => i.photos.map((p) => p.path));
+  if (allPaths.length === 0) return incidents;
   const { data } = await supabase.storage
     .from('incident-photos')
-    .createSignedUrls(paths, PHOTO_URL_TTL_SECONDS);
+    .createSignedUrls(allPaths, PHOTO_URL_TTL_SECONDS);
   const signedByPath = new Map((data ?? []).map((d) => [d.path, d.signedUrl]));
-  return {
+  return incidents.map((incident) => ({
     ...incident,
     photos: incident.photos.map((p) => ({ ...p, url: signedByPath.get(p.path) ?? p.url })),
-  };
+  }));
 }
 
 export function useIncidents() {
@@ -47,7 +51,7 @@ export function useIncidents() {
         .select('*, incident_photos(*), profiles!incidents_reported_by_fkey(name), assignee:profiles!incidents_assigned_to_fkey(name)')
         .order('incident_date', { ascending: false });
       if (error) throw error;
-      return Promise.all(data.map((row) => resolveIncidentPhotoUrls(mapIncident(row))));
+      return resolveIncidentPhotoUrls(data.map(mapIncident));
     },
   });
 
@@ -95,7 +99,7 @@ export function useIncidents() {
         try {
           await uploadIncidentPhoto(row.id, currentUser.id, file);
         } catch (err) {
-          failures.push(err instanceof Error ? err.message : `Failed to upload "${file.name}"`);
+          failures.push(getErrorMessage(err, `Failed to upload "${file.name}"`));
         }
       }
       if (failures.length > 0) throw new Error(failures.join('; '));

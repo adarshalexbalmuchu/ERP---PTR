@@ -8,6 +8,12 @@ export function formatDate(isoString: string): string {
   }
 }
 
+// Compact "3 Jul"-style date, used where a full formatDate would be too wide
+// (search results, inline notification text).
+export function formatShortDate(date: Date): string {
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
 export function formatDateTime(isoString: string): string {
   try {
     return format(parseISO(isoString), 'dd MMM yyyy, hh:mm a');

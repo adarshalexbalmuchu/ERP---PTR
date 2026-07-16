@@ -6,10 +6,10 @@ import { mapTask, mapComment, mapTaskUpdate } from '../lib/mappers';
 import { uploadTaskAttachment } from '../lib/attachments';
 import { getCurrentPosition } from '../utils/geolocation';
 import { logTaskAction, logTaskChanges, logTaskDeletion } from '../lib/audit';
+import { verifyAffectedRows, SINGLE_RECORD_NOT_UPDATED_MESSAGE } from '../lib/mutationVerification';
 import useStore from '../store/useStore';
-import type { Task } from '../types';
-
-type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>;
+import type { Task, CreateTaskData } from '../types';
+import { formatShortDate } from '../utils/formatters';
 
 const ATTACHMENT_URL_TTL_SECONDS = 3600;
 
@@ -155,11 +155,15 @@ export function useTask(id: string | undefined) {
   const startTask = useMutation({
     mutationFn: async () => {
       if (!id || !task || !currentUser) throw new Error('No task id');
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'InProgress', acknowledged_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (verifyAffectedRows({ requestedIds: [id], returnedRows: data, entityName: 'task-start' }).outcome !== 'complete') {
+        throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
+      }
       await logTaskAction(task, currentUser.id, 'status', 'Acknowledged & started');
     },
     onSuccess: invalidate,
@@ -168,11 +172,15 @@ export function useTask(id: string | undefined) {
   const completeTask = useMutation({
     mutationFn: async () => {
       if (!id || !currentUser || !task) throw new Error('No task id');
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'Completed', completed_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (verifyAffectedRows({ requestedIds: [id], returnedRows: data, entityName: 'task-complete' }).outcome !== 'complete') {
+        throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
+      }
       // Notify creator/officers (best-effort — the completion itself
       // already succeeded, so log rather than fail the mutation).
       if (task.createdById !== currentUser.id) {
@@ -180,7 +188,7 @@ export function useTask(id: string | undefined) {
           user_id: task.createdById,
           type: 'task_completed' as NotificationType,
           title: 'Task Completed',
-          message: `${currentUser.name} marked "${task.title}" as done · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
+          message: `${currentUser.name} marked "${task.title}" as done · ${formatShortDate(new Date())}`,
           task_id: id,
         });
         if (notifyErr) console.error('notification insert failed', notifyErr);
@@ -193,11 +201,15 @@ export function useTask(id: string | undefined) {
   const archiveTask = useMutation({
     mutationFn: async () => {
       if (!id || !task || !currentUser) throw new Error('No task id');
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'Archived', archived_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (verifyAffectedRows({ requestedIds: [id], returnedRows: data, entityName: 'task-archive' }).outcome !== 'complete') {
+        throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
+      }
       // Notify every assignee (primary + co-assignees, deduped, minus the
       // actor) in one batched insert instead of a round-trip per person.
       const archiveRecipients = [...new Set([task.assigneeId, ...task.coAssigneeIds])]
@@ -227,11 +239,15 @@ export function useTask(id: string | undefined) {
   const reopenTask = useMutation({
     mutationFn: async () => {
       if (!id || !task || !currentUser) throw new Error('No task id');
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ status: 'InProgress' })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (verifyAffectedRows({ requestedIds: [id], returnedRows: data, entityName: 'task-reopen' }).outcome !== 'complete') {
+        throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
+      }
       const recipients = [...new Set([task.assigneeId, ...task.coAssigneeIds])]
         .filter((userId) => userId !== currentUser.id);
       if (recipients.length > 0) {
@@ -254,11 +270,15 @@ export function useTask(id: string | undefined) {
   const requestChanges = useMutation({
     mutationFn: async (note: string) => {
       if (!id || !currentUser || !task) throw new Error('No task id');
-      const { error: taskErr } = await supabase
+      const { data: taskData, error: taskErr } = await supabase
         .from('tasks')
         .update({ status: 'InProgress' })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (taskErr) throw taskErr;
+      if (verifyAffectedRows({ requestedIds: [id], returnedRows: taskData, entityName: 'task-request-changes' }).outcome !== 'complete') {
+        throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
+      }
 
       const commentContent = note
         ? `[Changes Requested] ${note}`

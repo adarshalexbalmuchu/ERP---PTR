@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, AlertCircle } from 'lucide-react';
 import type { Comment, User } from '../types';
 import { formatRelative } from '../utils/formatters';
 
@@ -7,20 +7,40 @@ interface Props {
   comments: Comment[];
   users: User[];
   currentUser: User;
-  onAddComment: (content: string) => void;
+  /** May reject — the caller's real mutation, not fire-and-forget, so this
+      component can tell a genuine failure apart from a successful send and
+      never silently discard what the user typed. */
+  onAddComment: (content: string) => Promise<unknown>;
 }
 
 export default function CommentThread({ comments, users, currentUser, onAddComment }: Props) {
   const [value, setValue] = useState('');
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const getUserById = (id: string) => users.find((u) => u.id === id);
+
+  const send = async (content: string) => {
+    setSending(true);
+    setFailed(false);
+    try {
+      await onAddComment(content);
+      setValue('');
+    } catch {
+      // Deliberately keep the typed text in the box — this is exactly the
+      // "failed state, don't lose what was typed" case comments didn't
+      // handle before (the input used to clear unconditionally).
+      setFailed(true);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = value.trim();
-    if (!trimmed) return;
-    onAddComment(trimmed);
-    setValue('');
+    if (!trimmed || sending) return;
+    void send(trimmed);
   };
 
   return (
@@ -67,30 +87,39 @@ export default function CommentThread({ comments, users, currentUser, onAddComme
       </div>
 
       {/* Add comment */}
-      <form onSubmit={handleSubmit} className="flex gap-2 pt-2 border-t border-ptr-cream-dark">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-ptr-green text-white"
-        >
-          {currentUser.avatarInitials}
-        </div>
-        <div className="flex-1 flex gap-2">
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="Add a comment..."
-            maxLength={2000}
-            className="input-field flex-1"
-          />
-          <button
-            type="submit"
-            disabled={!value.trim()}
-            className="btn-primary px-3 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-      </form>
+      <div className="pt-2 border-t border-ptr-cream-dark">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-ptr-green text-white">
+            {currentUser.avatarInitials}
+          </div>
+          <div className="flex-1 flex gap-2">
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => { setValue(e.target.value); if (failed) setFailed(false); }}
+              placeholder="Add a comment..."
+              maxLength={2000}
+              disabled={sending}
+              className="input-field flex-1"
+              style={{ fontSize: '16px' }}
+            />
+            <button
+              type="submit"
+              disabled={!value.trim() || sending}
+              className="btn-primary px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={sending ? 'Sending comment' : 'Send comment'}
+            >
+              <Send className={`w-4 h-4 ${sending ? 'animate-pulse' : ''}`} />
+            </button>
+          </div>
+        </form>
+        {failed && (
+          <p className="flex items-center gap-1.5 text-xs text-signal-red mt-1.5 ml-11">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            Couldn&rsquo;t send — check your connection and try again.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { mapTask, mapIncident, mapProfile } from '../lib/mappers';
 import { formatIncidentType } from '../lib/incidentTypes';
-import type { Task, Incident, User as UserType, Range } from '../types';
+import { formatShortDate } from '../utils/formatters';
 
 export interface SearchResult {
   kind: 'task' | 'incident' | 'user' | 'range' | 'status';
@@ -45,10 +44,10 @@ export function useGlobalSearchResults(base: string, query: string) {
     const handle = setTimeout(async () => {
       try {
         const [taskRes, incidentRes, userRes, rangeRes] = await Promise.all([
-          supabase.from('tasks').select('*').ilike('title', `%${q}%`).limit(5),
-          supabase.from('incidents').select('*').or(`description.ilike.%${q}%,type.ilike.%${q}%`).limit(5),
-          supabase.from('profiles').select('*').ilike('name', `%${q}%`).limit(5),
-          supabase.from('ranges').select('*').ilike('name', `%${q}%`).limit(5),
+          supabase.from('tasks').select('id, title, status, due_date').ilike('title', `%${q}%`).limit(5),
+          supabase.from('incidents').select('id, type, type_other, severity').or(`description.ilike.%${q}%,type.ilike.%${q}%`).limit(5),
+          supabase.from('profiles').select('id, name, designation, role').ilike('name', `%${q}%`).limit(5),
+          supabase.from('ranges').select('id, name').ilike('name', `%${q}%`).limit(5),
         ]);
 
         const ranked: SearchResult[] = [];
@@ -60,24 +59,23 @@ export function useGlobalSearchResults(base: string, query: string) {
         }
         if (!taskRes.error && taskRes.data) {
           for (const row of taskRes.data) {
-            const t: Task = mapTask(row);
-            ranked.push({ kind: 'task', id: t.id, title: t.title, meta: `${t.status === 'InProgress' ? 'In progress' : t.status === 'NotStarted' ? 'Not started' : t.status} · Due ${new Date(t.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`, onSelect: () => navigate(`${base}/tasks/${t.id}`) });
+            const statusLabel = row.status === 'InProgress' ? 'In progress' : row.status === 'NotStarted' ? 'Not started' : row.status;
+            ranked.push({ kind: 'task', id: row.id, title: row.title, meta: `${statusLabel} · Due ${formatShortDate(new Date(row.due_date))}`, onSelect: () => navigate(`${base}/tasks/${row.id}`) });
           }
         }
         if (!incidentRes.error && incidentRes.data) {
           for (const row of incidentRes.data) {
-            const inc: Incident = mapIncident(row);
-            ranked.push({ kind: 'incident', id: inc.id, title: formatIncidentType(inc), meta: `${inc.severity} severity`, onSelect: () => navigate(`${base}/incidents?q=${encodeURIComponent(q)}`) });
+            const title = formatIncidentType({ type: row.type, typeOther: row.type_other ?? undefined });
+            ranked.push({ kind: 'incident', id: row.id, title, meta: `${row.severity} severity`, onSelect: () => navigate(`${base}/incidents?q=${encodeURIComponent(q)}`) });
           }
         }
         if (!userRes.error && userRes.data) {
           for (const row of userRes.data) {
-            const u: UserType = mapProfile(row);
-            ranked.push({ kind: 'user', id: u.id, title: u.name, meta: u.designation || u.role, onSelect: () => navigate(`${base}/tasks?q=${encodeURIComponent(u.name)}`) });
+            ranked.push({ kind: 'user', id: row.id, title: row.name, meta: row.designation || row.role, onSelect: () => navigate(`${base}/tasks?q=${encodeURIComponent(row.name)}`) });
           }
         }
         if (!rangeRes.error && rangeRes.data) {
-          for (const row of rangeRes.data as Range[]) {
+          for (const row of rangeRes.data) {
             ranked.push({ kind: 'range', id: row.id, title: row.name, meta: 'Range', onSelect: () => navigate(`${base}/tasks?range=${row.id}`) });
           }
         }

@@ -1,4 +1,4 @@
-import type { IncidentType } from '../types';
+import type { IncidentSeverity, IncidentType } from '../types';
 
 export type IncidentCategory = 'human_wildlife_conflict' | 'protection' | 'wildlife_sighting';
 
@@ -41,8 +41,6 @@ export const INCIDENT_CATEGORIES: IncidentCategoryGroup[] = [
   },
 ];
 
-export const INCIDENT_TYPES: IncidentType[] = INCIDENT_CATEGORIES.flatMap((g) => g.options.map((o) => o.type));
-
 export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = INCIDENT_CATEGORIES.reduce(
   (acc, group) => {
     for (const opt of group.options) acc[opt.type] = opt.label;
@@ -66,4 +64,18 @@ export function formatIncidentType(incident: { type: IncidentType; typeOther?: s
   return isOtherIncidentType(incident.type) && incident.typeOther
     ? `${label} — ${incident.typeOther}`
     : label;
+}
+
+// A muted, earthy severity gradient (gray → bronze → rust → red) instead
+// of bright saturated hues — reads as escalating urgency without turning
+// the map into a rainbow of pins. Shared by desktop and mobile map views.
+export const SEVERITY_COLOR: Record<IncidentSeverity, string> = {
+  Low: '#9CA3AF',
+  Medium: '#8A7F5C',
+  High: '#A8551E',
+  Critical: '#DC2626',
+};
+
+export function isHighSeverity(severity: IncidentSeverity): boolean {
+  return severity === 'High' || severity === 'Critical';
 }

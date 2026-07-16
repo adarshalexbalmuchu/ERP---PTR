@@ -19,7 +19,7 @@ function greeting(): string {
 function Metric({ label, value, tone = 'default', onClick }: { label: string; value: number | string; tone?: 'default' | 'red' | 'amber' | 'green'; onClick: () => void }) {
   const cls = tone === 'red' ? 'text-signal-red' : tone === 'amber' ? 'text-signal-amber' : tone === 'green' ? 'text-signal-green' : 'text-n-100';
   return (
-    <button onClick={onClick} className="text-left bg-white border border-n-30 rounded-lg p-3.5">
+    <button onClick={onClick} className="text-left bg-white border border-n-30 rounded-lg p-2.5 active:bg-n-10 transition-colors">
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>{value}</div>
       <div className="text-13 text-n-80 mt-0.5">{label}</div>
     </button>
@@ -29,7 +29,7 @@ function Metric({ label, value, tone = 'default', onClick }: { label: string; va
 function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between px-4 mb-1.5">
-      <div className="text-xs font-semibold uppercase tracking-wide text-n-70">{children}</div>
+      <div className="text-13 font-semibold text-n-90">{children}</div>
       {action}
     </div>
   );
@@ -54,6 +54,7 @@ export default function AdminHome() {
   const overdueCount = stats?.overdueCount ?? 0;
   const awaitingReview = tasks.filter((t) => t.status === 'Completed').length;
   const completionRate = totalTasks > 0 ? Math.round((((stats?.completedCount ?? 0) + (stats?.archivedCount ?? 0)) / totalTasks) * 100) : 0;
+  const criticalIncidentsCount = incidents.filter((i) => i.severity === 'Critical' && i.status === 'Open').length;
 
   const needsAttention = [...rangeStats]
     .map((r) => ({ ...r, health: healthOf(r.total, r.overdue) }))
@@ -73,10 +74,13 @@ export default function AdminHome() {
         </p>
       </div>
 
+      {/* Actionable conditions first — overdue work and open reviews need a
+          decision now, so they lead; the raw task total (informational, not
+          actionable on its own) no longer takes the most prominent slot. */}
       <div className="grid grid-cols-2 gap-2.5 px-4 mb-5">
-        <Metric label="Total tasks" value={totalTasks} onClick={() => navigate('/director/tasks')} />
         <Metric label="Overdue" value={overdueCount} tone={overdueCount > 0 ? 'red' : 'default'} onClick={() => navigate('/director/tasks?view=overdue')} />
         <Metric label="Awaiting review" value={awaitingReview} tone={awaitingReview > 0 ? 'amber' : 'default'} onClick={() => navigate('/director/tasks?view=review')} />
+        <Metric label="Critical incidents" value={criticalIncidentsCount} tone={criticalIncidentsCount > 0 ? 'red' : 'default'} onClick={() => navigate('/director/incidents')} />
         <Metric label="Completion" value={`${completionRate}%`} tone="green" onClick={() => navigate('/director/tasks?status=Archived')} />
       </div>
 

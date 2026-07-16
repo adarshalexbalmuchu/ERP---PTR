@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronUp, ChevronDown, Eye, Pencil, Trash2, UserCog, MoreHorizontal, ClipboardList } from 'lucide-react';
 import StatusBadge from './StatusBadge';
-import PriorityBadge from './PriorityBadge';
+import PriorityBadge, { PRIORITY_ORDER } from './PriorityBadge';
 import { Menu, MenuItem } from './ui/Menu';
 import { isOverdue } from '../utils/overdue';
 import { formatDate, formatDueRelative } from '../utils/formatters';
@@ -10,7 +10,6 @@ import type { Task, User, Range } from '../types';
 type SortKey = 'title' | 'assignee' | 'priority' | 'status' | 'due';
 type SortDir = 'asc' | 'desc';
 
-const PRIORITY_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 const STATUS_ORDER: Record<string, number> = { NotStarted: 0, InProgress: 1, Completed: 2, Archived: 3 };
 
 interface Props {

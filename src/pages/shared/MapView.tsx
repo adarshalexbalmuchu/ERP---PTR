@@ -8,8 +8,7 @@ import { useLiveLocations, FRESH_AFTER_MS, STALE_AFTER_MS } from '../../hooks/us
 import useStore from '../../store/useStore';
 import { formatDateTime, formatRelative } from '../../utils/formatters';
 import type { Coords } from '../../utils/geolocation';
-import { formatIncidentType } from '../../lib/incidentTypes';
-import type { IncidentSeverity } from '../../types';
+import { formatIncidentType, SEVERITY_COLOR } from '../../lib/incidentTypes';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import MobileMapView from '../mobile/MobileMapView';
 
@@ -44,16 +43,6 @@ const MAP_LAYERS: Record<LayerId, { label: string; icon: typeof MapIcon; url: st
     attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM &middot; Style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
     maxZoom: 17,
   },
-};
-
-// A muted, earthy severity gradient (gray → bronze → rust → red) instead
-// of bright saturated hues — reads as escalating urgency without turning
-// the map into a rainbow of pins.
-const SEVERITY_COLOR: Record<IncidentSeverity, string> = {
-  Low: '#9CA3AF',
-  Medium: '#8A7F5C',
-  High: '#A8551E',
-  Critical: '#DC2626',
 };
 
 export default function MapView() {

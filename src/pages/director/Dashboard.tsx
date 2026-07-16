@@ -26,6 +26,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import AdminHome from '../mobile/AdminHome';
 import type { Task } from '../../types';
 import { isFieldRole } from '../../types';
+import { getErrorMessage } from '../../lib/errors';
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -298,7 +299,7 @@ export default function DirectorDashboard() {
             for (const row of rows) {
               for (const file of files) {
                 try { await uploadTaskAttachment(row.id, currentUser.id, file); }
-                catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                catch (err) { alert(getErrorMessage(err, `Failed to upload "${file.name}"`)); }
               }
             }
             setFormOpen(false);

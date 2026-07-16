@@ -12,6 +12,7 @@ import CommentThread from './CommentThread';
 import { isOverdue } from '../utils/overdue';
 import { formatDate, formatDateTime, formatDueRelative } from '../utils/formatters';
 import { isFieldRole } from '../types';
+import { canManageTasks } from '../lib/permissions';
 
 function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
@@ -54,7 +55,7 @@ export default function TaskDetailPanel({
   if (!taskId) return null;
 
   const role = currentUser?.role;
-  const canManage = role === 'director' || role === 'range_officer';
+  const canManage = canManageTasks(role);
   const isAssignee = !!currentUser && (task?.assigneeId === currentUser.id || (task?.coAssigneeIds.includes(currentUser.id) ?? false));
 
   const assignee = task ? users.find((u) => u.id === task.assigneeId) : undefined;
@@ -188,7 +189,7 @@ export default function TaskDetailPanel({
               <div className="px-4 py-3 border-t border-n-30">
                 <div className="text-xs font-semibold text-n-70 uppercase tracking-wide mb-2">Comments ({task.comments.length})</div>
                 {currentUser && (
-                  <CommentThread comments={task.comments} users={users} currentUser={currentUser} onAddComment={(c) => addComment.mutate(c)} />
+                  <CommentThread comments={task.comments} users={users} currentUser={currentUser} onAddComment={(c) => addComment.mutateAsync(c)} />
                 )}
               </div>
             </>

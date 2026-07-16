@@ -20,6 +20,7 @@ import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { Page, PageHeading, SectionTitle } from '../../components/layout/Page';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import OfficerHome from '../mobile/OfficerHome';
+import { getErrorMessage } from '../../lib/errors';
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -190,7 +191,7 @@ export default function OfficerDashboard() {
             for (const row of rows) {
               for (const file of files) {
                 try { await uploadTaskAttachment(row.id, currentUser.id, file); }
-                catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                catch (err) { alert(getErrorMessage(err, `Failed to upload "${file.name}"`)); }
               }
             }
             setFormOpen(false);

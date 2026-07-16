@@ -63,9 +63,6 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 h-8 px-3.5 bg-white border border-n-40 text-n-90 font-semibold rounded text-13 hover:bg-n-20 active:bg-n-30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 h-8 px-3.5 bg-white border border-n-40 text-signal-red font-semibold rounded text-13 hover:bg-signal-red-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
-  }
   /* Toolbar/command-bar action — borderless until hovered. */
   .btn-subtle {
     @apply inline-flex items-center justify-center gap-2 h-8 px-2.5 bg-transparent text-n-90 font-medium rounded text-13 hover:bg-n-20 active:bg-n-30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
@@ -91,11 +88,6 @@
      the dashboard prefers continuous white with dividers over boxed cards. */
   .card {
     @apply bg-white rounded-md border border-n-30;
-  }
-
-  /* Focus-visible ring for keyboard users on custom controls. */
-  .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-accent/40 focus-visible:ring-offset-1;
   }
 }
 

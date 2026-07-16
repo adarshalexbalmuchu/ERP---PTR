@@ -7,9 +7,7 @@ import { logTaskChanges, logTaskDeletion } from '../lib/audit';
 import { formatDate } from '../utils/formatters';
 import { verifyAffectedRows, SINGLE_RECORD_NOT_UPDATED_MESSAGE, type VerifyAffectedRowsResult } from '../lib/mutationVerification';
 import useStore from '../store/useStore';
-import type { Task } from '../types';
-
-type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>;
+import type { Task, CreateTaskData } from '../types';
 
 // One batched insert instead of a round-trip per recipient. Best-effort:
 // the task mutation the user cares about has already succeeded by the time

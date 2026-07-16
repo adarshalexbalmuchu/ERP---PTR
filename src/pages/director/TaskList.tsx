@@ -12,6 +12,7 @@ import { useRanges } from '../../hooks/useRanges';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { usePanelToggle } from '../../contexts/PanelToggleContext';
 import { isOverdue } from '../../utils/overdue';
+import { matchesTaskSearch } from '../../utils/taskSearch';
 import { formatDate } from '../../utils/formatters';
 import { exportCsv } from '../../utils/exportCsv';
 import { uploadTaskAttachment } from '../../lib/attachments';
@@ -26,6 +27,7 @@ import { PanelSection, PanelItem } from '../../components/layout/PanelNav';
 import { Page, PageHeading } from '../../components/layout/Page';
 import type { Task, TaskStatus } from '../../types';
 import { isFieldRole } from '../../types';
+import { getErrorMessage } from '../../lib/errors';
 
 const STATUS_SET: { value: TaskStatus; label: string }[] = [
   { value: 'NotStarted', label: 'Not started' },
@@ -71,9 +73,8 @@ export default function DirectorTaskList() {
     if (priority && t.priority !== priority) return false;
     if (range && t.rangeId !== range) return false;
     if (search) {
-      const q = search.toLowerCase();
-      const name = users.find((u) => u.id === t.assigneeId)?.name.toLowerCase() ?? '';
-      if (!t.title.toLowerCase().includes(q) && !name.includes(q)) return false;
+      const name = users.find((u) => u.id === t.assigneeId)?.name ?? '';
+      if (!matchesTaskSearch(t.title, name, search)) return false;
     }
     return true;
   };
@@ -105,7 +106,7 @@ export default function DirectorTaskList() {
       const result = await bulkUpdateTasks.mutateAsync({ ids, patch });
       alert(describeBulkOutcome(result, ids.length, 'tasks'));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update the selected tasks.');
+      alert(getErrorMessage(err, 'Failed to update the selected tasks.'));
     }
   };
   const bulkStatus = (s: TaskStatus) => void runBulkUpdate(selectedIds, { status: s });
@@ -157,7 +158,7 @@ export default function DirectorTaskList() {
               for (const row of rows) {
                 for (const file of files) {
                   try { await uploadTaskAttachment(row.id, currentUser.id, file); }
-                  catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                  catch (err) { alert(getErrorMessage(err, `Failed to upload "${file.name}"`)); }
                 }
               }
               setMobileFormOpen(false);
@@ -295,7 +296,7 @@ export default function DirectorTaskList() {
               for (const row of rows) {
                 for (const file of files) {
                   try { await uploadTaskAttachment(row.id, currentUser.id, file); }
-                  catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                  catch (err) { alert(getErrorMessage(err, `Failed to upload "${file.name}"`)); }
                 }
               }
             }

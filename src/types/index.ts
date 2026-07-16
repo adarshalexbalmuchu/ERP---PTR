@@ -1,4 +1,12 @@
-export type Role = 'director' | 'range_officer' | 'guard' | 'range_office' | 'tiger_cell';
+// The literal unions below mirror the Postgres enum columns exactly — they
+// are re-exported from the generated database.types.ts (the source of
+// truth for the schema) instead of being hand-copied, so a schema change
+// can't silently drift out of sync with the app's types.
+import type {
+  UserRole, TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType,
+} from '../lib/database.types';
+export type { TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType };
+export type Role = UserRole;
 
 // range_office and tiger_cell hold the same access level as guard (field
 // staff scoped to their own assigned tasks/incidents) — just a different
@@ -8,18 +16,6 @@ export const FIELD_ROLES: Role[] = ['guard', 'range_office', 'tiger_cell'];
 export function isFieldRole(role: Role | undefined): boolean {
   return role !== undefined && FIELD_ROLES.includes(role);
 }
-
-export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
-
-export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
-
-export type TaskCategory =
-  | 'Patrol'
-  | 'Camera Trap'
-  | 'Survey'
-  | 'Maintenance'
-  | 'Admin'
-  | 'Other';
 
 export interface Range {
   id: string;
@@ -105,19 +101,12 @@ export interface Task {
   attachments: Attachment[];
 }
 
+export type CreateTaskData = Omit<Task, 'id' | 'createdAt' | 'comments' | 'attachments' | 'taskUpdates'>;
+
 export interface Notification {
   id: string;
   userId: string;
-  type:
-    | 'task_assigned'
-    | 'task_updated'
-    | 'task_completed'
-    | 'changes_requested'
-    | 'task_archived'
-    | 'task_due_soon'
-    | 'task_due_today'
-    | 'task_overdue'
-    | 'incident_reported';
+  type: NotificationType;
   title: string;
   message: string;
   /** Set for every notification type except incident_reported. */
@@ -127,24 +116,6 @@ export interface Notification {
   read: boolean;
   createdAt: string;
 }
-
-export type IncidentType =
-  | 'human_attack'
-  | 'livestock_attack'
-  | 'crop_damage'
-  | 'property_damage'
-  | 'conflict_other'
-  | 'poaching_sign'
-  | 'road_kill'
-  | 'animal_injury'
-  | 'tree_felling'
-  | 'other'
-  | 'wildlife_sighting'
-  | 'sighting_other';
-
-export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
-
-export type IncidentStatus = 'Open' | 'Resolved';
 
 export interface IncidentPhoto {
   id: string;

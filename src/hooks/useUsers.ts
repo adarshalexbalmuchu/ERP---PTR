@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 import { mapProfile } from '../lib/mappers';
 import type { User, Role } from '../types';
+import { verifyAffectedRows, SINGLE_RECORD_NOT_UPDATED_MESSAGE } from '../lib/mutationVerification';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -70,8 +71,11 @@ export function useUsers() {
       if (data.avatarInitials !== undefined) patch.avatar_initials = data.avatarInitials;
       patch.range_id = data.rangeId ?? null;
 
-      const { error } = await supabase.from('profiles').update(patch).eq('id', id);
+      const { data: rows, error } = await supabase.from('profiles').update(patch).eq('id', id).select('id');
       if (error) throw error;
+      if (verifyAffectedRows({ requestedIds: [id], returnedRows: rows, entityName: 'user-update' }).outcome !== 'complete') {
+        throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });

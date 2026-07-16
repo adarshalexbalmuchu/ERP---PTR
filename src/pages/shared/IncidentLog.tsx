@@ -25,9 +25,11 @@ import MobileIncidentList from '../mobile/MobileIncidentList';
 import { formatDate, formatDateTime } from '../../utils/formatters';
 import { exportCsv } from '../../utils/exportCsv';
 import { describeBulkOutcome } from '../../lib/mutationVerification';
+import { canManageIncidents } from '../../lib/permissions';
 import { uploadTaskAttachment } from '../../lib/attachments';
 import { MAX_INCIDENT_PHOTOS } from '../../lib/incidentPhotos';
-import { INCIDENT_CATEGORIES, formatIncidentType, isOtherIncidentType } from '../../lib/incidentTypes';
+import { INCIDENT_CATEGORIES, formatIncidentType, isOtherIncidentType, isHighSeverity } from '../../lib/incidentTypes';
+import { getErrorMessage } from '../../lib/errors';
 import type { IncidentType, IncidentSeverity, Incident, TaskPriority } from '../../types';
 import { isFieldRole } from '../../types';
 
@@ -282,13 +284,6 @@ function ReportForm({
   );
 }
 
-// Named-person exception, not a role rule — one specific profile holds the
-// tiger_cell role but is deliberately excluded from full incident-log
-// access (see incidents_tiger_cell in supabase/schema.sql; internal
-// records have who/why). If that profile is ever deleted and recreated,
-// this id must be updated to match.
-const RESTRICTED_TIGER_CELL_USER_ID = '237e1f9b-cf77-4b83-ae43-7641af75f67f';
-
 export default function IncidentLog() {
   const currentUser = useStore((s) => s.currentUser);
   const isMobile = useIsMobile();
@@ -317,8 +312,7 @@ export default function IncidentLog() {
   // these are the only roles with any UPDATE grant on incidents at all, so
   // selection/bulk actions are gated the same way: not just hidden for
   // everyone else, but genuinely rejected by the database too.
-  const canManage = currentUser?.role === 'director' ||
-    (currentUser?.role === 'tiger_cell' && currentUser.id !== RESTRICTED_TIGER_CELL_USER_ID);
+  const canManage = canManageIncidents(currentUser?.role, currentUser?.id);
   const canCreateTask = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
   const responders = users.filter((u) => isFieldRole(u.role));
   const assignableUsers = users.filter((u) => isFieldRole(u.role) && (!followUpFor || u.rangeId === followUpFor.rangeId));
@@ -342,10 +336,9 @@ export default function IncidentLog() {
     );
   }
 
-  const isHigh = (s: string) => s === 'High' || s === 'Critical';
   const filtered = incidents.filter((i) => {
     if (filterType && i.type !== filterType) return false;
-    if (filterSeverity === 'high') { if (!isHigh(i.severity)) return false; }
+    if (filterSeverity === 'high') { if (!isHighSeverity(i.severity)) return false; }
     else if (filterSeverity && i.severity !== filterSeverity) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -353,7 +346,7 @@ export default function IncidentLog() {
     }
     return true;
   });
-  const highCount = incidents.filter((i) => isHigh(i.severity)).length;
+  const highCount = incidents.filter((i) => isHighSeverity(i.severity)).length;
   const criticalCount = incidents.filter((i) => i.severity === 'Critical').length;
 
   const selectedIncidents = filtered.filter((i) => selectedIds.includes(i.id));
@@ -386,7 +379,7 @@ export default function IncidentLog() {
       const result = await assignIncidents.mutateAsync({ ids, userId });
       alert(describeBulkOutcome(result, ids.length, 'incidents'));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to assign the selected incidents.');
+      alert(getErrorMessage(err, 'Failed to assign the selected incidents.'));
     }
   };
   const bulkSeverity = async (severity: IncidentSeverity) => {
@@ -396,7 +389,7 @@ export default function IncidentLog() {
       const result = await changeSeverity.mutateAsync({ ids, severity });
       alert(describeBulkOutcome(result, ids.length, 'incidents'));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update severity for the selected incidents.');
+      alert(getErrorMessage(err, 'Failed to update severity for the selected incidents.'));
     }
   };
   const bulkToggleResolved = async () => {
@@ -409,7 +402,7 @@ export default function IncidentLog() {
       const result = await setStatus.mutateAsync({ ids, status: nextStatus });
       alert(describeBulkOutcome(result, ids.length, 'incidents'));
     } catch (err) {
-      alert(err instanceof Error ? err.message : `Failed to ${verb} the selected incidents.`);
+      alert(getErrorMessage(err, `Failed to ${verb} the selected incidents.`));
     }
   };
 
@@ -650,7 +643,7 @@ export default function IncidentLog() {
             for (const row of rows) {
               for (const file of files) {
                 try { await uploadTaskAttachment(row.id, currentUser.id, file); }
-                catch (err) { alert(err instanceof Error ? err.message : `Failed to upload "${file.name}"`); }
+                catch (err) { alert(getErrorMessage(err, `Failed to upload "${file.name}"`)); }
               }
             }
             setFollowUpFor(null);

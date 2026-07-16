@@ -1,40 +1,107 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Home, ClipboardList, AlertTriangle, Map as MapIcon, MoreHorizontal, Search,
-  UserCircle, Users, History, HelpCircle, LogOut, X, Wifi, WifiOff, RefreshCw, AlertCircle,
+  UserCircle, Users, History, HelpCircle, LogOut, X, Wifi, WifiOff, RefreshCw, AlertCircle, Check,
 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
+import { useIncidentQueue } from '../../hooks/useIncidentQueue';
 import { useLocationSharing } from '../../hooks/useLiveLocation';
+import { MobileOverlayProvider, useMobileOverlay } from '../../contexts/MobileOverlayContext';
+import { formatRelative } from '../../utils/formatters';
 import NotificationBell from '../NotificationBell';
 import BottomSheet from './BottomSheet';
 import MobileHelpSheet from './MobileHelpSheet';
 import MobileSearchOverlay from './MobileSearchOverlay';
 import jharkhandEmblem from '../../assets/jharkhand-emblem.png';
 
-function SyncPill() {
+const SYNC_PILL_CFG = {
+  offline: { icon: WifiOff, label: 'Offline', cls: 'text-white bg-white/15' },
+  syncing: { icon: RefreshCw, label: 'Syncing', cls: 'text-white bg-white/15', spin: true },
+  'sync-failed': { icon: AlertCircle, label: 'Sync failed', cls: 'text-white bg-signal-red/90' },
+  synced: { icon: Wifi, label: 'Synced', cls: 'text-white/80 bg-white/10' },
+} as const;
+
+function SyncPill({ onOpen }: { onOpen: (trigger: HTMLElement) => void }) {
   const { state, lastSynced } = useSyncStatus();
-  const cfg = {
-    offline: { icon: WifiOff, label: 'Offline', cls: 'text-white bg-white/15' },
-    syncing: { icon: RefreshCw, label: 'Syncing', cls: 'text-white bg-white/15', spin: true },
-    'sync-failed': { icon: AlertCircle, label: 'Sync failed', cls: 'text-white bg-signal-red/90' },
-    synced: { icon: Wifi, label: lastSynced ? 'Synced' : 'Online', cls: 'text-white/80 bg-white/10' },
-  }[state];
+  const cfg = SYNC_PILL_CFG[state];
   const Icon = cfg.icon;
   // A persistent status indicator at every width — the label collapses away
   // on narrow phones (iPhone SE/13 etc.) but the icon (and its colour) is
-  // always visible, since section 9 treats sync state as a core, always-on
-  // signal, not something that can quietly disappear on a smaller screen.
+  // always visible, since sync state is a core, always-on signal, not
+  // something that can quietly disappear on a smaller screen. Tapping it
+  // opens the real sync-detail sheet (see SyncDetailsSheet below).
   return (
-    <span
+    <button
+      onClick={(e) => onOpen(e.currentTarget)}
       className={`inline-flex items-center gap-1 h-6 px-1.5 xs:px-2 rounded-full text-[11px] font-medium flex-shrink-0 ${cfg.cls}`}
       title={lastSynced ? `Last synced ${new Date(lastSynced).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}` : cfg.label}
+      aria-label="Sync status"
     >
       <Icon className={`w-3 h-3 ${'spin' in cfg && cfg.spin ? 'animate-spin' : ''}`} />
       <span className="hidden xs:inline">{cfg.label}</span>
-    </span>
+    </button>
+  );
+}
+
+function SyncDetailsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { state, isOnline, pendingCount, failedCount, lastSynced } = useSyncStatus();
+  const { queued } = useIncidentQueue();
+  const queryClient = useQueryClient();
+  const totalPending = pendingCount + queued.filter((q) => q.status !== 'failed').length;
+  const totalFailed = failedCount + queued.filter((q) => q.status === 'failed').length;
+
+  const retry = () => {
+    void queryClient.resumePausedMutations();
+    void queryClient.invalidateQueries();
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Sync status">
+      <div className="p-4 space-y-3">
+        {!isOnline ? (
+          <div className="flex items-start gap-2.5">
+            <WifiOff className="w-5 h-5 text-signal-amber flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[15px] font-semibold text-n-100">Offline</p>
+              <p className="text-13 text-n-70 mt-0.5">
+                {totalPending + totalFailed > 0 ? `${totalPending + totalFailed} change${totalPending + totalFailed === 1 ? '' : 's'} waiting to sync` : 'Changes made now will sync once you’re back online.'}
+              </p>
+            </div>
+          </div>
+        ) : state === 'sync-failed' ? (
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-signal-red flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-[15px] font-semibold text-n-100">Sync failed</p>
+              <p className="text-13 text-n-70 mt-0.5">{totalFailed} change{totalFailed === 1 ? '' : 's'} could not be sent.</p>
+              <button onClick={retry} className="btn-secondary h-9 text-13 mt-2">Retry</button>
+            </div>
+          </div>
+        ) : state === 'syncing' ? (
+          <div className="flex items-start gap-2.5">
+            <RefreshCw className="w-5 h-5 text-ptr-green flex-shrink-0 mt-0.5 animate-spin" />
+            <div>
+              <p className="text-[15px] font-semibold text-n-100">Syncing…</p>
+              <p className="text-13 text-n-70 mt-0.5">{totalPending} change{totalPending === 1 ? '' : 's'} being sent.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2.5">
+            <Check className="w-5 h-5 text-signal-green flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[15px] font-semibold text-n-100">All changes synced</p>
+              <p className="text-13 text-n-70 mt-0.5">
+                {lastSynced ? `Last synced ${formatRelative(new Date(lastSynced).toISOString())}` : 'Nothing waiting to sync.'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -47,21 +114,57 @@ interface MoreItem {
   onClick?: () => void;
 }
 
-export default function MobileShell({ base, role }: { base: string; role: string }) {
+function LogoutConfirmSheet({ open, onClose, onConfirm, pendingCount }: { open: boolean; onClose: () => void; onConfirm: () => void; pendingCount: number }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Unsynced changes">
+      <div className="p-4 space-y-3">
+        <div className="flex items-start gap-2.5">
+          <AlertCircle className="w-5 h-5 text-signal-amber flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[15px] font-semibold text-n-100">{pendingCount} change{pendingCount === 1 ? '' : 's'} {pendingCount === 1 ? 'has' : 'have'} not synced.</p>
+            <p className="text-13 text-n-70 mt-0.5">Logging out may delay submission until you sign back in with a connection.</p>
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="btn-secondary flex-1 h-11">Stay signed in</button>
+          <button onClick={onConfirm} className="btn-primary flex-1 h-11">Log out</button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function ShellContent({ base, role }: { base: string; role: string }) {
   const currentUser = useStore((s) => s.currentUser);
   const { logoutFromSupabase } = useAuth();
   const navigate = useNavigate();
-  const [moreOpen, setMoreOpen] = useState(false);
+  const overlay = useMobileOverlay();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const syncPillRef = useRef<HTMLElement | null>(null);
+  const { pendingCount, failedCount } = useSyncStatus();
+  const { queued } = useIncidentQueue();
   // Field roles run the same background patrol-location beacon on mobile as
   // the desktop guard shell did — moving the shell here must not drop it.
   useLocationSharing();
 
-  const handleLogout = async () => {
-    setMoreOpen(false);
+  const totalPendingWork = pendingCount + failedCount + queued.length;
+
+  const moreOpen = overlay?.isOpen('more') ?? false;
+  const helpOpen = overlay?.isOpen('help') ?? false;
+  const syncOpen = overlay?.isOpen('sync-details') ?? false;
+  const closeMore = () => overlay?.close('more');
+
+  const doLogout = async () => {
+    setLogoutConfirmOpen(false);
+    overlay?.close();
     await logoutFromSupabase();
     navigate('/login', { replace: true });
+  };
+  const handleLogout = () => {
+    if (totalPendingWork > 0) { setLogoutConfirmOpen(true); return; }
+    void doLogout();
   };
 
   const moreItems: MoreItem[] = [
@@ -70,22 +173,26 @@ export default function MobileShell({ base, role }: { base: string; role: string
     ...(role === 'director' || role === 'range_officer'
       ? [{ label: 'System audit', icon: <History className="w-5 h-5" />, to: `${base}/audit` }]
       : []),
-    { label: 'Help & support', icon: <HelpCircle className="w-5 h-5" />, onClick: () => { setMoreOpen(false); setHelpOpen(true); } },
+    { label: 'Help & support', icon: <HelpCircle className="w-5 h-5" />, onClick: () => overlay?.open('help', moreButtonRef.current) },
     { label: 'Log out', icon: <LogOut className="w-5 h-5" />, danger: true, onClick: handleLogout },
   ];
 
+  // Active state is never colour-alone: a pale-green pill background plus
+  // green icon/label. The focus ring lives on this same inner pill (sized to
+  // the visible content) rather than the full-width/height NavLink, so
+  // keyboard focus never reads as "a different tab is now selected".
   const navItem = (to: string, end: boolean, icon: React.ReactNode, label: string) => (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) =>
-        `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] py-1.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ptr-accent/50 ${
-          isActive ? 'text-ptr-green' : 'text-n-70'
-        }`
-      }
-    >
-      {icon}
-      {label}
+    <NavLink to={to} end={end} className="group flex-1 flex items-center justify-center min-h-[52px] focus-visible:outline-none">
+      {({ isActive }) => (
+        <span
+          className={`flex flex-col items-center gap-0.5 px-3.5 py-1.5 rounded-lg transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ptr-accent group-focus-visible:ring-offset-1 ${
+            isActive ? 'text-ptr-green bg-ptr-green/10' : 'text-n-70'
+          }`}
+        >
+          {icon}
+          <span className="text-[11px] font-medium">{label}</span>
+        </span>
+      )}
     </NavLink>
   );
 
@@ -98,10 +205,10 @@ export default function MobileShell({ base, role }: { base: string; role: string
       >
         <img src={jharkhandEmblem} alt="" className="w-7 h-7 flex-shrink-0" />
         <div className="leading-tight min-w-0 flex-1">
-          <div className="text-[10px] text-white/70 uppercase tracking-wide leading-none">Government of Jharkhand</div>
+          <div className="text-[10px] text-white/70 uppercase tracking-wide leading-none truncate">Government of Jharkhand</div>
           <div className="text-[15px] font-semibold leading-tight truncate">Field Operations</div>
         </div>
-        <SyncPill />
+        <SyncPill onOpen={(trigger) => { syncPillRef.current = trigger; overlay?.open('sync-details', trigger); }} />
         <button
           onClick={() => setSearchOpen(true)}
           className="w-9 h-9 flex items-center justify-center rounded hover:bg-white/10 transition-colors flex-shrink-0"
@@ -142,21 +249,26 @@ export default function MobileShell({ base, role }: { base: string; role: string
         {navItem(`${base}/incidents`, false, <AlertTriangle className="w-5 h-5" />, 'Incidents')}
         {navItem(`${base}/map`, false, <MapIcon className="w-5 h-5" />, 'Map')}
         <button
-          onClick={() => setMoreOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] py-1.5 text-[11px] font-medium text-n-70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ptr-accent/50"
+          ref={moreButtonRef}
+          onClick={() => overlay?.open('more', moreButtonRef.current)}
+          aria-label="More"
+          aria-expanded={moreOpen}
+          className="group flex-1 flex items-center justify-center min-h-[52px] focus-visible:outline-none"
         >
-          <MoreHorizontal className="w-5 h-5" />
-          More
+          <span className={`flex flex-col items-center gap-0.5 px-3.5 py-1.5 rounded-lg transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ptr-accent group-focus-visible:ring-offset-1 ${moreOpen ? 'text-ptr-green bg-ptr-green/10' : 'text-n-70'}`}>
+            <MoreHorizontal className="w-5 h-5" />
+            <span className="text-[11px] font-medium">More</span>
+          </span>
         </button>
       </nav>
 
-      <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)}>
+      <BottomSheet open={moreOpen} onClose={closeMore}>
         <div className="px-4 pt-3 pb-1 flex items-center justify-between">
           <div className="min-w-0">
             <div className="text-13 font-semibold text-n-100 truncate">{currentUser?.name}</div>
             <div className="text-xs text-n-70 truncate">{currentUser?.designation}</div>
           </div>
-          <button onClick={() => setMoreOpen(false)} className="w-9 h-9 flex items-center justify-center rounded text-n-70 hover:bg-n-20 transition-colors flex-shrink-0" aria-label="Close">
+          <button onClick={closeMore} className="w-9 h-9 flex items-center justify-center rounded text-n-70 hover:bg-n-20 transition-colors flex-shrink-0" aria-label="Close more menu">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -166,14 +278,29 @@ export default function MobileShell({ base, role }: { base: string; role: string
               item.danger ? 'text-signal-red' : 'text-n-90 hover:bg-n-20'
             }`;
             const content = <><span className={item.danger ? 'text-signal-red' : 'text-n-70'}>{item.icon}</span>{item.label}</>;
-            if (item.to) return <NavLink key={item.label} to={item.to} onClick={() => setMoreOpen(false)} className={cls}>{content}</NavLink>;
+            if (item.to) return <NavLink key={item.label} to={item.to} onClick={closeMore} className={cls}>{content}</NavLink>;
             if (item.href) return <a key={item.label} href={item.href} className={cls}>{content}</a>;
             return <button key={item.label} onClick={item.onClick} className={cls}>{content}</button>;
           })}
         </div>
       </BottomSheet>
 
-      <MobileHelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <MobileHelpSheet open={helpOpen} onClose={() => overlay?.close('help')} />
+      <SyncDetailsSheet open={syncOpen} onClose={() => overlay?.close('sync-details')} />
+      <LogoutConfirmSheet
+        open={logoutConfirmOpen}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => void doLogout()}
+        pendingCount={totalPendingWork}
+      />
     </div>
+  );
+}
+
+export default function MobileShell({ base, role }: { base: string; role: string }) {
+  return (
+    <MobileOverlayProvider>
+      <ShellContent base={base} role={role} />
+    </MobileOverlayProvider>
   );
 }

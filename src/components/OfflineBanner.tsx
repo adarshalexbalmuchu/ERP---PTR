@@ -1,39 +1,24 @@
-import { useEffect, useState } from 'react';
-import { useMutationState } from '@tanstack/react-query';
-import { WifiOff, RefreshCw } from 'lucide-react';
+import { WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { useSyncStatus } from '../hooks/useSyncStatus';
 
 export default function OfflineBanner() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { state, pendingCount, failedCount } = useSyncStatus();
 
-  useEffect(() => {
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-
-  // Mutations paused by TanStack Query's default networkMode while offline
-  // (progress updates, start/complete, etc.) — resumed automatically once
-  // back online (see App.tsx's onSuccess / resumePausedMutations).
-  const pendingCount = useMutationState({
-    filters: { status: 'pending' },
-    select: (m) => m.state.isPaused,
-  }).filter(Boolean).length;
-
-  if (isOnline && pendingCount === 0) return null;
+  if (state === 'synced') return null;
 
   return (
     <div
       role="status"
       className={`px-4 py-1.5 text-13 font-medium flex items-center justify-center gap-2 ${
-        isOnline ? 'bg-signal-amber text-white' : 'bg-signal-red text-white'
+        state === 'syncing' ? 'bg-signal-amber text-white' : 'bg-signal-red text-white'
       }`}
     >
-      {isOnline ? (
+      {state === 'sync-failed' ? (
+        <>
+          <AlertCircle className="w-3.5 h-3.5" />
+          Sync failed — {failedCount} change{failedCount === 1 ? '' : 's'} could not be sent
+        </>
+      ) : state === 'syncing' ? (
         <>
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Syncing {pendingCount} change{pendingCount === 1 ? '' : 's'}…

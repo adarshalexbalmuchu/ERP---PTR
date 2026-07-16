@@ -15,6 +15,9 @@ const CONFIG: Record<TaskPriority, { label: string; Icon: LucideIcon; cls: strin
   Low: { label: 'Low', Icon: ChevronDown, cls: 'text-n-50', text: 'text-n-80' },
 };
 
+// Most urgent first — shared by every list/table that sorts tasks by priority.
+export const PRIORITY_ORDER: Record<TaskPriority, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+
 export default function PriorityBadge({ priority, size = 'md' }: Props) {
   const config = CONFIG[priority] ?? { label: String(priority ?? '—'), Icon: Minus, cls: 'text-n-60', text: 'text-n-80' };
   const { Icon } = config;

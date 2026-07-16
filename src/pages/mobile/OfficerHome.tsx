@@ -23,7 +23,7 @@ function greeting(): string {
 function Metric({ label, value, tone = 'default', onClick }: { label: string; value: number | string; tone?: 'default' | 'red' | 'amber'; onClick: () => void }) {
   const cls = tone === 'red' ? 'text-signal-red' : tone === 'amber' ? 'text-signal-amber' : 'text-n-100';
   return (
-    <button onClick={onClick} className="text-left bg-white border border-n-30 rounded-lg p-3.5">
+    <button onClick={onClick} className="text-left bg-white border border-n-30 rounded-lg p-2.5 active:bg-n-10 transition-colors">
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>{value}</div>
       <div className="text-13 text-n-80 mt-0.5">{label}</div>
     </button>
@@ -33,7 +33,7 @@ function Metric({ label, value, tone = 'default', onClick }: { label: string; va
 function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between px-4 mb-1.5">
-      <div className="text-xs font-semibold uppercase tracking-wide text-n-70">{children}</div>
+      <div className="text-13 font-semibold text-n-90">{children}</div>
       {action}
     </div>
   );
