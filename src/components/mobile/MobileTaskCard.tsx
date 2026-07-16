@@ -33,15 +33,15 @@ export default function MobileTaskCard({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3.5 border-b border-n-20 last:border-0 active:bg-n-10 transition-colors ${overdue ? 'bg-signal-red-bg/40' : 'bg-white'}`}
+      className={`w-full text-left px-4 py-2.5 border-b border-n-20 last:border-0 active:bg-n-10 transition-colors ${overdue ? 'bg-signal-red-bg/40' : 'bg-white'}`}
     >
       <div className={`flex items-center gap-1 text-[11px] font-bold tracking-wide ${p.cls}`}>
         <PIcon className="w-3 h-3" />
         {p.label}
       </div>
-      <div className="text-[15px] font-semibold text-n-100 leading-snug mt-1">{task.title}</div>
+      <div className="text-[15px] font-semibold text-n-100 leading-snug mt-0.5">{task.title}</div>
       <div className="text-13 text-n-70 mt-0.5 truncate">{locationLabel}{assigneeName ? ` · ${assigneeName}` : ''}</div>
-      <div className="flex items-center justify-between gap-2 mt-2">
+      <div className="flex items-center justify-between gap-2 mt-1.5">
         <StatusBadge status={task.status} size="sm" />
         <span className={`text-13 ${dueClass}`}>{due.text || (done ? formatDate(task.dueDate) : `Due ${formatDate(task.dueDate)}`)}</span>
       </div>

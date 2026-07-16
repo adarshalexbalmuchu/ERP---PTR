@@ -10,6 +10,7 @@ import { useSyncStatus } from '../../hooks/useSyncStatus';
 import { useLocationSharing } from '../../hooks/useLiveLocation';
 import NotificationBell from '../NotificationBell';
 import BottomSheet from './BottomSheet';
+import MobileHelpSheet from './MobileHelpSheet';
 import MobileSearchOverlay from './MobileSearchOverlay';
 import jharkhandEmblem from '../../assets/jharkhand-emblem.png';
 
@@ -19,7 +20,7 @@ function SyncPill() {
     offline: { icon: WifiOff, label: 'Offline', cls: 'text-white bg-white/15' },
     syncing: { icon: RefreshCw, label: 'Syncing', cls: 'text-white bg-white/15', spin: true },
     'sync-failed': { icon: AlertCircle, label: 'Sync failed', cls: 'text-white bg-signal-red/90' },
-    synced: { icon: Wifi, label: lastSynced ? 'Synced' : 'Online', cls: 'text-white/85 bg-white/10' },
+    synced: { icon: Wifi, label: lastSynced ? 'Synced' : 'Online', cls: 'text-white/80 bg-white/10' },
   }[state];
   const Icon = cfg.icon;
   // A persistent status indicator at every width — the label collapses away
@@ -52,6 +53,7 @@ export default function MobileShell({ base, role }: { base: string; role: string
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   // Field roles run the same background patrol-location beacon on mobile as
   // the desktop guard shell did — moving the shell here must not drop it.
   useLocationSharing();
@@ -68,7 +70,7 @@ export default function MobileShell({ base, role }: { base: string; role: string
     ...(role === 'director' || role === 'range_officer'
       ? [{ label: 'System audit', icon: <History className="w-5 h-5" />, to: `${base}/audit` }]
       : []),
-    { label: 'Help & support', icon: <HelpCircle className="w-5 h-5" />, href: 'mailto:tigercell.ptr@jharkhand.gov.in?subject=PTR%20Field%20Operations%20—%20Support' },
+    { label: 'Help & support', icon: <HelpCircle className="w-5 h-5" />, onClick: () => { setMoreOpen(false); setHelpOpen(true); } },
     { label: 'Log out', icon: <LogOut className="w-5 h-5" />, danger: true, onClick: handleLogout },
   ];
 
@@ -88,7 +90,7 @@ export default function MobileShell({ base, role }: { base: string; role: string
   );
 
   return (
-    <div className="min-h-dvh bg-white flex flex-col">
+    <div className="h-dvh bg-white flex flex-col overflow-hidden">
       {/* Top app bar — compact identity + status, no rail/sidebar */}
       <header
         className="sticky top-0 z-30 bg-ptr-green text-white flex items-center gap-2 px-3"
@@ -96,7 +98,7 @@ export default function MobileShell({ base, role }: { base: string; role: string
       >
         <img src={jharkhandEmblem} alt="" className="w-7 h-7 flex-shrink-0" />
         <div className="leading-tight min-w-0 flex-1">
-          <div className="text-[10px] text-white/65 uppercase tracking-wide leading-none">Government of Jharkhand</div>
+          <div className="text-[10px] text-white/70 uppercase tracking-wide leading-none">Government of Jharkhand</div>
           <div className="text-[15px] font-semibold leading-tight truncate">Field Operations</div>
         </div>
         <SyncPill />
@@ -112,7 +114,17 @@ export default function MobileShell({ base, role }: { base: string; role: string
 
       {searchOpen && <MobileSearchOverlay base={base} onClose={() => setSearchOpen(false)} />}
 
-      <main className="flex-1" style={{ paddingBottom: 'calc(var(--ptr-bottom-nav-h) + env(safe-area-inset-bottom))' }}>
+      {/* The single scroll owner for every mobile page — pages rendered
+          through this Outlet must stay in normal flow (no h-[calc(...)],
+          no overflow-y-auto of their own) so there is never more than one
+          vertical scrollbar on screen at once. */}
+      <main
+        className="flex-1 min-h-0 overflow-y-auto"
+        style={{
+          paddingBottom: 'calc(var(--ptr-bottom-nav-h) + env(safe-area-inset-bottom))',
+          overscrollBehaviorY: 'contain',
+        }}
+      >
         <Outlet />
       </main>
 
@@ -160,6 +172,8 @@ export default function MobileShell({ base, role }: { base: string; role: string
           })}
         </div>
       </BottomSheet>
+
+      <MobileHelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

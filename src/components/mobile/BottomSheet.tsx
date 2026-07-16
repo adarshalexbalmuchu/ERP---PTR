@@ -48,7 +48,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/35" style={{ animation: 'fadeIn 0.15s ease-out' }} onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30" style={{ animation: 'fadeIn 0.15s ease-out' }} onClick={onClose} />
       <div
         ref={sheetRef}
         className="absolute left-0 right-0 bottom-0 bg-white rounded-t-xl shadow-pop flex flex-col animate-sheet-up"

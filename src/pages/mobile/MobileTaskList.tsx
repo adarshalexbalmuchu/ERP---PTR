@@ -96,8 +96,8 @@ export default function MobileTaskList({
   const resetPaging = () => setVisibleCount(PAGE_SIZE);
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-56px-60px)]">
-      <div className="flex-shrink-0 px-4 pt-4 pb-1">
+    <div>
+      <div className="px-4 pt-3 pb-1">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-semibold text-n-100">{title}</h1>
           {onNewTask && (
@@ -107,24 +107,24 @@ export default function MobileTaskList({
           )}
         </div>
         {!isOnline && (
-          <div className="mt-2 flex items-center gap-1.5 text-13 text-signal-amber">
+          <div className="mt-1.5 flex items-center gap-1.5 text-13 text-signal-amber">
             <WifiOff className="w-3.5 h-3.5" />Offline — showing last synced data
           </div>
         )}
-        <div className="flex items-center gap-2 mt-3">
+        <div className="flex items-center gap-2 mt-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-n-70" />
             <input
               value={search}
               onChange={(e) => { setSearch(e.target.value); resetPaging(); }}
               placeholder="Search tasks…"
-              className="input-field pl-9"
+              className="input-field pl-9 !min-h-[40px]"
               style={{ fontSize: '16px' }}
             />
           </div>
           <button
             onClick={() => setFilterOpen(true)}
-            className="relative w-11 h-11 flex-shrink-0 flex items-center justify-center rounded border border-n-40 text-n-80"
+            className="relative w-10 h-10 flex-shrink-0 flex items-center justify-center rounded border border-n-40 text-n-80"
             aria-label="Advanced filters"
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -133,61 +133,57 @@ export default function MobileTaskList({
         </div>
       </div>
 
-      <div className="flex-shrink-0">
-        <FilterChips
-          chips={[
-            { id: 'all', label: 'All', count: chipCounts.all },
-            { id: 'mine', label: 'Mine', count: chipCounts.mine },
-            { id: 'today', label: 'Today', count: chipCounts.today },
-            { id: 'overdue', label: 'Overdue', count: chipCounts.overdue },
-            { id: 'review', label: 'Awaiting review', count: chipCounts.review },
-          ]}
-          active={chip}
-          onChange={(id) => { setChip(id as Chip); resetPaging(); }}
-        />
-      </div>
+      <FilterChips
+        chips={[
+          { id: 'all', label: 'All', count: chipCounts.all },
+          { id: 'mine', label: 'Mine', count: chipCounts.mine },
+          { id: 'today', label: 'Today', count: chipCounts.today },
+          { id: 'overdue', label: 'Overdue', count: chipCounts.overdue },
+          { id: 'review', label: 'Awaiting review', count: chipCounts.review },
+        ]}
+        active={chip}
+        onChange={(id) => { setChip(id as Chip); resetPaging(); }}
+      />
 
-      <div className="flex-1 min-h-0">
-        <PullToRefresh onRefresh={onRefresh}>
-          {loading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="skeleton h-3 w-16" />
-                  <div className="skeleton h-4 w-3/4" />
-                  <div className="skeleton h-3 w-1/2" />
-                </div>
-              ))}
-            </div>
-          ) : visible.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-n-20 flex items-center justify-center mb-3 text-n-70">
-                <Search className="w-5 h-5" />
+      <PullToRefresh onRefresh={onRefresh}>
+        {loading ? (
+          <div className="p-4 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="skeleton h-3 w-16" />
+                <div className="skeleton h-4 w-3/4" />
+                <div className="skeleton h-3 w-1/2" />
               </div>
-              <div className="text-[15px] font-semibold text-n-100">No tasks match this view</div>
-              <div className="text-13 text-n-70 mt-1">Try a different filter or check back later.</div>
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-n-20 flex items-center justify-center mb-3 text-n-70">
+              <Search className="w-5 h-5" />
             </div>
-          ) : (
-            <>
-              {visible.map((t) => (
-                <MobileTaskCard
-                  key={t.id}
-                  task={t}
-                  locationLabel={locationOf(t)}
-                  assigneeName={showAssignee ? nameOf(t.assigneeId) : undefined}
-                  onClick={() => onOpen(t)}
-                />
-              ))}
-              {sorted.length > visible.length && (
-                <button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} className="w-full py-4 text-13 font-medium text-ptr-accent">
-                  Load more ({sorted.length - visible.length} remaining)
-                </button>
-              )}
-              <div className="h-4" />
-            </>
-          )}
-        </PullToRefresh>
-      </div>
+            <div className="text-[15px] font-semibold text-n-100">No tasks match this view</div>
+            <div className="text-13 text-n-70 mt-1">Try a different filter or check back later.</div>
+          </div>
+        ) : (
+          <>
+            {visible.map((t) => (
+              <MobileTaskCard
+                key={t.id}
+                task={t}
+                locationLabel={locationOf(t)}
+                assigneeName={showAssignee ? nameOf(t.assigneeId) : undefined}
+                onClick={() => onOpen(t)}
+              />
+            ))}
+            {sorted.length > visible.length && (
+              <button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} className="w-full py-4 text-13 font-medium text-ptr-accent">
+                Load more ({sorted.length - visible.length} remaining)
+              </button>
+            )}
+            <div className="h-4" />
+          </>
+        )}
+      </PullToRefresh>
 
       <TaskFilterSheet
         open={filterOpen}
