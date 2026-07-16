@@ -22,6 +22,11 @@ exception when duplicate_object then null; end $$;
 -- pick them up (the do-block above only fires create on a fresh database).
 alter type user_role add value if not exists 'range_office';
 alter type user_role add value if not exists 'tiger_cell';
+-- Restricted role: Hospitality Inventory Management module only (own
+-- assigned locations, own profile) — never Tasks/Incidents/Map/Personnel/
+-- Audit. See get_my_inventory_location_ids() and the inventory RLS section
+-- near the end of this file.
+alter type user_role add value if not exists 'inventory_staff';
 
 -- Postgres runs this whole pasted script as one implicit transaction, and a
 -- newly-added enum value can't be referenced until that transaction commits
@@ -58,6 +63,12 @@ alter type notification_type add value if not exists 'task_overdue';
 -- Fired when a guard/officer/director reports a field incident — see
 -- notify_on_incident_insert() further down.
 alter type notification_type add value if not exists 'incident_reported';
+-- Hospitality Inventory Management module (see the dedicated section near
+-- the end of this file).
+alter type notification_type add value if not exists 'inventory_request_submitted';
+alter type notification_type add value if not exists 'inventory_request_approved';
+alter type notification_type add value if not exists 'inventory_request_rejected';
+alter type notification_type add value if not exists 'inventory_stock_issued';
 commit;
 
 do $$ begin
@@ -1397,4 +1408,909 @@ create or replace view task_range_stats
 
 grant select on task_dashboard_stats to authenticated;
 grant select on task_range_stats to authenticated;
+
+-- ═════════════════════════════════════════════
+-- Hospitality Inventory Management module (Phase 1)
+--
+-- A fully separate domain from Tasks/Incidents/Map/Personnel/Audit, visible
+-- only to 'director' (full access) and the new 'inventory_staff' role
+-- (own assigned locations + own profile only). Phase 1 scope: locations,
+-- categories, units, items, stock balances, an immutable transaction
+-- ledger, and the request → approval → issue workflow. Transfers,
+-- consumption/return/damage recording, offline drafts, and procurement are
+-- later phases and intentionally not modeled yet (see the app's inventory
+-- implementation plan) — inventory_transactions.source_location_id /
+-- destination_location_id below exist now so Phase 2 transfers don't need
+-- a later column migration, but nothing writes them yet.
+-- ═════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────
+-- Inventory enums (idempotent, same convention as the rest of this file)
+-- ─────────────────────────────────────────────
+do $$ begin
+  create type inventory_location_type as enum (
+    'central_warehouse', 'range_store', 'forest_office', 'resort',
+    'hotel', 'guest_house', 'kitchen', 'housekeeping_store', 'other_facility'
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type inventory_item_kind as enum ('consumable', 'reusable');
+exception when duplicate_object then null; end $$;
+
+-- Only the two transaction types Phase 1 actually produces. Transfer/
+-- consumption/return/damage/adjustment/purchase-receipt types are added the
+-- same way (alter type ... add value if not exists) when those phases land.
+do $$ begin
+  create type inventory_transaction_type as enum ('opening_balance', 'issued');
+exception when duplicate_object then null; end $$;
+
+-- 'UnderReview' is deliberately not a stored state: a Submitted request
+-- being looked at by a director is a UI-only label, not a persisted
+-- transition, so there's no separate write/RPC just to mark "someone
+-- opened this." The director's approve/reject action moves a request
+-- straight from Submitted to Approved/PartiallyApproved/Rejected.
+do $$ begin
+  create type inventory_request_status as enum (
+    'Draft', 'Submitted', 'Approved', 'PartiallyApproved', 'Rejected',
+    'PartiallyFulfilled', 'Fulfilled', 'Cancelled'
+  );
+exception when duplicate_object then null; end $$;
+
+-- ─────────────────────────────────────────────
+-- Inventory tables
+-- ─────────────────────────────────────────────
+
+create table if not exists inventory_locations (
+  id                  uuid primary key default uuid_generate_v4(),
+  name                text not null,
+  type                inventory_location_type not null,
+  range_id            uuid references ranges(id) on delete set null,
+  address_description text not null default '',
+  parent_location_id  uuid references inventory_locations(id) on delete set null,
+  active              boolean not null default true,
+  created_at          timestamptz not null default now()
+);
+
+-- Which inventory_staff users can see/act on which locations. Mirrors
+-- officer_ranges' exact shape (composite PK junction table).
+create table if not exists inventory_location_staff (
+  location_id uuid not null references inventory_locations(id) on delete cascade,
+  user_id     uuid not null references profiles(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  primary key (location_id, user_id)
+);
+
+-- Tables, not enums: the Director must be able to add new categories/units
+-- without a schema migration (unlike inventory_location_type, which is a
+-- fixed set of facility kinds that drives code branching).
+create table if not exists inventory_categories (
+  id         uuid primary key default uuid_generate_v4(),
+  name       text not null unique,
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists inventory_units (
+  id           uuid primary key default uuid_generate_v4(),
+  name         text not null unique,
+  abbreviation text not null default '',
+  active       boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+-- Schema-driven fraction rule, replacing a hardcoded integer-only-unit-name
+-- list in src/lib/inventoryQuantity.ts — a director-created custom unit can
+-- now declare its own rule instead of silently defaulting forever.
+--
+-- Nullable-first backfill (not a blanket UPDATE keyed on abbreviation): the
+-- column starts nullable with no default, gets backfilled ONLY where still
+-- NULL, then NOT NULL + DEFAULT are applied. This makes the backfill run
+-- exactly once, ever — a director who later flips a unit's fraction rule
+-- keeps that choice across every future re-run, since no row can ever be
+-- NULL again once the column is NOT NULL.
+alter table inventory_units add column if not exists allows_fractional boolean;
+
+update inventory_units set allows_fractional = (abbreviation not in ('pc', 'pkt', 'box', 'set', 'dz', 'roll'))
+  where allows_fractional is null;
+
+alter table inventory_units alter column allows_fractional set default true;
+alter table inventory_units alter column allows_fractional set not null;
+
+create table if not exists inventory_items (
+  id            uuid primary key default uuid_generate_v4(),
+  name          text not null,
+  category_id   uuid not null references inventory_categories(id) on delete restrict,
+  sku           text,
+  description   text not null default '',
+  unit_id       uuid not null references inventory_units(id) on delete restrict,
+  kind          inventory_item_kind not null default 'consumable',
+  min_stock     numeric not null default 0 check (min_stock >= 0),
+  reorder_level numeric not null default 0 check (reorder_level >= 0),
+  max_stock     numeric check (max_stock is null or max_stock >= 0),
+  track_expiry  boolean not null default false,
+  track_batch   boolean not null default false,
+  active        boolean not null default true,
+  photo_path    text,
+  created_at    timestamptz not null default now()
+);
+create unique index if not exists inventory_items_sku_idx on inventory_items(sku) where sku is not null;
+
+-- Derived stock balance per item/location — NEVER updated directly by
+-- client code (no client-facing update/insert grant below). Every change
+-- goes through a SECURITY DEFINER RPC (post_opening_balance/
+-- issue_inventory_stock) that mutates this row and writes an
+-- inventory_transactions row in the same atomic function call.
+create table if not exists inventory_stock (
+  id             uuid primary key default uuid_generate_v4(),
+  item_id        uuid not null references inventory_items(id) on delete restrict,
+  location_id    uuid not null references inventory_locations(id) on delete restrict,
+  available_qty  numeric not null default 0 check (available_qty >= 0),
+  reserved_qty   numeric not null default 0 check (reserved_qty >= 0),
+  in_use_qty     numeric not null default 0 check (in_use_qty >= 0),
+  damaged_qty    numeric not null default 0 check (damaged_qty >= 0),
+  expired_qty    numeric not null default 0 check (expired_qty >= 0),
+  updated_at     timestamptz not null default now(),
+  unique (item_id, location_id)
+);
+
+-- Immutable ledger — no update/delete policy is granted below (insert-only
+-- by omission, same convention as audit_log). Corrections are new rows,
+-- never edits of a posted one. source_location_id/destination_location_id
+-- are reserved for Phase 2 transfers; Phase 1 only ever sets location_id.
+create table if not exists inventory_transactions (
+  id                     uuid primary key default uuid_generate_v4(),
+  item_id                uuid not null references inventory_items(id) on delete restrict,
+  location_id            uuid not null references inventory_locations(id) on delete restrict,
+  quantity               numeric not null check (quantity > 0),
+  transaction_type       inventory_transaction_type not null,
+  source_location_id     uuid references inventory_locations(id) on delete set null,
+  destination_location_id uuid references inventory_locations(id) on delete set null,
+  related_request_id    uuid,
+  performed_by           uuid not null references profiles(id) on delete restrict,
+  approved_by            uuid references profiles(id) on delete set null,
+  notes                  text not null default '',
+  attachment_path        text,
+  previous_balance       numeric not null,
+  new_balance            numeric not null,
+  created_at             timestamptz not null default now()
+);
+
+-- Optional client-supplied idempotency key for issue_inventory_stock (spec
+-- section 10): a retried call after a perceived timeout — the first call
+-- actually succeeded server-side — would otherwise double-post, since two
+-- partial-quantity issues within the approved cap are each individually
+-- valid. A retried call reusing the same key is recognized and skipped.
+alter table inventory_transactions add column if not exists idempotency_key uuid;
+create unique index if not exists inventory_transactions_idempotency_key_uniq
+  on inventory_transactions(idempotency_key) where idempotency_key is not null;
+
+create table if not exists inventory_requests (
+  id                   uuid primary key default uuid_generate_v4(),
+  requesting_location_id uuid not null references inventory_locations(id) on delete restrict,
+  requested_by         uuid not null references profiles(id) on delete restrict,
+  status               inventory_request_status not null default 'Draft',
+  required_by_date     date,
+  priority             task_priority not null default 'Medium',
+  reason               text not null default '',
+  notes                text not null default '',
+  reject_reason        text,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+
+create table if not exists inventory_request_items (
+  id               uuid primary key default uuid_generate_v4(),
+  request_id       uuid not null references inventory_requests(id) on delete cascade,
+  item_id          uuid not null references inventory_items(id) on delete restrict,
+  requested_qty    numeric not null check (requested_qty > 0),
+  approved_qty     numeric check (approved_qty is null or approved_qty >= 0),
+  fulfilled_qty    numeric not null default 0 check (fulfilled_qty >= 0),
+  notes            text not null default ''
+);
+
+-- related_request_id has no inline `references` above because
+-- inventory_requests doesn't exist yet at that point in the file (added as
+-- a deferred ALTER once it does) — wrapped the same way every other
+-- constraint in this file is, so re-running this script is a no-op here.
+do $$ begin
+  alter table inventory_transactions
+    add constraint inventory_transactions_related_request_fkey
+    foreign key (related_request_id) references inventory_requests(id) on delete set null;
+exception when duplicate_object then null; end $$;
+
+drop trigger if exists inventory_locations_updated_at on inventory_locations;
+create trigger inventory_locations_updated_at before update on inventory_locations
+  for each row execute function set_updated_at();
+
+drop trigger if exists inventory_requests_updated_at on inventory_requests;
+create trigger inventory_requests_updated_at before update on inventory_requests
+  for each row execute function set_updated_at();
+
+-- ─────────────────────────────────────────────
+-- Inventory indexes
+-- ─────────────────────────────────────────────
+create index if not exists inventory_locations_range_id_idx on inventory_locations(range_id);
+create index if not exists inventory_location_staff_user_id_idx on inventory_location_staff(user_id);
+create index if not exists inventory_items_category_id_idx on inventory_items(category_id);
+create index if not exists inventory_stock_location_id_idx on inventory_stock(location_id);
+create index if not exists inventory_stock_item_id_idx on inventory_stock(item_id);
+create index if not exists inventory_transactions_item_id_idx on inventory_transactions(item_id);
+create index if not exists inventory_transactions_location_id_idx on inventory_transactions(location_id);
+create index if not exists inventory_transactions_created_at_idx on inventory_transactions(created_at desc);
+create index if not exists inventory_requests_requesting_location_id_idx on inventory_requests(requesting_location_id);
+create index if not exists inventory_requests_status_idx on inventory_requests(status);
+create index if not exists inventory_request_items_request_id_idx on inventory_request_items(request_id);
+
+-- ─────────────────────────────────────────────
+-- Length limits (defense in depth, same convention as the rest of this file)
+-- ─────────────────────────────────────────────
+do $$ begin
+  alter table inventory_locations add constraint inventory_locations_name_len check (char_length(name) <= 200);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table inventory_items add constraint inventory_items_name_len check (char_length(name) <= 200);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table inventory_requests add constraint inventory_requests_reason_len check (char_length(reason) <= 1000);
+exception when duplicate_object then null; end $$;
+
+-- Request-item integrity guards found during the Phase 1 hardening pass
+-- (spec section 7): nothing previously prevented the same item appearing
+-- twice on one request, or an inactive/deactivated item being added to a
+-- *new* request.
+-- A UNIQUE constraint's exception class on re-run is duplicate_table
+-- (42P07, "relation already exists" — from its implicit backing index),
+-- not duplicate_object (42710) like every other constraint type in this
+-- file. Found via the hardening pass's idempotent-reapply test: the
+-- duplicate_object-only handler let this one raise a real error on a
+-- second run.
+do $$ begin
+  alter table inventory_request_items
+    add constraint inventory_request_items_request_item_unique unique (request_id, item_id);
+exception when duplicate_object or duplicate_table then null; end $$;
+
+-- Insert-only guard: an item that later becomes inactive must not block
+-- new inserts against *existing* rows referencing it — historical requests
+-- retain their item references regardless of the item's current active
+-- state, so this only fires on INSERT, never on UPDATE.
+create or replace function enforce_inventory_request_item_active_item()
+returns trigger language plpgsql
+set search_path = '' as $$
+declare
+  v_active boolean;
+begin
+  select active into v_active from public.inventory_items where id = new.item_id;
+  if v_active is not true then
+    raise exception 'Cannot add an inactive item to a request';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists inventory_request_items_active_item_guard on inventory_request_items;
+create trigger inventory_request_items_active_item_guard before insert on inventory_request_items
+  for each row execute function enforce_inventory_request_item_active_item();
+
+-- ─────────────────────────────────────────────
+-- Extend notifications/audit_log for inventory
+-- ─────────────────────────────────────────────
+alter table notifications add column if not exists inventory_request_id uuid references inventory_requests(id) on delete cascade;
+create index if not exists notifications_inventory_request_id_idx on notifications(inventory_request_id) where inventory_request_id is not null;
+
+-- Widen the "exactly one of these is set" check from two columns to three
+-- (sum-of-booleans, since <> only expresses XOR for exactly two operands).
+alter table notifications drop constraint if exists notifications_task_or_incident_chk;
+alter table notifications add constraint notifications_task_or_incident_chk
+  check (
+    (case when task_id is not null then 1 else 0 end)
+    + (case when incident_id is not null then 1 else 0 end)
+    + (case when inventory_request_id is not null then 1 else 0 end) = 1
+  );
+
+-- audit_log stays task-shaped by name but gains nullable inventory columns
+-- (Director explicitly wanted one unified audit timeline rather than a
+-- second table) — logInventoryAction() in src/lib/audit.ts writes these.
+alter table audit_log add column if not exists inventory_item_id uuid references inventory_items(id) on delete set null;
+alter table audit_log add column if not exists inventory_transaction_id uuid references inventory_transactions(id) on delete set null;
+create index if not exists audit_log_inventory_item_id_idx on audit_log(inventory_item_id) where inventory_item_id is not null;
+
+-- Found during the hardening pass: request-lifecycle actions
+-- (submitted/approved/rejected) had no structured entity reference at all
+-- — only inventory_item_id/inventory_transaction_id existed, neither of
+-- which applies to a request-level action. Detail text alone doesn't
+-- satisfy "audit entries include entity type/ID."
+alter table audit_log add column if not exists inventory_request_id uuid references inventory_requests(id) on delete set null;
+create index if not exists audit_log_inventory_request_id_idx on audit_log(inventory_request_id) where inventory_request_id is not null;
+
+-- ─────────────────────────────────────────────
+-- Inventory helper functions
+-- ─────────────────────────────────────────────
+create or replace function get_my_inventory_location_ids()
+returns uuid[] language sql security definer stable
+set search_path = '' as $$
+  select coalesce(array_agg(location_id), '{}'::uuid[])
+  from public.inventory_location_staff where user_id = auth.uid();
+$$;
+-- This project's public schema has an ALTER DEFAULT PRIVILEGES rule that
+-- grants anon EXECUTE on every new function independently of PUBLIC — a
+-- bare `revoke ... from public` does not remove anon's own direct grant,
+-- and (the reverse gap) leaving PUBLIC's own implicit grant in place lets
+-- every role inherit it regardless of an anon-specific revoke. Both must
+-- be revoked; only authenticated needs this.
+revoke all on function get_my_inventory_location_ids() from public;
+grant execute on function get_my_inventory_location_ids() to authenticated;
+
+-- Closes the same gap enforce_guard_task_update() closes for tasks: RLS
+-- lets inventory_staff UPDATE their own Draft/Submitted request, but that
+-- alone would also let them set status straight to 'Approved' or write
+-- approved_qty/reject_reason on a direct API call. A director's session is
+-- exempt; approve_inventory_request/reject_inventory_request (below) are
+-- SECURITY DEFINER and bypass this trigger's own-role check entirely by
+-- running as the table owner.
+create or replace function enforce_inventory_request_staff_update()
+returns trigger language plpgsql
+set search_path = '' as $$
+begin
+  if public.get_my_role() <> 'director' then
+    if new.status not in ('Draft', 'Submitted', 'Cancelled') then
+      raise exception 'Only a director can approve, reject, or fulfil a request';
+    end if;
+    if new.reject_reason is distinct from old.reject_reason then
+      raise exception 'Only a director can set a rejection reason';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists inventory_requests_staff_guard on inventory_requests;
+create trigger inventory_requests_staff_guard before update on inventory_requests
+  for each row execute function enforce_inventory_request_staff_update();
+
+create or replace function enforce_inventory_request_item_staff_update()
+returns trigger language plpgsql
+set search_path = '' as $$
+begin
+  if public.get_my_role() <> 'director'
+     and (new.approved_qty is distinct from old.approved_qty
+          or new.fulfilled_qty is distinct from old.fulfilled_qty) then
+    raise exception 'Only a director can set approved/fulfilled quantities';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists inventory_request_items_staff_guard on inventory_request_items;
+create trigger inventory_request_items_staff_guard before update on inventory_request_items
+  for each row execute function enforce_inventory_request_item_staff_update();
+
+-- ─────────────────────────────────────────────
+-- Inventory RLS
+-- ─────────────────────────────────────────────
+alter table inventory_locations enable row level security;
+alter table inventory_location_staff enable row level security;
+alter table inventory_categories enable row level security;
+alter table inventory_units enable row level security;
+alter table inventory_items enable row level security;
+alter table inventory_stock enable row level security;
+alter table inventory_transactions enable row level security;
+alter table inventory_requests enable row level security;
+alter table inventory_request_items enable row level security;
+
+do $$ declare r record; begin
+  for r in select policyname, tablename from pg_policies
+    where schemaname = 'public' and tablename like 'inventory_%'
+  loop
+    execute format('drop policy if exists %I on %I', r.policyname, r.tablename);
+  end loop;
+end $$;
+
+create policy "inventory_locations_director" on inventory_locations
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_locations_staff_read" on inventory_locations
+  for select using (id = any ((select get_my_inventory_location_ids())::uuid[]));
+
+create policy "inventory_location_staff_director" on inventory_location_staff
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_location_staff_own_read" on inventory_location_staff
+  for select using (user_id = (select auth.uid()));
+
+-- Catalog data (categories/units/items) is global-read for every
+-- authenticated inventory role — a request can only be raised for an item
+-- the requester can see, and the full catalog isn't location-scoped.
+create policy "inventory_categories_director" on inventory_categories
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_categories_read" on inventory_categories
+  for select using ((select get_my_role()) in ('director', 'inventory_staff'));
+
+create policy "inventory_units_director" on inventory_units
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_units_read" on inventory_units
+  for select using ((select get_my_role()) in ('director', 'inventory_staff'));
+
+create policy "inventory_items_director" on inventory_items
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_items_read" on inventory_items
+  for select using ((select get_my_role()) in ('director', 'inventory_staff'));
+
+create policy "inventory_stock_director" on inventory_stock
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_stock_staff_read" on inventory_stock
+  for select using (location_id = any ((select get_my_inventory_location_ids())::uuid[]));
+
+-- No insert/update/delete grant to inventory_staff OR director on the
+-- transaction ledger — every write happens inside the SECURITY DEFINER
+-- RPCs below, which run as the table owner and so bypass RLS on the write
+-- itself. Director is deliberately restricted to SELECT here (not "for
+-- all"): found during the hardening pass that a director's own client
+-- session could otherwise directly UPDATE/DELETE posted transaction rows,
+-- contradicting the ledger's documented immutability. Verified this has no
+-- effect on any real write path — the client never writes to this table
+-- directly (see useInventoryTransactions.ts), only through the RPCs.
+create policy "inventory_transactions_director" on inventory_transactions
+  for select using ((select get_my_role()) = 'director');
+create policy "inventory_transactions_staff_read" on inventory_transactions
+  for select using (location_id = any ((select get_my_inventory_location_ids())::uuid[]));
+
+create policy "inventory_requests_director" on inventory_requests
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_requests_staff_read" on inventory_requests
+  for select using (requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[]));
+create policy "inventory_requests_staff_insert" on inventory_requests
+  for insert with check (
+    (select get_my_role()) = 'inventory_staff'
+    and requested_by = (select auth.uid())
+    and requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
+  );
+-- Column-level restriction is enforced by the trigger above, not here —
+-- RLS alone can gate row visibility, not which columns an UPDATE touches.
+create policy "inventory_requests_staff_update" on inventory_requests
+  for update using (
+    (select get_my_role()) = 'inventory_staff'
+    and requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
+  );
+
+create policy "inventory_request_items_director" on inventory_request_items
+  for all using ((select get_my_role()) = 'director');
+create policy "inventory_request_items_staff_read" on inventory_request_items
+  for select using (
+    exists (
+      select 1 from inventory_requests req
+      where req.id = inventory_request_items.request_id
+        and req.requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
+    )
+  );
+create policy "inventory_request_items_staff_insert" on inventory_request_items
+  for insert with check (
+    (select get_my_role()) = 'inventory_staff'
+    and exists (
+      select 1 from inventory_requests req
+      where req.id = inventory_request_items.request_id
+        and req.requested_by = (select auth.uid())
+    )
+  );
+create policy "inventory_request_items_staff_update" on inventory_request_items
+  for update using (
+    (select get_my_role()) = 'inventory_staff'
+    and exists (
+      select 1 from inventory_requests req
+      where req.id = inventory_request_items.request_id
+        and req.requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
+    )
+  );
+
+-- Extend the notifications insert check (defense in depth — the RPCs below
+-- are SECURITY DEFINER and bypass this anyway, but a direct client insert
+-- referencing an inventory_request_id should still only succeed if that
+-- request is visible to the inserting session, same principle as the
+-- existing task/incident branches).
+drop policy if exists "notifications_insert" on notifications;
+create policy "notifications_insert" on notifications
+  for insert with check (
+    (select auth.uid()) is not null
+    and (
+      exists (select 1 from tasks where tasks.id = notifications.task_id)
+      or exists (select 1 from incidents where incidents.id = notifications.incident_id)
+      or exists (select 1 from inventory_requests where inventory_requests.id = notifications.inventory_request_id)
+    )
+  );
+
+-- ─────────────────────────────────────────────
+-- Inventory RPCs — the only way inventory_stock/inventory_transactions
+-- ever change. Each is SECURITY DEFINER (runs as table owner, bypassing
+-- RLS on its own writes) but re-checks the caller's role/authorization
+-- from auth.uid() itself before doing anything, exactly like
+-- claim_push_subscription above. revoke/grant locks down who may call each.
+-- ─────────────────────────────────────────────
+
+-- Director-only: seeds/adds to a location's starting balance for an item.
+-- Returns whether this call actually applied the posting — false means a
+-- retried call with the same p_idempotency_key was recognized as a
+-- duplicate and safely skipped (mirrors issue_inventory_stock's pattern,
+-- now that a real Opening Balance UI calls this). Also rejects inactive
+-- items server-side, mirroring the same discipline already applied to
+-- request items.
+create or replace function post_opening_balance(
+  p_item_id uuid,
+  p_location_id uuid,
+  p_quantity numeric,
+  p_notes text default '',
+  p_idempotency_key uuid default null
+) returns boolean language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+  prev numeric;
+  v_item_active boolean;
+begin
+  if uid is null or public.get_my_role() is distinct from 'director' then
+    raise exception 'Only a director can post an opening balance';
+  end if;
+  if p_quantity <= 0 then
+    raise exception 'Quantity must be positive';
+  end if;
+
+  if p_idempotency_key is not null and exists (
+    select 1 from public.inventory_transactions where idempotency_key = p_idempotency_key
+  ) then
+    return false;
+  end if;
+
+  select active into v_item_active from public.inventory_items where id = p_item_id;
+  if v_item_active is not true then
+    raise exception 'Cannot post an opening balance for an inactive item';
+  end if;
+
+  insert into public.inventory_stock (item_id, location_id, available_qty)
+    values (p_item_id, p_location_id, 0)
+  on conflict (item_id, location_id) do nothing;
+
+  select available_qty into prev from public.inventory_stock
+    where item_id = p_item_id and location_id = p_location_id
+    for update;
+
+  update public.inventory_stock
+    set available_qty = prev + p_quantity, updated_at = now()
+    where item_id = p_item_id and location_id = p_location_id;
+
+  insert into public.inventory_transactions
+    (item_id, location_id, quantity, transaction_type, performed_by, notes, previous_balance, new_balance, idempotency_key)
+  values
+    (p_item_id, p_location_id, p_quantity, 'opening_balance', uid, p_notes, prev, prev + p_quantity, p_idempotency_key);
+
+  return true;
+end;
+$$;
+-- The 4-arg signature (before p_idempotency_key existed) is superseded;
+-- drop it so PostgREST doesn't expose two overloads of the same RPC name.
+drop function if exists post_opening_balance(uuid, uuid, numeric, text);
+revoke all on function post_opening_balance(uuid, uuid, numeric, text, uuid) from public;
+-- The bare revoke above only removes PUBLIC's grant; this project's default
+-- privileges on the public schema separately grant anon EXECUTE on every
+-- new function regardless of PUBLIC, so anon needs an explicit revoke too.
+revoke execute on function post_opening_balance(uuid, uuid, numeric, text, uuid) from anon;
+grant execute on function post_opening_balance(uuid, uuid, numeric, text, uuid) to authenticated;
+
+-- inventory_staff only: creates a request and its item lines atomically.
+-- Previously the client did this as two separate inserts (header, then
+-- items); if the items insert failed for any reason (inactive item hitting
+-- the trigger above, a duplicate item hitting the unique constraint), the
+-- request header was left behind as a permanent zero-item Draft — found
+-- during the Phase 1 hardening pass. Wrapping both in one SECURITY DEFINER
+-- function makes them atomic: a single function invocation is one implicit
+-- transaction, so any failure rolls back the header too.
+create or replace function create_inventory_request(
+  p_requesting_location_id uuid,
+  p_items jsonb,
+  p_required_by_date date default null,
+  p_priority task_priority default 'Medium',
+  p_reason text default ''
+) returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+  v_request_id uuid;
+  item jsonb;
+begin
+  if uid is null or public.get_my_role() is distinct from 'inventory_staff' then
+    raise exception 'Only inventory staff can create a request';
+  end if;
+  if not exists (
+    select 1 from public.inventory_location_staff
+    where location_id = p_requesting_location_id and user_id = uid
+  ) then
+    raise exception 'You are not assigned to this location';
+  end if;
+  if p_items is null or jsonb_array_length(p_items) = 0 then
+    raise exception 'A request must include at least one item';
+  end if;
+
+  insert into public.inventory_requests (requesting_location_id, requested_by, required_by_date, priority, reason)
+    values (p_requesting_location_id, uid, p_required_by_date, coalesce(p_priority, 'Medium'), coalesce(p_reason, ''))
+    returning id into v_request_id;
+
+  for item in select * from jsonb_array_elements(p_items) loop
+    insert into public.inventory_request_items (request_id, item_id, requested_qty)
+      values (v_request_id, (item->>'item_id')::uuid, (item->>'requested_qty')::numeric);
+  end loop;
+
+  return v_request_id;
+end;
+$$;
+revoke all on function create_inventory_request(uuid, jsonb, date, task_priority, text) from public;
+revoke execute on function create_inventory_request(uuid, jsonb, date, task_priority, text) from anon;
+grant execute on function create_inventory_request(uuid, jsonb, date, task_priority, text) to authenticated;
+
+-- Director-only: approves (fully or partially) the items on a Submitted
+-- request. p_item_approvals is a jsonb array of
+-- {"request_item_id": "<uuid>", "approved_qty": <number>}.
+--
+-- Two bugs found and fixed during the Phase 1 hardening pass:
+-- (1) this had no guard on the request's current status at all, so a
+-- director could re-"approve" an already-Rejected/Fulfilled/Cancelled
+-- request; it's now restricted to requests currently 'Submitted'.
+-- (2) approved_qty was written straight from client input with no upper
+-- bound (only "not negative" was enforced, by the table check constraint),
+-- so a client bug or direct RPC call could approve more than was
+-- requested; now validated per item against requested_qty.
+create or replace function approve_inventory_request(
+  p_request_id uuid,
+  p_item_approvals jsonb
+) returns void language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+  approval jsonb;
+  v_request_item_id uuid;
+  v_approved_qty numeric;
+  v_requested_qty numeric;
+  v_status public.inventory_request_status;
+  all_full boolean := true;
+  any_approved boolean := false;
+begin
+  if uid is null or public.get_my_role() is distinct from 'director' then
+    raise exception 'Only a director can approve a request';
+  end if;
+
+  select status into v_status from public.inventory_requests where id = p_request_id;
+  if v_status is null then
+    raise exception 'Request not found';
+  end if;
+  if v_status <> 'Submitted' then
+    raise exception 'Only a submitted request can be approved';
+  end if;
+
+  for approval in select * from jsonb_array_elements(p_item_approvals) loop
+    v_request_item_id := (approval->>'request_item_id')::uuid;
+    v_approved_qty := (approval->>'approved_qty')::numeric;
+
+    select requested_qty into v_requested_qty
+      from public.inventory_request_items
+      where id = v_request_item_id and request_id = p_request_id;
+    if v_requested_qty is null then
+      raise exception 'Request item does not belong to this request';
+    end if;
+    if v_approved_qty < 0 or v_approved_qty > v_requested_qty then
+      raise exception 'Approved quantity must be between 0 and the requested quantity';
+    end if;
+
+    update public.inventory_request_items
+      set approved_qty = v_approved_qty
+      where id = v_request_item_id and request_id = p_request_id;
+  end loop;
+
+  select
+    bool_and(coalesce(approved_qty, 0) >= requested_qty),
+    bool_or(coalesce(approved_qty, 0) > 0)
+  into all_full, any_approved
+  from public.inventory_request_items where request_id = p_request_id;
+
+  -- Explicit cast is required: with every CASE branch a bare string
+  -- literal (no enum-typed branch to anchor resolution, unlike
+  -- issue_inventory_stock's `else status` below), Postgres resolves the
+  -- whole expression as `text` (confirmed via pg_typeof), and assigning
+  -- that text to this enum column fails outright — this previously made
+  -- approve_inventory_request fail on every single call.
+  update public.inventory_requests
+    set status = (case when all_full then 'Approved' when any_approved then 'PartiallyApproved' else 'Rejected' end)::public.inventory_request_status,
+        updated_at = now()
+    where id = p_request_id;
+end;
+$$;
+revoke all on function approve_inventory_request(uuid, jsonb) from public;
+revoke execute on function approve_inventory_request(uuid, jsonb) from anon;
+grant execute on function approve_inventory_request(uuid, jsonb) to authenticated;
+
+-- Director-only: rejects a request outright, with a required reason.
+-- Restricted to requests currently 'Submitted' — previously had no status
+-- guard, so a director could reject an already-Fulfilled/Cancelled request.
+create or replace function reject_inventory_request(
+  p_request_id uuid,
+  p_reason text
+) returns void language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+  v_status public.inventory_request_status;
+begin
+  if uid is null or public.get_my_role() is distinct from 'director' then
+    raise exception 'Only a director can reject a request';
+  end if;
+  if p_reason is null or length(trim(p_reason)) = 0 then
+    raise exception 'A rejection reason is required';
+  end if;
+
+  select status into v_status from public.inventory_requests where id = p_request_id;
+  if v_status is null then
+    raise exception 'Request not found';
+  end if;
+  if v_status <> 'Submitted' then
+    raise exception 'Only a submitted request can be rejected';
+  end if;
+
+  update public.inventory_requests
+    set status = 'Rejected', reject_reason = p_reason, updated_at = now()
+    where id = p_request_id;
+end;
+$$;
+revoke all on function reject_inventory_request(uuid, text) from public;
+revoke execute on function reject_inventory_request(uuid, text) from anon;
+grant execute on function reject_inventory_request(uuid, text) to authenticated;
+
+-- Director or assigned inventory_staff at the issuing location: issues
+-- stock against an approved request line, atomically decrementing the
+-- balance and posting one immutable transaction row. Raises rather than
+-- allowing negative stock. Returns whether this call actually applied the
+-- issue — false means a retried call with the same p_idempotency_key was
+-- recognized as a duplicate and safely skipped; callers must not re-send
+-- notifications/audit entries for a skipped call.
+create or replace function issue_inventory_stock(
+  p_request_item_id uuid,
+  p_location_id uuid,
+  p_quantity numeric,
+  p_notes text default '',
+  p_idempotency_key uuid default null
+) returns boolean language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+  caller_role public.user_role;
+  ritem record;
+  prev numeric;
+  new_fulfilled numeric;
+  all_done boolean;
+  any_done boolean;
+begin
+  if uid is null then raise exception 'Not authenticated'; end if;
+
+  if p_idempotency_key is not null and exists (
+    select 1 from public.inventory_transactions where idempotency_key = p_idempotency_key
+  ) then
+    return false;
+  end if;
+
+  caller_role := public.get_my_role();
+
+  select ri.*, r.status as request_status, r.requesting_location_id
+    into ritem
+    from public.inventory_request_items ri
+    join public.inventory_requests r on r.id = ri.request_id
+    where ri.id = p_request_item_id;
+  if not found then raise exception 'Request line not found'; end if;
+  -- 'PartiallyFulfilled' must be allowed here, not just 'Approved' /
+  -- 'PartiallyApproved': issuing stock against any one item line flips the
+  -- whole request to 'PartiallyFulfilled' (see the status update at the
+  -- end of this function), so without it the very next issue call — same
+  -- line's remaining quantity, or a different item line — would wrongly
+  -- be rejected. Found live: issuing 12 of 30 approved units moved the
+  -- request to PartiallyFulfilled, then issuing the remaining 18 failed
+  -- with "must be approved" even though stock and approval both allowed it.
+  if ritem.request_status not in ('Approved', 'PartiallyApproved', 'PartiallyFulfilled') then
+    raise exception 'Request must be approved before stock can be issued';
+  end if;
+
+  -- IS DISTINCT FROM, not <>: if auth.uid() doesn't match any profiles row
+  -- (e.g. a deleted account with a still-valid JWT), get_my_role() returns
+  -- NULL, and NULL <> 'director' is NULL — `if NULL then` is treated as
+  -- false in plpgsql, which would silently skip this whole check. IS
+  -- DISTINCT FROM treats NULL as "not equal", closing that gap.
+  if caller_role is distinct from 'director' and not exists (
+    select 1 from public.inventory_location_staff
+      where location_id = p_location_id and user_id = uid
+  ) then
+    raise exception 'You are not assigned to this location';
+  end if;
+
+  if p_quantity <= 0 then raise exception 'Quantity must be positive'; end if;
+  if ritem.fulfilled_qty + p_quantity > coalesce(ritem.approved_qty, 0) then
+    raise exception 'Cannot issue more than the approved quantity';
+  end if;
+
+  select available_qty into prev from public.inventory_stock
+    where item_id = ritem.item_id and location_id = p_location_id
+    for update;
+  if prev is null or prev < p_quantity then
+    raise exception 'Insufficient stock at this location';
+  end if;
+
+  update public.inventory_stock
+    set available_qty = prev - p_quantity, updated_at = now()
+    where item_id = ritem.item_id and location_id = p_location_id;
+
+  insert into public.inventory_transactions
+    (item_id, location_id, quantity, transaction_type, related_request_id, performed_by, approved_by, notes, previous_balance, new_balance, idempotency_key)
+  values
+    (ritem.item_id, p_location_id, p_quantity, 'issued', ritem.request_id, uid, uid, p_notes, prev, prev - p_quantity, p_idempotency_key);
+
+  new_fulfilled := ritem.fulfilled_qty + p_quantity;
+  update public.inventory_request_items set fulfilled_qty = new_fulfilled where id = p_request_item_id;
+
+  select bool_and(fulfilled_qty >= coalesce(approved_qty, requested_qty)),
+         bool_or(fulfilled_qty > 0)
+    into all_done, any_done
+    from public.inventory_request_items where request_id = ritem.request_id;
+
+  update public.inventory_requests
+    set status = case when all_done then 'Fulfilled' when any_done then 'PartiallyFulfilled' else status end,
+        updated_at = now()
+    where id = ritem.request_id;
+
+  return true;
+end;
+$$;
+-- The 4-arg signature (before p_idempotency_key existed) is superseded;
+-- drop it so PostgREST doesn't expose two overloads of the same RPC name.
+drop function if exists issue_inventory_stock(uuid, uuid, numeric, text);
+revoke all on function issue_inventory_stock(uuid, uuid, numeric, text, uuid) from public;
+revoke execute on function issue_inventory_stock(uuid, uuid, numeric, text, uuid) from anon;
+grant execute on function issue_inventory_stock(uuid, uuid, numeric, text, uuid) to authenticated;
+
+-- ─────────────────────────────────────────────
+-- Storage bucket for inventory item photos
+-- ─────────────────────────────────────────────
+insert into storage.buckets (id, name, public, file_size_limit)
+  values ('inventory-photos', 'inventory-photos', false, 5242880)
+  on conflict (id) do update set
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "inventory_photos_upload" on storage.objects;
+drop policy if exists "inventory_photos_download" on storage.objects;
+drop policy if exists "inventory_photos_delete" on storage.objects;
+
+-- Objects stored under "<item-id>/<uuid>.jpg" — director manages the
+-- catalog, so upload/delete is director-only; any inventory role can view.
+create policy "inventory_photos_upload" on storage.objects
+  for insert with check (
+    bucket_id = 'inventory-photos'
+    and (select public.get_my_role()) = 'director'
+  );
+
+create policy "inventory_photos_download" on storage.objects
+  for select using (
+    bucket_id = 'inventory-photos'
+    and (select public.get_my_role()) in ('director', 'inventory_staff')
+  );
+
+create policy "inventory_photos_delete" on storage.objects
+  for delete using (
+    bucket_id = 'inventory-photos'
+    and (select public.get_my_role()) = 'director'
+  );
+
+-- ─────────────────────────────────────────────
+-- Starter reference data — directors can add more later via the Inventory
+-- module UI; these seed the suggested lists from the product spec so the
+-- catalog isn't empty on first use.
+-- ─────────────────────────────────────────────
+insert into inventory_units (name, abbreviation) values
+  ('Piece', 'pc'), ('Packet', 'pkt'), ('Box', 'box'), ('Set', 'set'),
+  ('Kilogram', 'kg'), ('Gram', 'g'), ('Litre', 'L'), ('Millilitre', 'mL'),
+  ('Metre', 'm'), ('Roll', 'roll'), ('Dozen', 'dz'), ('Other', '')
+on conflict (name) do nothing;
+
+insert into inventory_categories (name) values
+  ('Toiletries'), ('Linen'), ('Bedding'), ('Groceries'),
+  ('Housekeeping supplies'), ('Kitchen supplies'), ('Room appliances'),
+  ('Utensils'), ('Maintenance materials'), ('Office supplies'),
+  ('Safety equipment'), ('Other')
+on conflict (name) do nothing;
 

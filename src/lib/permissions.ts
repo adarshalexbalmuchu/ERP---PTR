@@ -20,3 +20,11 @@ export function canManageIncidents(role: Role | undefined, userId: string | unde
 export function canManageTasks(role: Role | undefined): boolean {
   return role === 'director' || role === 'range_officer';
 }
+
+/** Mirrors the inventory_*_director RLS policies — only a director can
+    manage the catalog, approve/reject requests, and issue stock outright.
+    Inventory staff act only within their assigned locations (enforced by
+    RLS via get_my_inventory_location_ids(), not by this check). */
+export function canManageInventory(role: Role | undefined): boolean {
+  return role === 'director';
+}

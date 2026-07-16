@@ -4,9 +4,16 @@
 // can't silently drift out of sync with the app's types.
 import type {
   UserRole, TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType,
+  InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus,
 } from '../lib/database.types';
 export type { TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType };
+export type { InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus };
 export type Role = UserRole;
+
+// inventory_staff is a fully separate access tier (own assigned inventory
+// locations + own profile only) — deliberately NOT part of FIELD_ROLES,
+// since that tier's scoping rules (assignee/co-assignee on tasks/incidents)
+// don't apply to it at all.
 
 // range_office and tiger_cell hold the same access level as guard (field
 // staff scoped to their own assigned tasks/incidents) — just a different
@@ -109,10 +116,12 @@ export interface Notification {
   type: NotificationType;
   title: string;
   message: string;
-  /** Set for every notification type except incident_reported. */
+  /** Set for every notification type except incident_reported/inventory_*. */
   taskId?: string;
   /** Set only for incident_reported. */
   incidentId?: string;
+  /** Set only for inventory_request_* / inventory_stock_issued. */
+  inventoryRequestId?: string;
   read: boolean;
   createdAt: string;
 }
@@ -172,7 +181,133 @@ export interface AuditLogEntry {
   actorId: string;
   action: string;
   detail: string;
+  inventoryItemId?: string;
+  inventoryTransactionId?: string;
   createdAt: string;
+}
+
+// ─────────────────────────────────────────────
+// Hospitality Inventory Management (Phase 1)
+// ─────────────────────────────────────────────
+
+export interface InventoryLocation {
+  id: string;
+  name: string;
+  type: InventoryLocationType;
+  rangeId?: string;
+  addressDescription: string;
+  parentLocationId?: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface InventoryCategory {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+export interface InventoryUnit {
+  id: string;
+  name: string;
+  abbreviation: string;
+  active: boolean;
+  /** Whether a quantity in this unit may be fractional (e.g. kg) or must be a whole number (e.g. Piece). */
+  allowsFractional: boolean;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  categoryId: string;
+  /** Joined display name, when the query includes the category join. */
+  categoryName?: string;
+  sku?: string;
+  description: string;
+  unitId: string;
+  /** Joined display abbreviation, when the query includes the unit join. */
+  unitAbbreviation?: string;
+  /** Joined from inventory_units, when the query includes the unit join. */
+  allowsFractional?: boolean;
+  kind: InventoryItemKind;
+  minStock: number;
+  reorderLevel: number;
+  maxStock?: number;
+  trackExpiry: boolean;
+  trackBatch: boolean;
+  active: boolean;
+  photoPath?: string;
+  photoUrl?: string;
+}
+
+export interface InventoryStock {
+  id: string;
+  itemId: string;
+  /** Joined display fields, when the query includes the item join. */
+  itemName?: string;
+  unitAbbreviation?: string;
+  allowsFractional?: boolean;
+  locationId: string;
+  locationName?: string;
+  availableQty: number;
+  reservedQty: number;
+  inUseQty: number;
+  damagedQty: number;
+  expiredQty: number;
+  minStock?: number;
+  reorderLevel?: number;
+  updatedAt: string;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  itemId: string;
+  itemName?: string;
+  locationId: string;
+  locationName?: string;
+  quantity: number;
+  transactionType: InventoryTransactionType;
+  sourceLocationId?: string;
+  destinationLocationId?: string;
+  relatedRequestId?: string;
+  performedBy: string;
+  performedByName?: string;
+  approvedBy?: string;
+  notes: string;
+  attachmentPath?: string;
+  previousBalance: number;
+  newBalance: number;
+  createdAt: string;
+}
+
+export interface InventoryRequestItem {
+  id: string;
+  requestId: string;
+  itemId: string;
+  itemName?: string;
+  unitAbbreviation?: string;
+  allowsFractional?: boolean;
+  requestedQty: number;
+  approvedQty?: number;
+  fulfilledQty: number;
+  notes: string;
+}
+
+export interface InventoryRequest {
+  id: string;
+  requestingLocationId: string;
+  requestingLocationName?: string;
+  requestedBy: string;
+  requestedByName?: string;
+  status: InventoryRequestStatus;
+  requiredByDate?: string;
+  priority: TaskPriority;
+  reason: string;
+  notes: string;
+  rejectReason?: string;
+  items: InventoryRequestItem[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AppState {

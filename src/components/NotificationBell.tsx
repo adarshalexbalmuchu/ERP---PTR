@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
+import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, AlertTriangle, Clock, RefreshCw, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -19,6 +19,10 @@ const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; cl
   task_due_today: { icon: Clock, className: 'bg-signal-amber/10 text-signal-amber' },
   task_overdue: { icon: AlertTriangle, className: 'bg-signal-red-bg text-signal-red' },
   incident_reported: { icon: AlertTriangle, className: 'bg-signal-red-bg text-signal-red' },
+  inventory_request_submitted: { icon: Package, className: 'bg-signal-amber/10 text-signal-amber' },
+  inventory_request_approved: { icon: Package, className: 'bg-ptr-green/10 text-ptr-green' },
+  inventory_request_rejected: { icon: Package, className: 'bg-signal-red-bg text-signal-red' },
+  inventory_stock_issued: { icon: Package, className: 'bg-ptr-green/10 text-ptr-green' },
 };
 
 // Four groups, in display order — "requires action" surfaces first and is
@@ -35,6 +39,10 @@ const GROUP_OF: Record<Notification['type'], NotifGroup> = {
   incident_reported: 'incidents',
   task_updated: 'system',
   task_archived: 'system',
+  inventory_request_submitted: 'action',
+  inventory_request_approved: 'assignments',
+  inventory_request_rejected: 'action',
+  inventory_stock_issued: 'assignments',
 };
 const GROUP_LABEL: Record<NotifGroup, string> = {
   action: 'Requires action',
@@ -110,10 +118,17 @@ export default function NotificationBell() {
   const handleNotifClick = (notif: Notification) => {
     markRead.mutate(notif.id);
     setOpen(false);
-    const base = currentUser?.role === 'director' ? '/director' : currentUser?.role === 'range_officer' ? '/officer' : '/guard';
+    const role = currentUser?.role;
+    if (role === 'inventory_staff') {
+      navigate(notif.inventoryRequestId ? `/inventory/requests/${notif.inventoryRequestId}` : '/inventory/requests');
+      return;
+    }
+    const base = role === 'director' ? '/director' : role === 'range_officer' ? '/officer' : '/guard';
     // incident_reported notifications have no task — they route to the
-    // Incident Log instead of a task's detail page.
+    // Incident Log instead of a task's detail page. inventory_* notifications
+    // (director side) route into the director's nested inventory area.
     if (notif.taskId) navigate(`${base}/tasks/${notif.taskId}`);
+    else if (notif.inventoryRequestId) navigate(`${base}/inventory/requests/${notif.inventoryRequestId}`);
     else navigate(`${base}/incidents`);
   };
 

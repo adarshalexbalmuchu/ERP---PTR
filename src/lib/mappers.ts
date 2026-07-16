@@ -1,5 +1,9 @@
 import type { Database } from './database.types';
-import type { User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry, LiveLocation } from '../types';
+import type {
+  User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry, LiveLocation,
+  InventoryLocation, InventoryCategory, InventoryUnit, InventoryItem, InventoryStock, InventoryTransaction,
+  InventoryRequest, InventoryRequestItem,
+} from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TaskRow = Database['public']['Tables']['tasks']['Row'];
@@ -103,6 +107,7 @@ export function mapNotification(row: NotificationRow): Notification {
     message: row.message,
     taskId: row.task_id ?? undefined,
     incidentId: row.incident_id ?? undefined,
+    inventoryRequestId: row.inventory_request_id ?? undefined,
     read: row.read,
     createdAt: row.created_at,
   };
@@ -180,6 +185,170 @@ export function mapAuditLogEntry(row: AuditLogRow): AuditLogEntry {
     actorId: row.actor_id,
     action: row.action,
     detail: row.detail,
+    inventoryItemId: row.inventory_item_id ?? undefined,
+    inventoryTransactionId: row.inventory_transaction_id ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+// ─────────────────────────────────────────────
+// Hospitality Inventory Management (Phase 1)
+// ─────────────────────────────────────────────
+
+type InventoryLocationRow = Database['public']['Tables']['inventory_locations']['Row'];
+type InventoryCategoryRow = Database['public']['Tables']['inventory_categories']['Row'];
+type InventoryUnitRow = Database['public']['Tables']['inventory_units']['Row'];
+type InventoryItemRow = Database['public']['Tables']['inventory_items']['Row'];
+type InventoryStockRow = Database['public']['Tables']['inventory_stock']['Row'];
+type InventoryTransactionRow = Database['public']['Tables']['inventory_transactions']['Row'];
+type InventoryRequestRow = Database['public']['Tables']['inventory_requests']['Row'];
+type InventoryRequestItemRow = Database['public']['Tables']['inventory_request_items']['Row'];
+
+export function mapInventoryLocation(row: InventoryLocationRow): InventoryLocation {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    rangeId: row.range_id ?? undefined,
+    addressDescription: row.address_description,
+    parentLocationId: row.parent_location_id ?? undefined,
+    active: row.active,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapInventoryCategory(row: InventoryCategoryRow): InventoryCategory {
+  return { id: row.id, name: row.name, active: row.active };
+}
+
+export function mapInventoryUnit(row: InventoryUnitRow): InventoryUnit {
+  return { id: row.id, name: row.name, abbreviation: row.abbreviation, active: row.active, allowsFractional: row.allows_fractional };
+}
+
+export function mapInventoryItem(
+  row: InventoryItemRow & {
+    inventory_categories?: { name: string } | null;
+    inventory_units?: { abbreviation: string; allows_fractional?: boolean } | null;
+  },
+): InventoryItem {
+  return {
+    id: row.id,
+    name: row.name,
+    categoryId: row.category_id,
+    categoryName: row.inventory_categories?.name ?? undefined,
+    sku: row.sku ?? undefined,
+    description: row.description,
+    unitId: row.unit_id,
+    unitAbbreviation: row.inventory_units?.abbreviation ?? undefined,
+    allowsFractional: row.inventory_units?.allows_fractional,
+    kind: row.kind,
+    minStock: row.min_stock,
+    reorderLevel: row.reorder_level,
+    maxStock: row.max_stock ?? undefined,
+    trackExpiry: row.track_expiry,
+    trackBatch: row.track_batch,
+    active: row.active,
+    photoPath: row.photo_path ?? undefined,
+    // photo_path is a bare storage path; a signed URL is resolved separately
+    // (same pattern as mapAttachment/mapIncidentPhoto), not filled in here.
+    photoUrl: undefined,
+  };
+}
+
+export function mapInventoryStock(
+  row: InventoryStockRow & {
+    inventory_items?: { name: string; unit_id: string; min_stock: number; reorder_level: number; inventory_units?: { abbreviation: string; allows_fractional?: boolean } | null } | null;
+    inventory_locations?: { name: string } | null;
+  },
+): InventoryStock {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    itemName: row.inventory_items?.name ?? undefined,
+    unitAbbreviation: row.inventory_items?.inventory_units?.abbreviation ?? undefined,
+    allowsFractional: row.inventory_items?.inventory_units?.allows_fractional,
+    locationId: row.location_id,
+    locationName: row.inventory_locations?.name ?? undefined,
+    availableQty: row.available_qty,
+    reservedQty: row.reserved_qty,
+    inUseQty: row.in_use_qty,
+    damagedQty: row.damaged_qty,
+    expiredQty: row.expired_qty,
+    minStock: row.inventory_items?.min_stock,
+    reorderLevel: row.inventory_items?.reorder_level,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapInventoryTransaction(
+  row: InventoryTransactionRow & {
+    inventory_items?: { name: string } | null;
+    inventory_locations?: { name: string } | null;
+    performed_by_profile?: { name: string } | null;
+  },
+): InventoryTransaction {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    itemName: row.inventory_items?.name ?? undefined,
+    locationId: row.location_id,
+    locationName: row.inventory_locations?.name ?? undefined,
+    quantity: row.quantity,
+    transactionType: row.transaction_type,
+    sourceLocationId: row.source_location_id ?? undefined,
+    destinationLocationId: row.destination_location_id ?? undefined,
+    relatedRequestId: row.related_request_id ?? undefined,
+    performedBy: row.performed_by,
+    performedByName: row.performed_by_profile?.name ?? undefined,
+    approvedBy: row.approved_by ?? undefined,
+    notes: row.notes,
+    attachmentPath: row.attachment_path ?? undefined,
+    previousBalance: row.previous_balance,
+    newBalance: row.new_balance,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapInventoryRequestItem(
+  row: InventoryRequestItemRow & {
+    inventory_items?: { name: string; inventory_units?: { abbreviation: string; allows_fractional?: boolean } | null } | null;
+  },
+): InventoryRequestItem {
+  return {
+    id: row.id,
+    requestId: row.request_id,
+    itemId: row.item_id,
+    itemName: row.inventory_items?.name ?? undefined,
+    unitAbbreviation: row.inventory_items?.inventory_units?.abbreviation ?? undefined,
+    allowsFractional: row.inventory_items?.inventory_units?.allows_fractional,
+    requestedQty: row.requested_qty,
+    approvedQty: row.approved_qty ?? undefined,
+    fulfilledQty: row.fulfilled_qty,
+    notes: row.notes,
+  };
+}
+
+export function mapInventoryRequest(
+  row: InventoryRequestRow & {
+    inventory_locations?: { name: string } | null;
+    profiles?: { name: string } | null;
+    inventory_request_items?: InventoryRequestItemRow[];
+  },
+): InventoryRequest {
+  return {
+    id: row.id,
+    requestingLocationId: row.requesting_location_id,
+    requestingLocationName: row.inventory_locations?.name ?? undefined,
+    requestedBy: row.requested_by,
+    requestedByName: row.profiles?.name ?? undefined,
+    status: row.status,
+    requiredByDate: row.required_by_date ?? undefined,
+    priority: row.priority,
+    reason: row.reason,
+    notes: row.notes,
+    rejectReason: row.reject_reason ?? undefined,
+    items: (row.inventory_request_items ?? []).map(mapInventoryRequestItem),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

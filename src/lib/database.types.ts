@@ -1,13 +1,17 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type UserRole = 'director' | 'range_officer' | 'guard' | 'range_office' | 'tiger_cell';
+export type UserRole = 'director' | 'range_officer' | 'guard' | 'range_office' | 'tiger_cell' | 'inventory_staff';
 export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
-export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported';
+export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported' | 'inventory_request_submitted' | 'inventory_request_approved' | 'inventory_request_rejected' | 'inventory_stock_issued';
 export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'conflict_other' | 'poaching_sign' | 'road_kill' | 'animal_injury' | 'tree_felling' | 'other' | 'wildlife_sighting' | 'sighting_other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 export type IncidentStatus = 'Open' | 'Resolved';
+export type InventoryLocationType = 'central_warehouse' | 'range_store' | 'forest_office' | 'resort' | 'hotel' | 'guest_house' | 'kitchen' | 'housekeeping_store' | 'other_facility';
+export type InventoryItemKind = 'consumable' | 'reusable';
+export type InventoryTransactionType = 'opening_balance' | 'issued';
+export type InventoryRequestStatus = 'Draft' | 'Submitted' | 'Approved' | 'PartiallyApproved' | 'Rejected' | 'PartiallyFulfilled' | 'Fulfilled' | 'Cancelled';
 
 type Relationships = {
   foreignKeyName: string;
@@ -276,6 +280,7 @@ export interface Database {
           message: string;
           task_id: string | null;
           incident_id: string | null;
+          inventory_request_id: string | null;
           read: boolean;
           created_at: string;
         };
@@ -287,6 +292,7 @@ export interface Database {
           message: string;
           task_id?: string | null;
           incident_id?: string | null;
+          inventory_request_id?: string | null;
           read?: boolean;
         };
         Update: {
@@ -297,6 +303,7 @@ export interface Database {
           message?: string;
           task_id?: string | null;
           incident_id?: string | null;
+          inventory_request_id?: string | null;
           read?: boolean;
         };
         Relationships: Relationships;
@@ -455,6 +462,9 @@ export interface Database {
           actor_id: string;
           action: string;
           detail: string;
+          inventory_item_id: string | null;
+          inventory_transaction_id: string | null;
+          inventory_request_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -465,6 +475,9 @@ export interface Database {
           actor_id: string;
           action: string;
           detail?: string;
+          inventory_item_id?: string | null;
+          inventory_transaction_id?: string | null;
+          inventory_request_id?: string | null;
         };
         Update: {
           id?: string;
@@ -474,6 +487,264 @@ export interface Database {
           actor_id?: string;
           action?: string;
           detail?: string;
+          inventory_item_id?: string | null;
+          inventory_transaction_id?: string | null;
+          inventory_request_id?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      inventory_locations: {
+        Row: {
+          id: string;
+          name: string;
+          type: InventoryLocationType;
+          range_id: string | null;
+          address_description: string;
+          parent_location_id: string | null;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          type: InventoryLocationType;
+          range_id?: string | null;
+          address_description?: string;
+          parent_location_id?: string | null;
+          active?: boolean;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          type?: InventoryLocationType;
+          range_id?: string | null;
+          address_description?: string;
+          parent_location_id?: string | null;
+          active?: boolean;
+        };
+        Relationships: Relationships;
+      };
+      inventory_location_staff: {
+        Row: { location_id: string; user_id: string; created_at: string };
+        Insert: { location_id: string; user_id: string };
+        Update: { location_id?: string; user_id?: string };
+        Relationships: Relationships;
+      };
+      inventory_categories: {
+        Row: { id: string; name: string; active: boolean; created_at: string };
+        Insert: { id?: string; name: string; active?: boolean };
+        Update: { id?: string; name?: string; active?: boolean };
+        Relationships: Relationships;
+      };
+      inventory_units: {
+        Row: { id: string; name: string; abbreviation: string; active: boolean; allows_fractional: boolean; created_at: string };
+        Insert: { id?: string; name: string; abbreviation?: string; active?: boolean; allows_fractional?: boolean };
+        Update: { id?: string; name?: string; abbreviation?: string; active?: boolean; allows_fractional?: boolean };
+        Relationships: Relationships;
+      };
+      inventory_items: {
+        Row: {
+          id: string;
+          name: string;
+          category_id: string;
+          sku: string | null;
+          description: string;
+          unit_id: string;
+          kind: InventoryItemKind;
+          min_stock: number;
+          reorder_level: number;
+          max_stock: number | null;
+          track_expiry: boolean;
+          track_batch: boolean;
+          active: boolean;
+          photo_path: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          category_id: string;
+          sku?: string | null;
+          description?: string;
+          unit_id: string;
+          kind?: InventoryItemKind;
+          min_stock?: number;
+          reorder_level?: number;
+          max_stock?: number | null;
+          track_expiry?: boolean;
+          track_batch?: boolean;
+          active?: boolean;
+          photo_path?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          category_id?: string;
+          sku?: string | null;
+          description?: string;
+          unit_id?: string;
+          kind?: InventoryItemKind;
+          min_stock?: number;
+          reorder_level?: number;
+          max_stock?: number | null;
+          track_expiry?: boolean;
+          track_batch?: boolean;
+          active?: boolean;
+          photo_path?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      inventory_stock: {
+        Row: {
+          id: string;
+          item_id: string;
+          location_id: string;
+          available_qty: number;
+          reserved_qty: number;
+          in_use_qty: number;
+          damaged_qty: number;
+          expired_qty: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          item_id: string;
+          location_id: string;
+          available_qty?: number;
+          reserved_qty?: number;
+          in_use_qty?: number;
+          damaged_qty?: number;
+          expired_qty?: number;
+        };
+        Update: {
+          id?: string;
+          item_id?: string;
+          location_id?: string;
+          available_qty?: number;
+          reserved_qty?: number;
+          in_use_qty?: number;
+          damaged_qty?: number;
+          expired_qty?: number;
+        };
+        Relationships: Relationships;
+      };
+      inventory_transactions: {
+        Row: {
+          id: string;
+          item_id: string;
+          location_id: string;
+          quantity: number;
+          transaction_type: InventoryTransactionType;
+          source_location_id: string | null;
+          destination_location_id: string | null;
+          related_request_id: string | null;
+          performed_by: string;
+          approved_by: string | null;
+          notes: string;
+          attachment_path: string | null;
+          previous_balance: number;
+          new_balance: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          item_id: string;
+          location_id: string;
+          quantity: number;
+          transaction_type: InventoryTransactionType;
+          source_location_id?: string | null;
+          destination_location_id?: string | null;
+          related_request_id?: string | null;
+          performed_by: string;
+          approved_by?: string | null;
+          notes?: string;
+          attachment_path?: string | null;
+          previous_balance: number;
+          new_balance: number;
+        };
+        Update: {
+          id?: string;
+          item_id?: string;
+          location_id?: string;
+          quantity?: number;
+          transaction_type?: InventoryTransactionType;
+          source_location_id?: string | null;
+          destination_location_id?: string | null;
+          related_request_id?: string | null;
+          performed_by?: string;
+          approved_by?: string | null;
+          notes?: string;
+          attachment_path?: string | null;
+          previous_balance?: number;
+          new_balance?: number;
+        };
+        Relationships: Relationships;
+      };
+      inventory_requests: {
+        Row: {
+          id: string;
+          requesting_location_id: string;
+          requested_by: string;
+          status: InventoryRequestStatus;
+          required_by_date: string | null;
+          priority: TaskPriority;
+          reason: string;
+          notes: string;
+          reject_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          requesting_location_id: string;
+          requested_by: string;
+          status?: InventoryRequestStatus;
+          required_by_date?: string | null;
+          priority?: TaskPriority;
+          reason?: string;
+          notes?: string;
+          reject_reason?: string | null;
+        };
+        Update: {
+          id?: string;
+          requesting_location_id?: string;
+          requested_by?: string;
+          status?: InventoryRequestStatus;
+          required_by_date?: string | null;
+          priority?: TaskPriority;
+          reason?: string;
+          notes?: string;
+          reject_reason?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      inventory_request_items: {
+        Row: {
+          id: string;
+          request_id: string;
+          item_id: string;
+          requested_qty: number;
+          approved_qty: number | null;
+          fulfilled_qty: number;
+          notes: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          item_id: string;
+          requested_qty: number;
+          approved_qty?: number | null;
+          fulfilled_qty?: number;
+          notes?: string;
+        };
+        Update: {
+          id?: string;
+          request_id?: string;
+          item_id?: string;
+          requested_qty?: number;
+          approved_qty?: number | null;
+          fulfilled_qty?: number;
+          notes?: string;
         };
         Relationships: Relationships;
       };
@@ -515,6 +786,10 @@ export interface Database {
       incident_type: IncidentType;
       incident_severity: IncidentSeverity;
       incident_status: IncidentStatus;
+      inventory_location_type: InventoryLocationType;
+      inventory_item_kind: InventoryItemKind;
+      inventory_transaction_type: InventoryTransactionType;
+      inventory_request_status: InventoryRequestStatus;
     };
   };
 }

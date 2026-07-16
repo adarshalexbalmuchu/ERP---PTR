@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -15,6 +15,8 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  Boxes,
+  Package,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +27,10 @@ import HelpMenu from './HelpMenu';
 import GlobalSearch from './GlobalSearch';
 import Footer from './Footer';
 import MobileShell from './mobile/MobileShell';
+// Lazy, unlike MobileShell above — inventory_staff is one role out of six,
+// so its shell shouldn't ship in the shared bundle every Field Ops user
+// downloads (MobileShell itself stays eager since most roles render it).
+const InventoryMobileShell = lazy(() => import('./mobile/InventoryMobileShell'));
 import { SlotProvider, CommandBarSlot, ContextPanelSlot } from './layout/Slots';
 import { PanelToggleContext } from '../contexts/PanelToggleContext';
 import { Z } from '../lib/floating';
@@ -40,8 +46,22 @@ function directorSections(): Section[] {
     { key: 'tasks', to: '/director/tasks', label: 'Task registry', icon: <ClipboardList className={iconCls} /> },
     { key: 'incidents', to: '/director/incidents', label: 'Incident reports', icon: <AlertTriangle className={iconCls} /> },
     { key: 'map', to: '/director/map', label: 'Range map', icon: <MapIcon className={iconCls} /> },
+    { key: 'inventory', to: '/director/inventory', label: 'Inventory', icon: <Boxes className={iconCls} /> },
     { key: 'users', to: '/director/users', label: 'Personnel', icon: <Users className={iconCls} /> },
     { key: 'audit', to: '/director/audit', label: 'System audit', icon: <History className={iconCls} /> },
+  ];
+}
+
+// Compact 5-item sidebar per the Inventory module spec — deliberately its
+// own function (not a role branch inside directorSections/officerSections)
+// since inventory_staff's nav has nothing in common with Field Ops nav.
+function inventoryStaffSections(): Section[] {
+  return [
+    { key: 'dashboard', to: '/inventory', label: 'Dashboard', icon: <LayoutDashboard className={iconCls} /> },
+    { key: 'stock', to: '/inventory/stock', label: 'Stock', icon: <Package className={iconCls} /> },
+    { key: 'requests', to: '/inventory/requests', label: 'Requests', icon: <ClipboardList className={iconCls} /> },
+    { key: 'transactions', to: '/inventory/transactions', label: 'Transactions', icon: <History className={iconCls} /> },
+    { key: 'profile', to: '/inventory/profile', label: 'Profile', icon: <UserCircle className={iconCls} /> },
   ];
 }
 
@@ -60,9 +80,13 @@ const SECTION_TITLES: Record<string, string> = {
   tasks: 'Task registry',
   incidents: 'Incident reports',
   map: 'Range map',
+  inventory: 'Inventory',
   users: 'Personnel',
   audit: 'System audit',
   profile: 'My profile',
+  stock: 'Stock',
+  requests: 'Requests',
+  transactions: 'Transactions',
 };
 
 // Which rail section a given path belongs to (task detail lives under Tasks).
@@ -74,14 +98,13 @@ function sectionForPath(pathname: string, base: string): string {
   return seg; // incidents | map | users | audit | profile
 }
 
-function UserMenu({ onLogout }: { onLogout: () => void }) {
+function UserMenu({ base, onLogout }: { base: string; onLogout: () => void }) {
   const currentUser = useStore((s) => s.currentUser);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 8 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const base = currentUser?.role === 'director' ? '/director' : '/officer';
 
   useEffect(() => {
     if (!open) return;
@@ -211,7 +234,7 @@ function GlobalHeader({
       <div className="flex items-center gap-0.5 ml-auto md:ml-0">
         <HelpMenu />
         <NotificationBell />
-        <UserMenu onLogout={handleLogout} />
+        <UserMenu base={base} onLogout={handleLogout} />
       </div>
     </header>
   );
@@ -495,6 +518,7 @@ function GuardLayout() {
 function roleBase(role: string | undefined): string {
   if (role === 'director') return '/director';
   if (role === 'range_officer') return '/officer';
+  if (role === 'inventory_staff') return '/inventory';
   return '/guard';
 }
 
@@ -502,10 +526,13 @@ export default function Layout() {
   const currentUser = useStore((s) => s.currentUser);
   const isMobile = useIsMobile();
 
-  // Below 768px every role shares the same bottom-nav shell (Home / Tasks /
-  // Incidents / Map / More) — the desktop icon-rail/drawer chrome below is
-  // untouched and only ever mounts at >=768px.
+  // Below 768px every Field Ops role shares the same bottom-nav shell
+  // (Home / Tasks / Incidents / Map / More) — inventory_staff gets its own
+  // parallel mobile shell instead (no Field Ops nav, no live-location
+  // sharing). The desktop icon-rail/drawer chrome below is untouched and
+  // only ever mounts at >=768px.
   if (isMobile) {
+    if (currentUser?.role === 'inventory_staff') return <InventoryMobileShell />;
     return <MobileShell base={roleBase(currentUser?.role)} role={currentUser?.role ?? 'guard'} />;
   }
 
@@ -521,6 +548,17 @@ export default function Layout() {
     return (
       <SlotProvider>
         <AdminLayout sections={officerSections()} base="/officer" />
+      </SlotProvider>
+    );
+  }
+
+  // inventory_staff reuses the same generic AdminLayout shell (icon rail +
+  // header + panel) with its own section list/base — deliberately NOT
+  // GuardLayout, which unconditionally calls useLocationSharing() below.
+  if (currentUser?.role === 'inventory_staff') {
+    return (
+      <SlotProvider>
+        <AdminLayout sections={inventoryStaffSections()} base="/inventory" />
       </SlotProvider>
     );
   }

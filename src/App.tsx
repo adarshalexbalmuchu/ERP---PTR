@@ -25,9 +25,24 @@ const Profile = lazy(() => import('./pages/shared/Profile'));
 const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
 const GuardTaskList = lazy(() => import('./pages/guard/TaskList'));
 
+// Hospitality Inventory Management (Phase 1) — a fully separate domain from
+// Field Ops, so it gets its own lazy chunk regardless of which shell (the
+// director's nested area, or the inventory_staff top-level one) renders it.
+const InventoryDashboard = lazy(() => import('./pages/inventory/Dashboard'));
+const InventoryItems = lazy(() => import('./pages/inventory/Items'));
+const InventoryCategories = lazy(() => import('./pages/inventory/Categories'));
+const InventoryLocations = lazy(() => import('./pages/inventory/Locations'));
+const InventoryStock = lazy(() => import('./pages/inventory/Stock'));
+const InventoryRequests = lazy(() => import('./pages/inventory/Requests'));
+const InventoryRequestDetail = lazy(() => import('./pages/inventory/RequestDetail'));
+const InventoryTransactions = lazy(() => import('./pages/inventory/Transactions'));
+const InventoryReports = lazy(() => import('./pages/inventory/Reports'));
+const InventoryStaffManagement = lazy(() => import('./pages/inventory/StaffManagement'));
+
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
   if (role === 'range_officer') return '/officer';
+  if (role === 'inventory_staff') return '/inventory';
   return '/guard';
 }
 
@@ -68,6 +83,15 @@ function ProtectedGuard({ children }: { children: ReactNode }) {
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (!isFieldRole(user.role)) return <Navigate to={roleHome(user.role)} replace />;
+  return <>{children}</>;
+}
+
+function ProtectedInventoryStaff({ children }: { children: ReactNode }) {
+  const { loading } = useAuth();
+  const user = useStore((s) => s.currentUser);
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'inventory_staff') return <Navigate to={roleHome(user.role)} replace />;
   return <>{children}</>;
 }
 
@@ -151,6 +175,19 @@ export default function App() {
               <Route path="map" element={<MapView />} />
               <Route path="audit" element={<AuditLog />} />
               <Route path="profile" element={<Profile />} />
+
+              {/* Hospitality Inventory Management — nested area with its own
+                  internal pages; opens from the icon rail / mobile More sheet. */}
+              <Route path="inventory" element={<InventoryDashboard />} />
+              <Route path="inventory/items" element={<InventoryItems />} />
+              <Route path="inventory/categories" element={<InventoryCategories />} />
+              <Route path="inventory/locations" element={<InventoryLocations />} />
+              <Route path="inventory/stock" element={<InventoryStock />} />
+              <Route path="inventory/requests" element={<InventoryRequests />} />
+              <Route path="inventory/requests/:id" element={<InventoryRequestDetail />} />
+              <Route path="inventory/transactions" element={<InventoryTransactions />} />
+              <Route path="inventory/reports" element={<InventoryReports />} />
+              <Route path="inventory/staff" element={<InventoryStaffManagement />} />
             </Route>
 
             {/* Range Officer */}
@@ -185,6 +222,24 @@ export default function App() {
               <Route path="tasks/:id" element={<TaskDetailPage />} />
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />
+              <Route path="profile" element={<Profile />} />
+            </Route>
+
+            {/* Inventory staff — a fully separate shell (see Layout.tsx),
+                no Field Ops routes at all under this tree. */}
+            <Route
+              path="/inventory"
+              element={
+                <ProtectedInventoryStaff>
+                  <Layout />
+                </ProtectedInventoryStaff>
+              }
+            >
+              <Route index element={<InventoryDashboard />} />
+              <Route path="stock" element={<InventoryStock />} />
+              <Route path="requests" element={<InventoryRequests />} />
+              <Route path="requests/:id" element={<InventoryRequestDetail />} />
+              <Route path="transactions" element={<InventoryTransactions />} />
               <Route path="profile" element={<Profile />} />
             </Route>
 
