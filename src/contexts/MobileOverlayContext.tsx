@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lockBodyScroll } from '../utils/scrollLock';
 
 // Single coordinator for every blocking mobile overlay (More, Help, filter
 // sheets, sync details, map marker/nearby panels, ...) so opening one always
@@ -72,15 +73,18 @@ export function MobileOverlayProvider({ children }: { children: ReactNode }) {
   }, [active, close]);
 
   // Lock background scrolling only while a blocking overlay is open, and
-  // restore the exact scroll position of <main> afterwards.
+  // restore the exact scroll position of <main> afterwards. Uses the
+  // position:fixed body-lock technique (not a bare overflow:hidden) — iOS
+  // Safari has a known bug where position:fixed descendants (like the sheet
+  // itself) stop receiving touch events when scroll is locked via
+  // overflow:hidden alone, even though everything still renders correctly.
   useEffect(() => {
     const main = document.querySelector('main');
     if (!active) return;
     const scrollTop = main?.scrollTop ?? 0;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockBodyScroll();
     return () => {
-      document.body.style.overflow = prevOverflow;
+      unlock();
       if (main) main.scrollTop = scrollTop;
     };
   }, [active]);
