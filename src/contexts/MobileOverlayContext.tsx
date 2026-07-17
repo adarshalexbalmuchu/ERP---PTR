@@ -16,8 +16,11 @@ interface MobileOverlayContextValue {
   open: (id: MobileOverlayId, trigger?: HTMLElement | null) => void;
   /** Closes the active overlay. If `id` is given, only closes when that
       overlay is actually the one currently open (a safe no-op otherwise —
-      lets an unmounting component call this without checking first). */
-  close: (id?: MobileOverlayId) => void;
+      lets an unmounting component call this without checking first).
+      Pass `{ viaNavigation: true }` when the close is happening because the
+      user tapped a link/route change inside the overlay (see close()'s own
+      comment for why this matters — skipping it breaks in-sheet links). */
+  close: (id?: MobileOverlayId, opts?: { viaNavigation?: boolean }) => void;
   isOpen: (id: MobileOverlayId) => boolean;
 }
 
@@ -31,13 +34,24 @@ export function MobileOverlayProvider({ children }: { children: ReactNode }) {
   // rather than the Back gesture that already popped it for us.
   const pushedHistoryRef = useRef(false);
 
-  const close = useCallback((id?: MobileOverlayId) => {
+  const close = useCallback((id?: MobileOverlayId, opts?: { viaNavigation?: boolean }) => {
     setActive((current) => {
       if (id && current !== id) return current;
-      if (current !== null && pushedHistoryRef.current) {
-        pushedHistoryRef.current = false;
+      // `history.back()` is asynchronous — it doesn't unwind the stack
+      // until some time after this call returns. A NavLink tapped inside
+      // the sheet fires its own onClick (this close call) first, then
+      // immediately does its own `history.pushState` for the real
+      // navigation. If we call history.back() here, that pending back-
+      // traversal resolves AFTER the link's pushState has already landed,
+      // and ends up unwinding the very navigation the user just triggered —
+      // the link silently "does nothing" with no error. Skip the
+      // back() call for navigation-triggered closes; the pushed entry is
+      // left as a harmless orphan (popstate always just closes whatever's
+      // open, never reopens a stale sheet — see the listener below).
+      if (current !== null && pushedHistoryRef.current && !opts?.viaNavigation) {
         history.back();
       }
+      pushedHistoryRef.current = false;
       const trigger = triggerRef.current;
       triggerRef.current = null;
       if (trigger) window.requestAnimationFrame(() => trigger.focus());

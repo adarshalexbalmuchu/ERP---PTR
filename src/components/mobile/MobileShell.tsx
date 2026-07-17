@@ -281,7 +281,7 @@ function ShellContent({ base, role }: { base: string; role: string }) {
               item.danger ? 'text-signal-red' : 'text-n-90 hover:bg-n-20'
             }`;
             const content = <><span className={item.danger ? 'text-signal-red' : 'text-n-70'}>{item.icon}</span>{item.label}</>;
-            if (item.to) return <NavLink key={item.label} to={item.to} onClick={closeMore} className={cls}>{content}</NavLink>;
+            if (item.to) return <NavLink key={item.label} to={item.to} onClick={() => overlay?.close('more', { viaNavigation: true })} className={cls}>{content}</NavLink>;
             if (item.href) return <a key={item.label} href={item.href} className={cls}>{content}</a>;
             return <button key={item.label} onClick={item.onClick} className={cls}>{content}</button>;
           })}

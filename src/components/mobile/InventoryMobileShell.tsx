@@ -122,6 +122,10 @@ function ShellContent() {
   const helpOpen = overlay?.isOpen('help') ?? false;
   const syncOpen = overlay?.isOpen('sync-details') ?? false;
   const closeMore = () => (overlay ? overlay.close('more') : setLocalMoreOpen(false));
+  // Distinct from closeMore: a NavLink's own navigation races against and
+  // gets unwound by close()'s history.back() call (see that function's
+  // comment) — in-sheet links must skip it.
+  const closeMoreForNav = () => (overlay ? overlay.close('more', { viaNavigation: true }) : setLocalMoreOpen(false));
 
   const handleLogout = async () => {
     overlay?.close();
@@ -216,7 +220,7 @@ function ShellContent() {
               item.danger ? 'text-signal-red' : 'text-n-90 hover:bg-n-20'
             }`;
             const content = <><span className={item.danger ? 'text-signal-red' : 'text-n-70'}>{item.icon}</span>{item.label}</>;
-            if (item.to) return <NavLink key={item.label} to={item.to} onClick={closeMore} className={cls}>{content}</NavLink>;
+            if (item.to) return <NavLink key={item.label} to={item.to} onClick={closeMoreForNav} className={cls}>{content}</NavLink>;
             return <button key={item.label} onClick={item.onClick} className={cls}>{content}</button>;
           })}
         </div>
