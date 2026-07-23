@@ -7,13 +7,20 @@ import { CommandBar, ContextPanel } from '../../components/layout/Slots';
 import { Page, PageHeading } from '../../components/layout/Page';
 import type { User, Role } from '../../types';
 
+// inventory_staff is DEPRECATED (see schema.sql) — Inventory access is now
+// an additional capability any guard can be granted via Inventory managers
+// (Director → Inventory → Inventory managers), not a separate role. These
+// Record<Role, ...> maps still need an entry for it purely so this stays
+// exhaustive against the Postgres enum (which can't be safely dropped
+// while live); the role is deliberately absent from the create/edit
+// dropdown below so no new user can ever be given it.
 const ROLE_LABELS: Record<Role, string> = {
   director: 'Director',
   range_officer: 'Range Officer',
   guard: 'Guard / Field Staff',
   range_office: 'Range Office',
   tiger_cell: 'Tiger Cell',
-  inventory_staff: 'Inventory Staff',
+  inventory_staff: 'Inventory Staff (deprecated)',
 };
 
 // Director gets the one brand-color highlight (top authority); the other
@@ -29,8 +36,6 @@ const ROLE_COLORS: Record<Role, string> = {
 
 // Director works reserve-wide and Tiger Cell staff (research/tech roles that
 // span ranges) aren't posted to one range either — both skip the field.
-// Inventory staff are scoped by inventory_location_staff assignments
-// instead of a range, so they skip it too.
 const ROLE_HAS_NO_RANGE: Record<Role, boolean> = {
   director: true,
   range_officer: false,
@@ -180,7 +185,6 @@ function UserFormModal({
                 <option value="guard">Guard / Field Staff</option>
                 <option value="range_office">Range Office</option>
                 <option value="tiger_cell">Tiger Cell</option>
-                <option value="inventory_staff">Inventory Staff</option>
               </Select>
             </div>
             <div>

@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
 import { useIncidentQueue } from '../../hooks/useIncidentQueue';
 import { useLocationSharing } from '../../hooks/useLiveLocation';
+import { useMyInventoryAccess } from '../../hooks/useInventoryAccess';
 import { MobileOverlayProvider, useMobileOverlay } from '../../contexts/MobileOverlayContext';
 import { formatRelative } from '../../utils/formatters';
 import NotificationBell from '../NotificationBell';
@@ -148,6 +149,7 @@ function ShellContent({ base, role }: { base: string; role: string }) {
   // Field roles run the same background patrol-location beacon on mobile as
   // the desktop guard shell did — moving the shell here must not drop it.
   useLocationSharing();
+  const { hasInventoryAccess } = useMyInventoryAccess();
 
   const totalPendingWork = pendingCount + failedCount + queued.length;
 
@@ -170,8 +172,11 @@ function ShellContent({ base, role }: { base: string; role: string }) {
   const moreItems: MoreItem[] = [
     { label: 'My profile', icon: <UserCircle className="w-5 h-5" />, to: `${base}/profile` },
     // Inventory opens as a full module with its own internal navigation —
-    // not a sixth bottom-nav destination, per the module spec.
-    ...(role === 'director' ? [{ label: 'Inventory', icon: <Boxes className="w-5 h-5" />, to: `${base}/inventory` }] : []),
+    // not a sixth bottom-nav destination, per the module spec. Director
+    // always qualifies; anyone else needs at least one active Inventory
+    // location assignment (never merely by holding the guard role) — both
+    // cases are exactly what hasInventoryAccess already encodes.
+    ...(hasInventoryAccess ? [{ label: 'Inventory', icon: <Boxes className="w-5 h-5" />, to: `${base}/inventory` }] : []),
     ...(role === 'director' ? [{ label: 'Personnel', icon: <Users className="w-5 h-5" />, to: `${base}/users` }] : []),
     ...(role === 'director' || role === 'range_officer'
       ? [{ label: 'System audit', icon: <History className="w-5 h-5" />, to: `${base}/audit` }]

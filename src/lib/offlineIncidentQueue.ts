@@ -28,6 +28,13 @@ export interface DraftIncident {
   capturedAt: string;
   status: 'pending' | 'submitting' | 'failed';
   error?: string;
+  /** Set once the incident row itself has been inserted — lets a retry
+      after a failed photo upload resume from there instead of inserting a
+      second incident row for the same report. */
+  incidentId?: string;
+  /** Count of `photos` already uploaded successfully — lets a retry resume
+      mid-way instead of re-uploading (and duplicating) earlier photos. */
+  uploadedCount?: number;
 }
 
 const KEY = 'ptr-incident-draft-queue';
@@ -114,27 +121,39 @@ function patchQueue(id: string, patch: Partial<DraftIncident>) {
 }
 
 async function submitDraft(draft: DraftIncident): Promise<void> {
-  const { data: row, error } = await supabase
-    .from('incidents')
-    .insert({
-      type: draft.type,
-      type_other: draft.typeOther ?? null,
-      severity: draft.severity,
-      description: draft.description,
-      range_id: draft.rangeId,
-      area_id: draft.areaId ?? null,
-      reported_by: draft.reportedBy,
-      lat: draft.lat,
-      lng: draft.lng,
-      incident_date: draft.capturedAt,
-    })
-    .select()
-    .single();
-  if (error) throw error;
+  // A retry of a draft that already made it past the insert (e.g. it failed
+  // on a photo upload) must not insert the incident row again — reuse the
+  // id from the earlier attempt instead of creating a duplicate report.
+  let incidentId = draft.incidentId;
+  if (!incidentId) {
+    const { data: row, error } = await supabase
+      .from('incidents')
+      .insert({
+        type: draft.type,
+        type_other: draft.typeOther ?? null,
+        severity: draft.severity,
+        description: draft.description,
+        range_id: draft.rangeId,
+        area_id: draft.areaId ?? null,
+        reported_by: draft.reportedBy,
+        lat: draft.lat,
+        lng: draft.lng,
+        incident_date: draft.capturedAt,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    incidentId = row.id;
+    patchQueue(draft.id, { incidentId });
+  }
 
-  for (let i = 0; i < draft.photos.length; i++) {
+  // Resume from the first photo that hasn't been confirmed uploaded yet, so
+  // a retry after a partial failure doesn't re-upload (and duplicate)
+  // photos that already succeeded.
+  for (let i = draft.uploadedCount ?? 0; i < draft.photos.length; i++) {
     const file = base64ToFile(draft.photos[i], `field-photo-${i + 1}.jpg`);
-    await uploadIncidentPhoto(row.id, draft.reportedBy, file);
+    await uploadIncidentPhoto(incidentId, draft.reportedBy, file);
+    patchQueue(draft.id, { uploadedCount: i + 1 });
   }
 }
 

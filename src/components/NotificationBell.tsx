@@ -119,14 +119,11 @@ export default function NotificationBell() {
     markRead.mutate(notif.id);
     setOpen(false);
     const role = currentUser?.role;
-    if (role === 'inventory_staff') {
-      navigate(notif.inventoryRequestId ? `/inventory/requests/${notif.inventoryRequestId}` : '/inventory/requests');
-      return;
-    }
     const base = role === 'director' ? '/director' : role === 'range_officer' ? '/officer' : '/guard';
     // incident_reported notifications have no task — they route to the
     // Incident Log instead of a task's detail page. inventory_* notifications
-    // (director side) route into the director's nested inventory area.
+    // route into whichever role's nested inventory area — the director's, or
+    // (for an assigned guard) /guard/inventory/requests/:id.
     if (notif.taskId) navigate(`${base}/tasks/${notif.taskId}`);
     else if (notif.inventoryRequestId) navigate(`${base}/inventory/requests/${notif.inventoryRequestId}`);
     else navigate(`${base}/incidents`);

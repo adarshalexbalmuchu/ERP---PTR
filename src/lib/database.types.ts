@@ -525,9 +525,21 @@ export interface Database {
         Relationships: Relationships;
       };
       inventory_location_staff: {
-        Row: { location_id: string; user_id: string; created_at: string };
-        Insert: { location_id: string; user_id: string };
-        Update: { location_id?: string; user_id?: string };
+        Row: {
+          id: string; location_id: string; user_id: string; active: boolean;
+          assignment_type: string; assigned_by: string | null; assigned_at: string;
+          ended_at: string | null; created_at: string;
+        };
+        Insert: {
+          id?: string; location_id: string; user_id: string; active?: boolean;
+          assignment_type?: string; assigned_by?: string | null; assigned_at?: string;
+          ended_at?: string | null;
+        };
+        Update: {
+          id?: string; location_id?: string; user_id?: string; active?: boolean;
+          assignment_type?: string; assigned_by?: string | null; assigned_at?: string;
+          ended_at?: string | null;
+        };
         Relationships: Relationships;
       };
       inventory_categories: {

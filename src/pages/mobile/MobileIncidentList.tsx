@@ -148,7 +148,10 @@ export default function MobileIncidentList({
           <div className="text-13 font-semibold text-signal-amber flex items-center gap-1.5"><WifiOff className="w-3.5 h-3.5" />{queued.length} report{queued.length !== 1 ? 's' : ''} waiting to sync</div>
           {queued.map((q) => (
             <div key={q.id} className="flex items-center justify-between gap-2 text-13">
-              <span className="text-n-90 truncate">{formatIncidentType(q)}</span>
+              <div className="min-w-0">
+                <span className="text-n-90 truncate block">{formatIncidentType(q)}</span>
+                {q.status === 'failed' && q.error && <span className="text-signal-red text-[11px] block truncate">{q.error}</span>}
+              </div>
               {q.status === 'submitting' ? (
                 <span className="flex items-center gap-1 text-n-70 flex-shrink-0"><RefreshCw className="w-3.5 h-3.5 animate-spin" />Sending…</span>
               ) : q.status === 'failed' ? (

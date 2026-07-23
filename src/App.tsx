@@ -1,10 +1,11 @@
 import { type ReactNode, lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryClient, queryPersister } from './lib/queryClient';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import useStore from './store/useStore';
 import { isFieldRole } from './types';
+import { useMyInventoryAccess } from './hooks/useInventoryAccess';
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import OfflineBanner from './components/OfflineBanner';
@@ -25,9 +26,9 @@ const Profile = lazy(() => import('./pages/shared/Profile'));
 const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
 const GuardTaskList = lazy(() => import('./pages/guard/TaskList'));
 
-// Hospitality Inventory Management (Phase 1) — a fully separate domain from
-// Field Ops, so it gets its own lazy chunk regardless of which shell (the
-// director's nested area, or the inventory_staff top-level one) renders it.
+// Hospitality Inventory Management (Phase 1) — a domain module shared by
+// the director's nested area and (for an assigned guard) a nested area
+// under /guard. Not a separate role/shell — see ProtectedInventoryAccess.
 const InventoryDashboard = lazy(() => import('./pages/inventory/Dashboard'));
 const InventoryItems = lazy(() => import('./pages/inventory/Items'));
 const InventoryCategories = lazy(() => import('./pages/inventory/Categories'));
@@ -37,12 +38,11 @@ const InventoryRequests = lazy(() => import('./pages/inventory/Requests'));
 const InventoryRequestDetail = lazy(() => import('./pages/inventory/RequestDetail'));
 const InventoryTransactions = lazy(() => import('./pages/inventory/Transactions'));
 const InventoryReports = lazy(() => import('./pages/inventory/Reports'));
-const InventoryStaffManagement = lazy(() => import('./pages/inventory/StaffManagement'));
+const InventoryManagers = lazy(() => import('./pages/inventory/Managers'));
 
 function roleHome(role: string): string {
   if (role === 'director') return '/director';
   if (role === 'range_officer') return '/officer';
-  if (role === 'inventory_staff') return '/inventory';
   return '/guard';
 }
 
@@ -86,12 +86,20 @@ function ProtectedGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function ProtectedInventoryStaff({ children }: { children: ReactNode }) {
+// Capability-based, not role-based: Inventory access requires either the
+// director role or at least one active inventory_location_staff
+// assignment (see useMyInventoryAccess). Guards a route, not a shell — the
+// wrapped routes still render inside whichever Layout the outer role-guard
+// (ProtectedGuard/ProtectedDirector) already selected, so an assigned
+// guard's Inventory pages open inside their normal Guard shell, never a
+// separate Inventory-only application.
+function ProtectedInventoryAccess({ children }: { children: ReactNode }) {
   const { loading } = useAuth();
   const user = useStore((s) => s.currentUser);
-  if (loading) return <LoadingScreen />;
+  const { hasInventoryAccess, isLoading } = useMyInventoryAccess();
+  if (loading || isLoading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'inventory_staff') return <Navigate to={roleHome(user.role)} replace />;
+  if (!hasInventoryAccess) return <Navigate to={roleHome(user.role)} replace />;
   return <>{children}</>;
 }
 
@@ -177,7 +185,9 @@ export default function App() {
               <Route path="profile" element={<Profile />} />
 
               {/* Hospitality Inventory Management — nested area with its own
-                  internal pages; opens from the icon rail / mobile More sheet. */}
+                  internal pages; opens from the icon rail / mobile More sheet.
+                  Director always has full access, so no extra capability
+                  guard is needed here (ProtectedDirector already covers it). */}
               <Route path="inventory" element={<InventoryDashboard />} />
               <Route path="inventory/items" element={<InventoryItems />} />
               <Route path="inventory/categories" element={<InventoryCategories />} />
@@ -187,7 +197,7 @@ export default function App() {
               <Route path="inventory/requests/:id" element={<InventoryRequestDetail />} />
               <Route path="inventory/transactions" element={<InventoryTransactions />} />
               <Route path="inventory/reports" element={<InventoryReports />} />
-              <Route path="inventory/staff" element={<InventoryStaffManagement />} />
+              <Route path="inventory/managers" element={<InventoryManagers />} />
             </Route>
 
             {/* Range Officer */}
@@ -208,7 +218,11 @@ export default function App() {
               <Route path="profile" element={<Profile />} />
             </Route>
 
-            {/* Guard */}
+            {/* Guard — Inventory is an additional capability for guards with
+                an active location assignment, not a separate role/shell.
+                Nested under the same Layout/ProtectedGuard as the rest of
+                Field Ops; the inner "inventory" route adds the extra
+                capability check on top. */}
             <Route
               path="/guard"
               element={
@@ -223,24 +237,14 @@ export default function App() {
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />
               <Route path="profile" element={<Profile />} />
-            </Route>
 
-            {/* Inventory staff — a fully separate shell (see Layout.tsx),
-                no Field Ops routes at all under this tree. */}
-            <Route
-              path="/inventory"
-              element={
-                <ProtectedInventoryStaff>
-                  <Layout />
-                </ProtectedInventoryStaff>
-              }
-            >
-              <Route index element={<InventoryDashboard />} />
-              <Route path="stock" element={<InventoryStock />} />
-              <Route path="requests" element={<InventoryRequests />} />
-              <Route path="requests/:id" element={<InventoryRequestDetail />} />
-              <Route path="transactions" element={<InventoryTransactions />} />
-              <Route path="profile" element={<Profile />} />
+              <Route path="inventory" element={<ProtectedInventoryAccess><Outlet /></ProtectedInventoryAccess>}>
+                <Route index element={<InventoryDashboard />} />
+                <Route path="stock" element={<InventoryStock />} />
+                <Route path="requests" element={<InventoryRequests />} />
+                <Route path="requests/:id" element={<InventoryRequestDetail />} />
+                <Route path="transactions" element={<InventoryTransactions />} />
+              </Route>
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

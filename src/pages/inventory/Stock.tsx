@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { MapPin, Plus, Search } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useInventoryStock } from '../../hooks/useInventoryStock';
 import { useInventoryLocations } from '../../hooks/useInventoryLocations';
 import { useInventoryItems } from '../../hooks/useInventoryCatalog';
+import { useSelectedInventoryLocation } from '../../hooks/useInventoryAccess';
 import { canManageInventory } from '../../lib/permissions';
 import { quantityInputStep, validateQuantity } from '../../lib/inventoryQuantity';
 import Select from '../../components/Select';
@@ -97,12 +98,22 @@ export default function InventoryStockPage() {
   const isDirector = canManageInventory(currentUser?.role);
   const { stock, isLoading } = useInventoryStock();
   const { locations } = useInventoryLocations();
+  const {
+    assignedLocations, selectedLocationId, selectedLocation, selectLocation, needsSelection,
+  } = useSelectedInventoryLocation();
   const [locationId, setLocationId] = useState('');
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
 
+  // A director browses across every location (the "All my locations"
+  // filter below is genuinely optional there). A guard covering more than
+  // one location must never see their stock silently merged — the
+  // persisted, explicitly-picked location is the only thing that filters
+  // the list for them, not a client-side dropdown that defaults to "all".
+  const effectiveLocationId = isDirector ? locationId : (selectedLocationId ?? '');
+
   const filtered = stock.filter((s) => {
-    if (locationId && s.locationId !== locationId) return false;
+    if (effectiveLocationId && s.locationId !== effectiveLocationId) return false;
     if (search && !(s.itemName ?? '').toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -119,43 +130,67 @@ export default function InventoryStockPage() {
 
       {isDirector && formOpen && <OpeningBalanceForm onClose={() => setFormOpen(false)} />}
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="w-4 h-4 text-n-70 absolute left-2.5 top-1/2 -translate-y-1/2" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items…" className="input-field pl-8" />
+      {!isDirector && assignedLocations.length > 0 && (
+        <div className="flex items-center gap-2 text-13 text-n-80">
+          <MapPin className="w-4 h-4 text-ptr-green flex-shrink-0" />
+          {assignedLocations.length > 1 ? (
+            <Select
+              value={selectedLocationId ?? ''}
+              onChange={(e) => selectLocation(e.target.value)}
+              className="input-field select-field max-w-xs"
+            >
+              <option value="" disabled>Select a location</option>
+              {assignedLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </Select>
+          ) : (
+            <span className="font-semibold text-n-100">{selectedLocation?.name ?? '—'}</span>
+          )}
         </div>
-        {locations.length > 1 && (
-          <Select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="input-field select-field max-w-xs">
-            <option value="">All my locations</option>
-            {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </Select>
-        )}
-      </div>
+      )}
 
-      {isLoading ? (
-        <div className="skeleton h-40" />
-      ) : filtered.length === 0 ? (
-        <EmptyState title="No stock recorded yet" description="Ask a director to post an opening balance for your location." />
+      {needsSelection ? (
+        <EmptyState title="Select a location" description="Choose which of your assigned locations you want to view." />
       ) : (
-        <div className="card divide-y divide-n-20">
-          {filtered.map((s) => {
-            const low = s.minStock !== undefined && s.availableQty <= s.minStock;
-            return (
-              <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="text-13 font-semibold text-n-100 truncate">{s.itemName ?? 'Unknown item'}</div>
-                  <div className="text-xs text-n-70 truncate">{s.locationName ?? '—'}</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className={`text-13 font-semibold tabular-nums ${low ? 'text-signal-red' : 'text-n-100'}`}>
-                    {s.availableQty} {s.unitAbbreviation ?? ''}
+        <>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search className="w-4 h-4 text-n-70 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items…" className="input-field pl-8" />
+            </div>
+            {isDirector && locations.length > 1 && (
+              <Select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="input-field select-field max-w-xs">
+                <option value="">All my locations</option>
+                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </Select>
+            )}
+          </div>
+
+          {isLoading ? (
+            <div className="skeleton h-40" />
+          ) : filtered.length === 0 ? (
+            <EmptyState title="No stock recorded yet" description="Ask a director to post an opening balance for your location." />
+          ) : (
+            <div className="card divide-y divide-n-20">
+              {filtered.map((s) => {
+                const low = s.minStock !== undefined && s.availableQty <= s.minStock;
+                return (
+                  <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="text-13 font-semibold text-n-100 truncate">{s.itemName ?? 'Unknown item'}</div>
+                      <div className="text-xs text-n-70 truncate">{s.locationName ?? '—'}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className={`text-13 font-semibold tabular-nums ${low ? 'text-signal-red' : 'text-n-100'}`}>
+                        {s.availableQty} {s.unitAbbreviation ?? ''}
+                      </div>
+                      {low && <div className="text-xs text-signal-red">Low stock</div>}
+                    </div>
                   </div>
-                  {low && <div className="text-xs text-signal-red">Low stock</div>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </Page>
   );

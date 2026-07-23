@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useInventoryRequests } from '../../hooks/useInventoryRequests';
 import { useInventoryLocations } from '../../hooks/useInventoryLocations';
 import { useInventoryItems } from '../../hooks/useInventoryCatalog';
+import { useSelectedInventoryLocation } from '../../hooks/useInventoryAccess';
 import { canManageInventory } from '../../lib/permissions';
 import { quantityInputStep, validateQuantity } from '../../lib/inventoryQuantity';
 import Select from '../../components/Select';
@@ -31,7 +32,18 @@ function NewRequestForm({ onClose }: { onClose: () => void }) {
   const { items: allItems } = useInventoryItems();
   const items = allItems.filter((i) => i.active);
   const { createRequest, submitRequest } = useInventoryRequests();
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? '');
+  // A guard covering more than one location defaults to whichever one
+  // they're currently switched to on the Stock page (useSelectedInventoryLocation),
+  // instead of an arbitrary first-in-list pick that could silently raise a
+  // request against the wrong facility.
+  const { selectedLocationId } = useSelectedInventoryLocation();
+  const [locationId, setLocationId] = useState(selectedLocationId ?? locations[0]?.id ?? '');
+  // selectedLocationId resolves one tick after mount (it reads localStorage
+  // inside an effect) — pick it up once it arrives, but only while nothing
+  // has been chosen yet, so it never overwrites a deliberate manual switch.
+  useEffect(() => {
+    if (selectedLocationId && !locationId) setLocationId(selectedLocationId);
+  }, [selectedLocationId, locationId]);
   const [lines, setLines] = useState<{ itemId: string; qty: string }[]>([{ itemId: '', qty: '1' }]);
   const [requiredByDate, setRequiredByDate] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('Medium');

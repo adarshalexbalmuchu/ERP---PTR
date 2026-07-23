@@ -3,6 +3,11 @@ import { canManageInventory, canManageTasks, canManageIncidents } from './permis
 import { isFieldRole, FIELD_ROLES } from '../types';
 import type { Role } from '../types';
 
+// inventory_staff is DEPRECATED — kept only because the Postgres enum value
+// can't be safely dropped while live. No profile currently holds it and no
+// new user can ever be given it (see the create-user Edge Function and
+// every role-selection UI). It's still included here so these exhaustive
+// checks stay honest about every literal the Role type actually contains.
 const ALL_ROLES: Role[] = ['director', 'range_officer', 'guard', 'range_office', 'tiger_cell', 'inventory_staff'];
 
 describe('canManageInventory', () => {
@@ -10,11 +15,11 @@ describe('canManageInventory', () => {
     expect(canManageInventory('director')).toBe(true);
   });
 
-  it('inventory_staff cannot manage inventory (they act only within assigned locations, enforced by RLS)', () => {
+  it('the deprecated inventory_staff role cannot manage inventory', () => {
     expect(canManageInventory('inventory_staff')).toBe(false);
   });
 
-  it('every existing Field Operations role is denied inventory management', () => {
+  it('every existing Field Operations role is denied full inventory management (an assigned guard acts only within their assigned locations, enforced by RLS, not by this check)', () => {
     for (const role of ['range_officer', 'guard', 'range_office', 'tiger_cell'] as Role[]) {
       expect(canManageInventory(role)).toBe(false);
     }
@@ -25,7 +30,7 @@ describe('canManageInventory', () => {
   });
 });
 
-describe('inventory_staff is not accidentally treated as a field role', () => {
+describe('the deprecated inventory_staff role is not accidentally treated as a field role', () => {
   it('is not included in FIELD_ROLES', () => {
     expect(FIELD_ROLES).not.toContain('inventory_staff');
   });
@@ -47,10 +52,8 @@ describe('inventory_staff is not accidentally treated as a field role', () => {
   });
 });
 
-// Sanity check that adding inventory_staff didn't change any pre-existing
-// permission helper's behavior for the roles that were already handled.
-describe('existing permission helpers are unaffected by the new role', () => {
-  it('canManageTasks is unchanged for all roles including inventory_staff', () => {
+describe('existing permission helpers are unaffected by Inventory access', () => {
+  it('canManageTasks is unchanged for every role, including the deprecated inventory_staff', () => {
     expect(canManageTasks('director')).toBe(true);
     expect(canManageTasks('range_officer')).toBe(true);
     expect(canManageTasks('guard')).toBe(false);
@@ -59,7 +62,7 @@ describe('existing permission helpers are unaffected by the new role', () => {
     expect(canManageTasks('inventory_staff')).toBe(false);
   });
 
-  it('canManageIncidents is unchanged for all roles including inventory_staff', () => {
+  it('canManageIncidents is unchanged for every role, including the deprecated inventory_staff', () => {
     expect(canManageIncidents('director', 'any-id')).toBe(true);
     expect(canManageIncidents('tiger_cell', 'some-other-id')).toBe(true);
     expect(canManageIncidents('inventory_staff', 'any-id')).toBe(false);

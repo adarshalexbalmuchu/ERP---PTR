@@ -8,8 +8,9 @@ import useStore from '../store/useStore';
 import type { InventoryStock } from '../types';
 
 // RLS (inventory_stock_staff_read / inventory_stock_director) already scopes
-// which rows come back — director sees everything, inventory_staff only
-// their assigned locations — so this query never needs a client-side filter.
+// which rows come back — director sees everything, an assigned guard only
+// their actively-assigned locations — so this query never needs a
+// client-side filter.
 export function useInventoryStock() {
   const queryClient = useQueryClient();
   const currentUser = useStore((s) => s.currentUser);

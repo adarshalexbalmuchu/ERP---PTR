@@ -22,10 +22,15 @@ exception when duplicate_object then null; end $$;
 -- pick them up (the do-block above only fires create on a fresh database).
 alter type user_role add value if not exists 'range_office';
 alter type user_role add value if not exists 'tiger_cell';
--- Restricted role: Hospitality Inventory Management module only (own
--- assigned locations, own profile) — never Tasks/Incidents/Map/Personnel/
--- Audit. See get_my_inventory_location_ids() and the inventory RLS section
--- near the end of this file.
+-- DEPRECATED (2026-07): Inventory access is no longer a separate role.
+-- It's now a capability any existing guard can be granted via an active
+-- inventory_location_staff assignment (see get_my_inventory_location_ids()
+-- and the inventory RLS section near the end of this file) — a guard keeps
+-- their full Field Ops access and gains Inventory as an addition, not a
+-- separate account/role. This enum value is kept only because a live
+-- Postgres enum value can't be safely dropped; no new user should ever be
+-- assigned it (enforced in the create-user Edge Function and every
+-- role-selection UI), and no profile currently holds it.
 alter type user_role add value if not exists 'inventory_staff';
 
 -- Postgres runs this whole pasted script as one implicit transaction, and a
@@ -1412,9 +1417,11 @@ grant select on task_range_stats to authenticated;
 -- ═════════════════════════════════════════════
 -- Hospitality Inventory Management module (Phase 1)
 --
--- A fully separate domain from Tasks/Incidents/Map/Personnel/Audit, visible
--- only to 'director' (full access) and the new 'inventory_staff' role
--- (own assigned locations + own profile only). Phase 1 scope: locations,
+-- A domain module within the same app: full access for 'director', plus
+-- an additional capability any existing guard can hold — Inventory access
+-- to their actively-assigned location(s) — on top of their normal Field
+-- Ops access (Tasks/Incidents/Map/Personnel/Audit are unaffected; this
+-- module is additive, not a separate account type). Phase 1 scope: locations,
 -- categories, units, items, stock balances, an immutable transaction
 -- ledger, and the request → approval → issue workflow. Transfers,
 -- consumption/return/damage recording, offline drafts, and procurement are
@@ -1472,14 +1479,61 @@ create table if not exists inventory_locations (
   created_at          timestamptz not null default now()
 );
 
--- Which inventory_staff users can see/act on which locations. Mirrors
--- officer_ranges' exact shape (composite PK junction table).
+-- Found while seeding real named locations (Betla, New Complex, ...): this
+-- table had no unique constraint on name at all, unlike inventory_categories
+-- /inventory_units (both `name text not null unique`). Without it, a seed
+-- insert's `on conflict do nothing` is silently inert (nothing to conflict
+-- on) and re-running it would insert duplicate rows every time. Same
+-- duplicate_table exception class as the other UNIQUE-constraint fix
+-- earlier in this file (42P07 on re-run, not 42710).
+do $$ begin
+  alter table inventory_locations add constraint inventory_locations_name_key unique (name);
+exception when duplicate_object or duplicate_table then null; end $$;
+
+-- Which users can see/act on which Inventory locations. Inventory access
+-- is capability-based, not role-based: any user (in practice, an existing
+-- guard) with an active row here gets Inventory access to that location;
+-- the director always has full access regardless of this table. A
+-- surrogate id + partial unique index (below) rather than a composite
+-- primary key on (location_id, user_id) — the assignment needs to support
+-- history (unassign now, reassign later), which a hard composite PK on the
+-- pair would forbid re-inserting after the first deactivation.
 create table if not exists inventory_location_staff (
-  location_id uuid not null references inventory_locations(id) on delete cascade,
-  user_id     uuid not null references profiles(id) on delete cascade,
-  created_at  timestamptz not null default now(),
-  primary key (location_id, user_id)
+  id              uuid primary key default uuid_generate_v4(),
+  location_id     uuid not null references inventory_locations(id) on delete cascade,
+  user_id         uuid not null references profiles(id) on delete cascade,
+  active          boolean not null default true,
+  assignment_type text not null default 'location_manager',
+  assigned_by     uuid references profiles(id) on delete set null,
+  assigned_at     timestamptz not null default now(),
+  ended_at        timestamptz,
+  created_at      timestamptz not null default now()
 );
+
+-- Access-architecture migration (2026-07): this table originally had a
+-- composite primary key (location_id, user_id) with no active/history
+-- columns, back when Inventory access was granted via a separate
+-- inventory_staff role. Migrating an already-deployed database with that
+-- older shape to the one declared above — safe/additive, no data loss (the
+-- table was empty in production at the time of this change).
+alter table inventory_location_staff add column if not exists id uuid default uuid_generate_v4();
+update inventory_location_staff set id = uuid_generate_v4() where id is null;
+alter table inventory_location_staff alter column id set not null;
+alter table inventory_location_staff add column if not exists active boolean not null default true;
+alter table inventory_location_staff add column if not exists assignment_type text not null default 'location_manager';
+alter table inventory_location_staff add column if not exists assigned_by uuid references profiles(id) on delete set null;
+alter table inventory_location_staff add column if not exists assigned_at timestamptz not null default now();
+alter table inventory_location_staff add column if not exists ended_at timestamptz;
+alter table inventory_location_staff drop constraint if exists inventory_location_staff_pkey;
+do $$ begin
+  alter table inventory_location_staff add constraint inventory_location_staff_pkey primary key (id);
+exception when duplicate_object or duplicate_table then null; end $$;
+
+-- The actual "no two simultaneous active assignments for the same
+-- (user, location) pair" rule — a partial unique index since Postgres has
+-- no WHERE clause on a plain table-level UNIQUE constraint.
+create unique index if not exists inventory_location_staff_active_uniq
+  on inventory_location_staff(user_id, location_id) where active;
 
 -- Tables, not enums: the Director must be able to add new categories/units
 -- without a schema migration (unlike inventory_location_type, which is a
@@ -1728,11 +1782,17 @@ create index if not exists audit_log_inventory_request_id_idx on audit_log(inven
 -- ─────────────────────────────────────────────
 -- Inventory helper functions
 -- ─────────────────────────────────────────────
+-- Access-architecture change: Inventory access is capability-based, not
+-- role-based (there is no inventory_staff role in the new model). This
+-- function never actually checked role — it just needed the `active`
+-- filter now that the column exists, so it returns only currently-active
+-- assignments (a deactivated/ended assignment must stop granting access
+-- immediately, not linger until the row is deleted).
 create or replace function get_my_inventory_location_ids()
 returns uuid[] language sql security definer stable
 set search_path = '' as $$
   select coalesce(array_agg(location_id), '{}'::uuid[])
-  from public.inventory_location_staff where user_id = auth.uid();
+  from public.inventory_location_staff where user_id = auth.uid() and active;
 $$;
 -- This project's public schema has an ALTER DEFAULT PRIVILEGES rule that
 -- grants anon EXECUTE on every new function independently of PUBLIC — a
@@ -1744,7 +1804,7 @@ revoke all on function get_my_inventory_location_ids() from public;
 grant execute on function get_my_inventory_location_ids() to authenticated;
 
 -- Closes the same gap enforce_guard_task_update() closes for tasks: RLS
--- lets inventory_staff UPDATE their own Draft/Submitted request, but that
+-- lets an assigned guard UPDATE their own Draft/Submitted request, but that
 -- alone would also let them set status straight to 'Approved' or write
 -- approved_qty/reject_reason on a direct API call. A director's session is
 -- exempt; approve_inventory_request/reject_inventory_request (below) are
@@ -1818,30 +1878,41 @@ create policy "inventory_location_staff_director" on inventory_location_staff
 create policy "inventory_location_staff_own_read" on inventory_location_staff
   for select using (user_id = (select auth.uid()));
 
--- Catalog data (categories/units/items) is global-read for every
--- authenticated inventory role — a request can only be raised for an item
--- the requester can see, and the full catalog isn't location-scoped.
+-- Catalog data (categories/units/items) is global-read for every user with
+-- Inventory access — a request can only be raised for an item the
+-- requester can see, and the full catalog isn't location-scoped.
+-- Capability-based, not role-based: director OR any active
+-- inventory_location_staff assignment (no inventory_staff role exists).
 create policy "inventory_categories_director" on inventory_categories
   for all using ((select get_my_role()) = 'director');
 create policy "inventory_categories_read" on inventory_categories
-  for select using ((select get_my_role()) in ('director', 'inventory_staff'));
+  for select using (
+    (select get_my_role()) = 'director'
+    or exists (select 1 from inventory_location_staff where user_id = (select auth.uid()) and active)
+  );
 
 create policy "inventory_units_director" on inventory_units
   for all using ((select get_my_role()) = 'director');
 create policy "inventory_units_read" on inventory_units
-  for select using ((select get_my_role()) in ('director', 'inventory_staff'));
+  for select using (
+    (select get_my_role()) = 'director'
+    or exists (select 1 from inventory_location_staff where user_id = (select auth.uid()) and active)
+  );
 
 create policy "inventory_items_director" on inventory_items
   for all using ((select get_my_role()) = 'director');
 create policy "inventory_items_read" on inventory_items
-  for select using ((select get_my_role()) in ('director', 'inventory_staff'));
+  for select using (
+    (select get_my_role()) = 'director'
+    or exists (select 1 from inventory_location_staff where user_id = (select auth.uid()) and active)
+  );
 
 create policy "inventory_stock_director" on inventory_stock
   for all using ((select get_my_role()) = 'director');
 create policy "inventory_stock_staff_read" on inventory_stock
   for select using (location_id = any ((select get_my_inventory_location_ids())::uuid[]));
 
--- No insert/update/delete grant to inventory_staff OR director on the
+-- No insert/update/delete grant to an assigned guard OR director on the
 -- transaction ledger — every write happens inside the SECURITY DEFINER
 -- RPCs below, which run as the table owner and so bypass RLS on the write
 -- itself. Director is deliberately restricted to SELECT here (not "for
@@ -1859,18 +1930,22 @@ create policy "inventory_requests_director" on inventory_requests
   for all using ((select get_my_role()) = 'director');
 create policy "inventory_requests_staff_read" on inventory_requests
   for select using (requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[]));
+-- Role check dropped (no inventory_staff role exists) — the
+-- location-membership check via get_my_inventory_location_ids() is already
+-- the real gate, and that function only ever returns active assignments.
+-- Dropping the role check doesn't widen access: a director doesn't get
+-- inventory_location_staff rows in this model, so they still only reach
+-- inventory_requests through the separate "for all" director policy.
 create policy "inventory_requests_staff_insert" on inventory_requests
   for insert with check (
-    (select get_my_role()) = 'inventory_staff'
-    and requested_by = (select auth.uid())
+    requested_by = (select auth.uid())
     and requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
   );
 -- Column-level restriction is enforced by the trigger above, not here —
 -- RLS alone can gate row visibility, not which columns an UPDATE touches.
 create policy "inventory_requests_staff_update" on inventory_requests
   for update using (
-    (select get_my_role()) = 'inventory_staff'
-    and requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
+    requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
   );
 
 create policy "inventory_request_items_director" on inventory_request_items
@@ -1885,8 +1960,7 @@ create policy "inventory_request_items_staff_read" on inventory_request_items
   );
 create policy "inventory_request_items_staff_insert" on inventory_request_items
   for insert with check (
-    (select get_my_role()) = 'inventory_staff'
-    and exists (
+    exists (
       select 1 from inventory_requests req
       where req.id = inventory_request_items.request_id
         and req.requested_by = (select auth.uid())
@@ -1894,8 +1968,7 @@ create policy "inventory_request_items_staff_insert" on inventory_request_items
   );
 create policy "inventory_request_items_staff_update" on inventory_request_items
   for update using (
-    (select get_my_role()) = 'inventory_staff'
-    and exists (
+    exists (
       select 1 from inventory_requests req
       where req.id = inventory_request_items.request_id
         and req.requesting_location_id = any ((select get_my_inventory_location_ids())::uuid[])
@@ -1993,7 +2066,7 @@ revoke all on function post_opening_balance(uuid, uuid, numeric, text, uuid) fro
 revoke execute on function post_opening_balance(uuid, uuid, numeric, text, uuid) from anon;
 grant execute on function post_opening_balance(uuid, uuid, numeric, text, uuid) to authenticated;
 
--- inventory_staff only: creates a request and its item lines atomically.
+-- An assigned guard creates a request and its item lines atomically.
 -- Previously the client did this as two separate inserts (header, then
 -- items); if the items insert failed for any reason (inactive item hitting
 -- the trigger above, a duplicate item hitting the unique constraint), the
@@ -2001,6 +2074,12 @@ grant execute on function post_opening_balance(uuid, uuid, numeric, text, uuid) 
 -- during the Phase 1 hardening pass. Wrapping both in one SECURITY DEFINER
 -- function makes them atomic: a single function invocation is one implicit
 -- transaction, so any failure rolls back the header too.
+-- Authorization is capability-based, not role-based: director OR an
+-- active assignment to the requesting location (no inventory_staff role
+-- exists). A director doesn't get inventory_location_staff rows in this
+-- model, so in practice this preserves "only assigned guards create
+-- requests" while matching the universal "Director OR active assignment"
+-- authorization rule applied to every Inventory RPC.
 create or replace function create_inventory_request(
   p_requesting_location_id uuid,
   p_items jsonb,
@@ -2013,12 +2092,12 @@ declare
   v_request_id uuid;
   item jsonb;
 begin
-  if uid is null or public.get_my_role() is distinct from 'inventory_staff' then
-    raise exception 'Only inventory staff can create a request';
+  if uid is null then
+    raise exception 'Not authenticated';
   end if;
-  if not exists (
+  if (select public.get_my_role()) is distinct from 'director' and not exists (
     select 1 from public.inventory_location_staff
-    where location_id = p_requesting_location_id and user_id = uid
+    where location_id = p_requesting_location_id and user_id = uid and active
   ) then
     raise exception 'You are not assigned to this location';
   end if;
@@ -2156,7 +2235,7 @@ revoke all on function reject_inventory_request(uuid, text) from public;
 revoke execute on function reject_inventory_request(uuid, text) from anon;
 grant execute on function reject_inventory_request(uuid, text) to authenticated;
 
--- Director or assigned inventory_staff at the issuing location: issues
+-- Director or an assigned guard at the issuing location: issues
 -- stock against an approved request line, atomically decrementing the
 -- balance and posting one immutable transaction row. Raises rather than
 -- allowing negative stock. Returns whether this call actually applied the
@@ -2287,7 +2366,10 @@ create policy "inventory_photos_upload" on storage.objects
 create policy "inventory_photos_download" on storage.objects
   for select using (
     bucket_id = 'inventory-photos'
-    and (select public.get_my_role()) in ('director', 'inventory_staff')
+    and (
+      (select public.get_my_role()) = 'director'
+      or exists (select 1 from public.inventory_location_staff where user_id = (select auth.uid()) and active)
+    )
   );
 
 create policy "inventory_photos_delete" on storage.objects

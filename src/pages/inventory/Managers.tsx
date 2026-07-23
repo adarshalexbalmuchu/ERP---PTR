@@ -7,14 +7,18 @@ import EmptyState from '../../components/EmptyState';
 import { Page, PageHeading } from '../../components/layout/Page';
 import { getErrorMessage } from '../../lib/errors';
 
-export default function InventoryStaffManagement() {
+// Assigns Inventory access to existing guards — there is no separate
+// Inventory-only account. A guard keeps their normal Field Ops access and
+// gains Inventory as an addition for whichever location(s) they're
+// assigned here.
+export default function InventoryManagers() {
   const { users } = useUsers();
   const { locations } = useInventoryLocations();
   const { assignments, isLoading, assignStaff, unassignStaff } = useInventoryLocationStaff();
   const [userId, setUserId] = useState('');
   const [locationId, setLocationId] = useState('');
 
-  const staffUsers = users.filter((u) => u.role === 'inventory_staff');
+  const guardUsers = users.filter((u) => u.role === 'guard');
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? '—';
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name ?? '—';
 
@@ -24,23 +28,23 @@ export default function InventoryStaffManagement() {
       await assignStaff.mutateAsync({ userId, locationId });
       setUserId(''); setLocationId('');
     } catch (err) {
-      alert(getErrorMessage(err, 'Failed to assign staff to this location.'));
+      alert(getErrorMessage(err, 'Failed to assign this guard to the location.'));
     }
   };
 
   return (
     <Page className="space-y-6">
       <PageHeading
-        title="Inventory staff"
-        meta="Assign inventory staff to the locations they can see and act on. Add the account itself from Personnel first."
+        title="Inventory managers"
+        meta="Give an existing guard Inventory access to one or more locations. Create the guard account itself from Personnel first."
       />
 
       <div className="card p-4 flex flex-wrap items-end gap-3">
         <div className="min-w-[200px]">
-          <label className="block text-13 font-medium text-n-90 mb-1.5">Staff member</label>
+          <label className="block text-13 font-medium text-n-90 mb-1.5">Guard</label>
           <Select value={userId} onChange={(e) => setUserId(e.target.value)} className="input-field select-field">
-            <option value="">Select staff</option>
-            {staffUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            <option value="">Select guard</option>
+            {guardUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </Select>
         </div>
         <div className="min-w-[200px]">
@@ -55,12 +59,12 @@ export default function InventoryStaffManagement() {
         </button>
       </div>
 
-      {staffUsers.length === 0 ? (
-        <EmptyState title="No inventory staff accounts yet" description="Create one from the Personnel page with the Inventory Staff role." />
+      {guardUsers.length === 0 ? (
+        <EmptyState title="No guard accounts yet" description="Create one from the Personnel page first." />
       ) : isLoading ? (
         <div className="skeleton h-32" />
       ) : assignments.length === 0 ? (
-        <EmptyState title="No location assignments yet" />
+        <EmptyState title="No Inventory managers assigned yet" />
       ) : (
         <div className="card divide-y divide-n-20">
           {assignments.map((a) => (
@@ -72,7 +76,7 @@ export default function InventoryStaffManagement() {
               <button
                 onClick={() => void unassignStaff.mutateAsync(a)}
                 className="w-8 h-8 flex items-center justify-center rounded text-n-70 hover:bg-signal-red-bg hover:text-signal-red transition-colors"
-                aria-label="Remove assignment"
+                aria-label="Remove Inventory access for this location"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -108,8 +108,8 @@ export function useInventoryRequests() {
         throw new Error(SINGLE_RECORD_NOT_UPDATED_MESSAGE);
       }
       // Directors are globally readable (profiles_read), so this resolves
-      // fine from an inventory_staff session without needing a server-side
-      // recipient-resolution trigger the way incident_reported does.
+      // fine from an assigned guard's session without needing a
+      // server-side recipient-resolution trigger the way incident_reported does.
       const { data: directors } = await supabase.from('profiles').select('id').eq('role', 'director');
       await insertInventoryNotifications(
         (directors ?? []).map((d) => d.id),

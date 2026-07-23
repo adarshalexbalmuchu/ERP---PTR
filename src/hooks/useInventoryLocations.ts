@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 import { mapInventoryLocation } from '../lib/mappers';
 import { verifyAffectedRows, SINGLE_RECORD_NOT_UPDATED_MESSAGE } from '../lib/mutationVerification';
+import useStore from '../store/useStore';
 import type { InventoryLocation, InventoryLocationType } from '../types';
 
 export function useInventoryLocations() {
@@ -58,15 +59,19 @@ export function useInventoryLocations() {
   return { locations, isLoading, createLocation, updateLocation };
 }
 
-// Which inventory_staff users are assigned to which locations — director-only
-// management surface (src/pages/director/inventory/StaffAssignments.tsx).
+// Which guards currently hold Inventory access to which locations —
+// director-only management surface (src/pages/inventory/StaffManagement.tsx,
+// "Inventory managers"). Access is capability-based, not role-based: any
+// existing guard can be granted it via an active row here.
 export function useInventoryLocationStaff() {
   const queryClient = useQueryClient();
+  const currentUser = useStore((s) => s.currentUser);
 
   const { data: assignments = [], isLoading } = useQuery({
     queryKey: ['inventory-location-staff'],
     queryFn: async (): Promise<{ locationId: string; userId: string }[]> => {
-      const { data, error } = await supabase.from('inventory_location_staff').select('location_id, user_id');
+      const { data, error } = await supabase.from('inventory_location_staff')
+        .select('location_id, user_id').eq('active', true);
       if (error) throw error;
       return data.map((r) => ({ locationId: r.location_id, userId: r.user_id }));
     },
@@ -74,16 +79,23 @@ export function useInventoryLocationStaff() {
 
   const assignStaff = useMutation({
     mutationFn: async ({ locationId, userId }: { locationId: string; userId: string }) => {
-      const { error } = await supabase.from('inventory_location_staff').insert({ location_id: locationId, user_id: userId });
+      const { error } = await supabase.from('inventory_location_staff').insert({
+        location_id: locationId, user_id: userId, assigned_by: currentUser?.id ?? null,
+      });
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory-location-staff'] }),
   });
 
+  // Soft-deactivate, not a hard delete — preserves assignment history (who
+  // held Inventory access to a location and when) rather than erasing it.
+  // Scoped to `.eq('active', true)` so this only ever touches the current
+  // active row for the pair, never a past historical one.
   const unassignStaff = useMutation({
     mutationFn: async ({ locationId, userId }: { locationId: string; userId: string }) => {
       const { error } = await supabase.from('inventory_location_staff')
-        .delete().eq('location_id', locationId).eq('user_id', userId);
+        .update({ active: false, ended_at: new Date().toISOString() })
+        .eq('location_id', locationId).eq('user_id', userId).eq('active', true);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory-location-staff'] }),

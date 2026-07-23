@@ -12,15 +12,17 @@ export const MAX_INCIDENT_PHOTOS = 5;
 // at ~75% JPEG quality brings that down to roughly 150-400 KB with no
 // visible quality loss for reviewing an incident — the single biggest
 // lever for both storage cost and upload reliability on a weak field
-// signal. Runs in a Web Worker so it doesn't block the UI, and handles
-// EXIF orientation automatically (a phone photo's rotation tag is a common
-// source of "why is my photo sideways" bugs if resized by hand).
+// signal. Handles EXIF orientation automatically (a phone photo's rotation
+// tag is a common source of "why is my photo sideways" bugs if resized by
+// hand). useWebWorker is off: the library's worker does importScripts()
+// from a jsdelivr CDN URL by default, which our script-src 'self' CSP
+// blocks (see vercel.json).
 async function compressPhoto(file: File): Promise<File> {
   try {
     return await imageCompression(file, {
       maxSizeMB: 1,
       maxWidthOrHeight: 1600,
-      useWebWorker: true,
+      useWebWorker: false,
       initialQuality: 0.75,
     });
   } catch {

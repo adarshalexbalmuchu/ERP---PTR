@@ -25,18 +25,22 @@ function corsHeaders(req: Request): Record<string, string> {
   };
 }
 
+// inventory_staff is DEPRECATED and deliberately excluded here — Inventory
+// access is now an additional capability any existing guard can be granted
+// (via inventory_location_staff), not a separate role/account type. No new
+// user should ever be created with it.
 interface CreateUserPayload {
   email: string;
   password: string;
   name: string;
-  role: 'director' | 'range_officer' | 'guard' | 'range_office' | 'tiger_cell' | 'inventory_staff';
+  role: 'director' | 'range_officer' | 'guard' | 'range_office' | 'tiger_cell';
   phone?: string;
   avatarInitials: string;
   designation: string;
   rangeId?: string;
 }
 
-const VALID_ROLES = ['director', 'range_officer', 'guard', 'range_office', 'tiger_cell', 'inventory_staff'] as const;
+const VALID_ROLES = ['director', 'range_officer', 'guard', 'range_office', 'tiger_cell'] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Deliberately simple: enough to reject garbage, not trying to fully
 // implement RFC 5322 (Supabase Auth validates again on its side).

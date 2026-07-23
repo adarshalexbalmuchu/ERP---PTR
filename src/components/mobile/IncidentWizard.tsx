@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, X, MapPin, RefreshCw, CheckCircle2, WifiOff } from 'lucide-react';
+import { ArrowLeft, X, MapPin, RefreshCw, CheckCircle2, WifiOff, AlertCircle } from 'lucide-react';
 import Select from '../Select';
 import EvidenceCapture, { EMPTY_EVIDENCE, type CapturedEvidence } from './EvidenceCapture';
 import PriorityBadge from '../PriorityBadge';
@@ -48,7 +48,8 @@ export default function IncidentWizard({ isOpen, onClose, defaultRangeId, lockRa
   const [evidence, setEvidence] = useState<CapturedEvidence>(EMPTY_EVIDENCE);
   const [severity, setSeverity] = useState<IncidentSeverity>('Medium');
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<'submitted' | 'queued' | null>(null);
+  const [result, setResult] = useState<'submitted' | 'queued' | 'failed' | null>(null);
+  const [resultError, setResultError] = useState('');
 
   // Re-seeds every time the wizard opens (not just on first mount) — the
   // component instance can persist across opens, and a map tap picks a new
@@ -65,7 +66,7 @@ export default function IncidentWizard({ isOpen, onClose, defaultRangeId, lockRa
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setStep(0); setType('wildlife_sighting'); setTypeOther(''); setRangeId(defaultRangeId); setAreaId('');
-        setGps(null); setGpsError(''); setEvidence(EMPTY_EVIDENCE); setSeverity('Medium'); setResult(null);
+        setGps(null); setGpsError(''); setEvidence(EMPTY_EVIDENCE); setSeverity('Medium'); setResult(null); setResultError('');
         onClose();
       }
     };
@@ -90,7 +91,7 @@ export default function IncidentWizard({ isOpen, onClose, defaultRangeId, lockRa
 
   const reset = () => {
     setStep(0); setType('wildlife_sighting'); setTypeOther(''); setRangeId(defaultRangeId); setAreaId('');
-    setGps(null); setGpsError(''); setEvidence(EMPTY_EVIDENCE); setSeverity('Medium'); setResult(null);
+    setGps(null); setGpsError(''); setEvidence(EMPTY_EVIDENCE); setSeverity('Medium'); setResult(null); setResultError('');
   };
 
   const canProceed = () => {
@@ -111,9 +112,19 @@ export default function IncidentWizard({ isOpen, onClose, defaultRangeId, lockRa
       reportedBy: currentUser.id,
     });
     await processQueue();
-    const stillQueued = loadQueue().some((i) => i.id === draft.id);
+    const stillQueued = loadQueue().find((i) => i.id === draft.id);
     setSubmitting(false);
-    setResult(stillQueued ? 'queued' : 'submitted');
+    if (!stillQueued) { setResult('submitted'); return; }
+    // A queued draft that failed while the device is online won't fix
+    // itself by waiting for a connection — every retry hits the same error
+    // (e.g. an oversized photo) until the user does something about it, so
+    // don't tell them it'll "just sync later" when it won't.
+    if (stillQueued.status === 'failed' && navigator.onLine) {
+      setResultError(stillQueued.error ?? 'Something went wrong submitting this report.');
+      setResult('failed');
+    } else {
+      setResult('queued');
+    }
   };
 
   const close = () => { reset(); onClose(); };
@@ -126,6 +137,13 @@ export default function IncidentWizard({ isOpen, onClose, defaultRangeId, lockRa
             <CheckCircle2 className="w-14 h-14 text-signal-green mb-4" />
             <h2 className="text-xl font-semibold text-n-100">Report submitted</h2>
             <p className="text-15 text-n-70 mt-1.5">Your incident report has been sent.</p>
+          </>
+        ) : result === 'failed' ? (
+          <>
+            <AlertCircle className="w-14 h-14 text-signal-red mb-4" />
+            <h2 className="text-xl font-semibold text-n-100">Report not sent</h2>
+            <p className="text-15 text-n-70 mt-1.5">{resultError}</p>
+            <p className="text-13 text-n-70 mt-3">It's saved on this device — open Incidents and tap Retry once it's fixed.</p>
           </>
         ) : (
           <>

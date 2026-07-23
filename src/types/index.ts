@@ -10,10 +10,13 @@ export type { TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeve
 export type { InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus };
 export type Role = UserRole;
 
-// inventory_staff is a fully separate access tier (own assigned inventory
-// locations + own profile only) — deliberately NOT part of FIELD_ROLES,
-// since that tier's scoping rules (assignee/co-assignee on tasks/incidents)
-// don't apply to it at all.
+// inventory_staff is DEPRECATED — Inventory access is no longer a separate
+// role/tier. It's an additional capability any existing guard can hold
+// (see useMyInventoryAccess / inventory_location_staff), on top of their
+// normal Field Ops access. No new user can ever be given this role (see
+// the create-user Edge Function and every role-selection UI); it stays in
+// FIELD_ROLES' exclusion list only because the Postgres enum value can't
+// be safely dropped while live and no profile currently holds it.
 
 // range_office and tiger_cell hold the same access level as guard (field
 // staff scoped to their own assigned tasks/incidents) — just a different
