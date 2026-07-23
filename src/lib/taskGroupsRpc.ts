@@ -11,6 +11,9 @@ type PgError = { message: string; code?: string };
 const clientWithData = supabase as unknown as {
   rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: PgError | null }>;
 };
+const client = supabase as unknown as {
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: PgError | null }>;
+};
 
 /** One-time group assignment: creates the occurrence, its discussion, one
     task per active member, and one notification per newly-assigned
@@ -36,4 +39,14 @@ export async function createGroupOccurrence(args: {
   });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/** Pin/unpin a message — an RPC rather than a raw UPDATE because the
+    authority to pin (director, or officer/coordinator within their own
+    group/occurrence) is narrower than task_messages_update_own's
+    sender-or-director RLS check, and Postgres RLS can't express a
+    column-level distinction like that. */
+export async function setMessagePinned(messageId: string, pinned: boolean): Promise<void> {
+  const { error } = await client.rpc('set_message_pinned', { p_message_id: messageId, p_pinned: pinned });
+  if (error) throw new Error(error.message);
 }

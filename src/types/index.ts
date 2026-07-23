@@ -127,12 +127,16 @@ export interface Notification {
   type: NotificationType;
   title: string;
   message: string;
-  /** Set for every notification type except incident_reported/inventory_*. */
+  /** Set for every notification type except incident_reported, inventory_*, group_series_failing, group_occurrence_overdue. */
   taskId?: string;
   /** Set only for incident_reported. */
   incidentId?: string;
   /** Set only for inventory_request_* / inventory_stock_issued. */
   inventoryRequestId?: string;
+  /** Set only for group_series_failing. */
+  seriesId?: string;
+  /** Set only for group_occurrence_overdue. */
+  occurrenceId?: string;
   read: boolean;
   createdAt: string;
 }
@@ -425,6 +429,10 @@ export interface GroupMessage {
   createdAt: string;
   editedAt?: string;
   redactedAt?: string;
+  pinnedAt?: string;
+  pinnedBy?: string;
+  /** Number of distinct members who have read this message (task_message_reads) — "acknowledgements". Only populated where the query joins it (group/occurrence discussion views). */
+  readCount?: number;
 }
 
 export interface AppState {

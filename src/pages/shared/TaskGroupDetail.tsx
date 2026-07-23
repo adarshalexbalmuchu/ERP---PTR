@@ -266,8 +266,8 @@ export default function TaskGroupDetail() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
-  const { group, members, occurrences, series, conversationId, isLoading, addMember, removeMember, setCoordinator, setSeriesStatus } = useTaskGroup(id);
-  const { messages, postMessage } = useGroupMessages(conversationId);
+  const { group, members, occurrences, series, seriesStats, conversationId, isLoading, addMember, removeMember, setCoordinator, setSeriesStatus } = useTaskGroup(id);
+  const { messages, postMessage, setPinned, redactMessage } = useGroupMessages(conversationId);
   const { users } = useUsers();
   const { ranges } = useRanges();
   const [tab, setTab] = useState('overview');
@@ -276,6 +276,8 @@ export default function TaskGroupDetail() {
   const [addMemberId, setAddMemberId] = useState('');
 
   const canManage = canManageTaskGroups(currentUser?.role);
+  const isCoordinator = members.some((m) => m.userId === currentUser?.id && m.membershipRole === 'coordinator');
+  const canModerate = canManage || isCoordinator;
   const memberIds = new Set(members.map((m) => m.userId));
   const addableUsers = users.filter((u) => isFieldRole(u.role) && !memberIds.has(u.id));
   const rangeName = group?.rangeId ? ranges.find((r) => r.id === group.rangeId)?.name : 'Reserve-wide';
@@ -321,6 +323,28 @@ export default function TaskGroupDetail() {
             <div><div className="text-xs text-n-70">Coordinators</div><div className="text-xl font-semibold text-n-100">{members.filter((m) => m.membershipRole === 'coordinator').length}</div></div>
             <div><div className="text-xs text-n-70">Status</div><div className="text-xl font-semibold text-n-100 capitalize">{group.status}</div></div>
           </div>
+          {Object.keys(seriesStats).length > 0 && (
+            <div>
+              <div className="text-13 font-semibold text-n-90 mb-2">Series performance</div>
+              <div className="card divide-y divide-n-20">
+                {series.filter((s) => seriesStats[s.id]).map((s) => {
+                  const stats = seriesStats[s.id];
+                  return (
+                    <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                      <div className="min-w-0">
+                        <div className="text-13 font-medium text-n-100 truncate">{s.title}</div>
+                        <div className="text-xs text-n-70">{stats.total} assignment{stats.total === 1 ? '' : 's'} generated · {stats.completed} completed · {stats.inProgress} in progress</div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-lg font-semibold text-ptr-green">{stats.completionRate}%</div>
+                        <div className="text-xs text-n-70">completion</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {occurrences.length > 0 && (
             <div>
               <div className="text-13 font-semibold text-n-90 mb-2">Recent activity</div>
@@ -463,10 +487,12 @@ export default function TaskGroupDetail() {
             messages={messages}
             users={users}
             currentUser={currentUser}
-            canPost={canManage || group.membersCanReply || members.some((m) => m.userId === currentUser.id && m.membershipRole === 'coordinator')}
+            canPost={canManage || group.membersCanReply || isCoordinator}
             disabledReason="Only coordinators and officers can post announcements in this group."
             onSend={(body) => postMessage.mutateAsync(body)}
             emptyLabel="No announcements yet."
+            onPin={canModerate ? (messageId, pinned) => setPinned.mutateAsync({ messageId, pinned }) : undefined}
+            onRedact={(messageId) => redactMessage.mutateAsync(messageId)}
           />
         </div>
       )}

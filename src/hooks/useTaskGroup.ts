@@ -4,7 +4,21 @@ import { supabase } from '../lib/supabase';
 import { mapTaskGroup, mapTaskGroupMember, mapTaskOccurrence, mapTaskSeries, recurrenceRuleToDb } from '../lib/mappers';
 import { createGroupOccurrence } from '../lib/taskGroupsRpc';
 import useStore from '../store/useStore';
-import type { TaskCategory, TaskPriority, TaskSeriesRecurrence, TaskSeriesStatus, RecurrenceRule } from '../types';
+import type { TaskCategory, TaskPriority, TaskSeriesRecurrence, TaskSeriesStatus, RecurrenceRule, TaskStatus } from '../types';
+
+/** Recurring performance analytics — a per-series rollup of every task
+    that series has ever generated. Computed client-side from the same
+    `tasks` rows the Assignments/Overview tabs already read; no schema
+    addition, no server-side aggregation function, since this is exactly
+    the kind of read a Postgres index handles fine at this scale. */
+export interface SeriesStats {
+  total: number;
+  completed: number;
+  awaitingReview: number;
+  inProgress: number;
+  notStarted: number;
+  completionRate: number;
+}
 
 /** One Task Group's full detail surface: the group itself, its active
     roster, and its occurrences (past and current) — everything the
@@ -67,6 +81,39 @@ export function useTaskGroup(id: string | undefined) {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data.map(mapTaskSeries);
+    },
+    enabled: !!id,
+  });
+
+  const { data: seriesStats = {} } = useQuery({
+    queryKey: ['task-group-series-stats', id],
+    queryFn: async (): Promise<Record<string, SeriesStats>> => {
+      if (!id) return {};
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('series_id, status')
+        .eq('group_id', id)
+        .not('series_id', 'is', null);
+      if (error) throw error;
+      const rows = data as unknown as { series_id: string; status: TaskStatus }[];
+      const byStatus = rows.reduce<Record<string, TaskStatus[]>>((acc, r) => {
+        (acc[r.series_id] ??= []).push(r.status);
+        return acc;
+      }, {});
+      const out: Record<string, SeriesStats> = {};
+      for (const [seriesId, statuses] of Object.entries(byStatus)) {
+        const total = statuses.length;
+        const completed = statuses.filter((s) => s === 'Archived').length;
+        out[seriesId] = {
+          total,
+          completed,
+          awaitingReview: statuses.filter((s) => s === 'Completed').length,
+          inProgress: statuses.filter((s) => s === 'InProgress').length,
+          notStarted: statuses.filter((s) => s === 'NotStarted').length,
+          completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+        };
+      }
+      return out;
     },
     enabled: !!id,
   });
@@ -206,6 +253,7 @@ export function useTaskGroup(id: string | undefined) {
     members,
     occurrences,
     series,
+    seriesStats,
     conversationId: conversationId ?? null,
     isLoading: groupLoading || membersLoading || occurrencesLoading || seriesLoading,
     addMember,

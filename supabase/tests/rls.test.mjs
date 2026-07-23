@@ -548,6 +548,106 @@ async function run() {
     }
   }
 
+  // ── Phase 3: pinning RPC + escalations ─────────────────────────────
+  {
+    const client = new Client(CONN);
+    await client.connect();
+    const setUser = (uid) => client.query(`SET LOCAL ROLE authenticated; SET LOCAL app.uid = '${uid}'`);
+    let spCounter = 0;
+    const expectErrorSp = async (fn) => {
+      const sp = `sp3_${spCounter++}`;
+      await client.query(`SAVEPOINT ${sp}`);
+      try {
+        await fn();
+        await client.query(`RELEASE SAVEPOINT ${sp}`);
+        return null;
+      } catch (e) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+        return e.message;
+      }
+    };
+    try {
+      await client.query('BEGIN');
+
+      const convRes = await client.query(
+        `insert into task_conversations (type, group_id) values ('group', $1) returning id`,
+        [G.betlaPatrol],
+      );
+      const groupConvId = convRes.rows[0].id;
+      const msgRes = await client.query(
+        `insert into task_messages (conversation_id, sender_id, body) values ($1, $2, 'Reminder: bring binoculars') returning id`,
+        [groupConvId, U.officerBetla],
+      );
+      const msgId = msgRes.rows[0].id;
+
+      await setUser(U.officerBetla);
+      await client.query('select set_message_pinned($1, true)', [msgId]);
+      const pinned = await client.query('select pinned_at is not null as pinned from task_messages where id = $1', [msgId]);
+      check('officer(Betla) can pin a message in their own group', pinned.rows[0]?.pinned === true);
+
+      await setUser(U.guardBetla);
+      const pinErr = await expectErrorSp(() => client.query('select set_message_pinned($1, false)', [msgId]));
+      check('ordinary member (not coordinator) cannot pin/unpin', pinErr !== null, pinErr ?? 'no error raised');
+      const stillPinned = await client.query('select pinned_at is not null as pinned from task_messages where id = $1', [msgId]);
+      check('message stays pinned after the rejected unpin attempt', stillPinned.rows[0]?.pinned === true);
+
+      // officerBetla legitimately manages the Betla group, so they can
+      // create the series/occurrence rows and their own audit_log rows
+      // (actor_id must equal the acting session's uid — audit_log_insert's
+      // own RLS check) while still impersonating 'authenticated'.
+      await setUser(U.officerBetla);
+
+      // A series with 2+ recent generation failures gets exactly one
+      // escalation notification, deduped on rerun.
+      const flakySeriesId = (await client.query(
+        `insert into task_series (group_id, title, category, priority, recurrence_type, recurrence_rule, start_date, creation_time, due_offset_days, status, created_by, range_id)
+         values ($1, 'Flaky series', 'Patrol', 'Medium', 'daily', '{}'::jsonb, current_date - 5, '00:00', 1, 'active', $2, $3) returning id`,
+        [G.betlaPatrol, U.officerBetla, R.betla],
+      )).rows[0].id;
+      await client.query(
+        `insert into audit_log (task_title, actor_id, action, detail, series_id) values
+           ('Flaky series', $1, 'series_generation_failed', 'boom 1', $2),
+           ('Flaky series', $1, 'series_generation_failed', 'boom 2', $2)`,
+        [U.officerBetla, flakySeriesId],
+      );
+      // generate_series_escalations() is revoked from authenticated
+      // entirely (pg_cron calls it as the plain connection owner, not any
+      // impersonated app role) — RESET ROLE to match that exactly, the
+      // same way pg_cron itself would invoke it.
+      await client.query('RESET ROLE');
+      const esc1 = await client.query('select out_outcome from generate_series_escalations() where out_target_id = $1', [flakySeriesId]);
+      check('a series with 2+ recent failures gets an escalation notification', esc1.rows[0]?.out_outcome === 'notified', JSON.stringify(esc1.rows));
+      const esc1Count = await client.query(`select count(*) from notifications where series_id = $1 and type = 'group_series_failing'`, [flakySeriesId]);
+      await client.query('select generate_series_escalations()');
+      const esc1CountAfter = await client.query(`select count(*) from notifications where series_id = $1 and type = 'group_series_failing'`, [flakySeriesId]);
+      check('re-running escalations does not duplicate the series notification', esc1CountAfter.rows[0].count === esc1Count.rows[0].count, `${esc1Count.rows[0].count} -> ${esc1CountAfter.rows[0].count}`);
+
+      // An overdue occurrence with an open member task gets flagged once.
+      await setUser(U.officerBetla);
+      const overdueOccId = (await client.query(
+        `insert into task_occurrences (group_id, title, due_at, status, created_by)
+         values ($1, 'Overdue smoke occurrence', now() - interval '2 days', 'active', $2) returning id`,
+        [G.betlaPatrol, U.officerBetla],
+      )).rows[0].id;
+      await client.query(
+        `insert into tasks (title, assignee_id, created_by_id, range_id, status, priority, due_date, occurrence_id)
+         values ('Overdue smoke occurrence', $1, $2, $3, 'NotStarted', 'Medium', current_date - 1, $4)`,
+        [U.guardBetla, U.officerBetla, R.betla, overdueOccId],
+      );
+      await client.query('RESET ROLE');
+      const esc2 = await client.query('select out_outcome from generate_series_escalations() where out_target_id = $1', [overdueOccId]);
+      check('an overdue occurrence with an open task gets flagged', esc2.rows[0]?.out_outcome === 'notified', JSON.stringify(esc2.rows));
+      const esc2CountBefore = await client.query(`select count(*) from notifications where occurrence_id = $1 and type = 'group_occurrence_overdue'`, [overdueOccId]);
+      await client.query('select generate_series_escalations()');
+      const esc2CountAfter = await client.query(`select count(*) from notifications where occurrence_id = $1 and type = 'group_occurrence_overdue'`, [overdueOccId]);
+      check('re-running escalations does not duplicate the overdue-occurrence notification', esc2CountAfter.rows[0].count === esc2CountBefore.rows[0].count, `${esc2CountBefore.rows[0].count} -> ${esc2CountAfter.rows[0].count}`);
+
+      await client.query('ROLLBACK');
+    } finally {
+      await client.end();
+    }
+  }
+
   console.log(results.join('\n'));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);

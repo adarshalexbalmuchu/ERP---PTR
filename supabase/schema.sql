@@ -3108,3 +3108,294 @@ exception when others then
   raise notice 'pg_cron unavailable; recurring series generation not scheduled';
 end $$;
 
+-- ═════════════════════════════════════════════
+-- Task Groups & Recurring Assignments — Phase 3 (Advanced coordination)
+-- ═════════════════════════════════════════════
+-- Temporary substitutions and per-task actions (reassign/extend due date/
+-- remove one member's task) need no schema changes at all — they're
+-- ordinary UPDATE/DELETE on `tasks`, already covered by the existing
+-- tasks_director/tasks_officer_write RLS policies. Message
+-- acknowledgements likewise need no new schema — task_message_reads
+-- already exists from Phase 1 with correct RLS; Phase 3 only wires up the
+-- client side. What's added here: audit_log.series_id (reliable
+-- attribution for consecutive-failure escalation, instead of matching on
+-- title text), pinning (moderation), set_message_pinned RPC,
+-- generate_series_escalations() + its cron job (repeated-failure
+-- escalation + missed-occurrence handling), and updating
+-- generate_due_task_occurrences()'s failure branch to also record
+-- series_id. Recurring performance analytics needs no schema addition
+-- either — computed client-side from the existing tasks/occurrences rows.
+
+alter table audit_log add column if not exists series_id uuid references task_series(id) on delete set null;
+create index if not exists audit_log_series_id_idx on audit_log(series_id) where series_id is not null;
+
+alter table task_messages add column if not exists pinned_at timestamptz;
+alter table task_messages add column if not exists pinned_by uuid references profiles(id) on delete set null;
+
+alter type notification_type add value if not exists 'group_series_failing';
+alter type notification_type add value if not exists 'group_occurrence_overdue';
+commit;
+
+alter table notifications add column if not exists series_id uuid references task_series(id) on delete cascade;
+alter table notifications add column if not exists occurrence_id uuid references task_occurrences(id) on delete cascade;
+create index if not exists notifications_series_id_idx on notifications(series_id) where series_id is not null;
+create index if not exists notifications_occurrence_id_idx on notifications(occurrence_id) where occurrence_id is not null;
+
+alter table notifications drop constraint if exists notifications_task_or_incident_chk;
+alter table notifications add constraint notifications_task_or_incident_chk
+  check (
+    (case when task_id is not null then 1 else 0 end)
+    + (case when incident_id is not null then 1 else 0 end)
+    + (case when inventory_request_id is not null then 1 else 0 end)
+    + (case when series_id is not null then 1 else 0 end)
+    + (case when occurrence_id is not null then 1 else 0 end) = 1
+  );
+
+-- Re-deploy with series_id added to the failure-path audit_log insert —
+-- everything else is byte-identical to the Phase 2 version.
+create or replace function generate_due_task_occurrences()
+returns table(out_series_id uuid, out_occurrence_id uuid, out_outcome text, out_detail text)
+language plpgsql security definer
+set search_path = '' as $$
+declare
+  v_series record;
+  v_today date := (now() at time zone 'Asia/Kolkata')::date;
+  v_hour int := extract(hour from now() at time zone 'Asia/Kolkata');
+  v_dow int := extract(dow from v_today)::int;
+  v_dom int := extract(day from v_today)::int;
+  v_days_in_month int := extract(day from (date_trunc('month', v_today) + interval '1 month - 1 day'))::int;
+  v_is_due boolean;
+  v_due_at timestamptz;
+  v_new_occurrence_id uuid;
+  v_new_task_id uuid;
+  v_member record;
+begin
+  for v_series in
+    select s.*
+    from public.task_series s
+    join public.task_groups g on g.id = s.group_id
+    where s.status = 'active'
+      and g.status = 'active'
+      and s.start_date <= v_today
+      and (s.end_date is null or s.end_date >= v_today)
+      and v_hour >= extract(hour from s.creation_time)
+  loop
+    v_is_due := case v_series.recurrence_type
+      when 'daily' then true
+      when 'weekly' then (v_series.recurrence_rule -> 'weekdays') @> to_jsonb(v_dow)
+      when 'weekdays' then (v_series.recurrence_rule -> 'weekdays') @> to_jsonb(v_dow)
+      when 'monthly' then least(coalesce((v_series.recurrence_rule ->> 'day_of_month')::int, 1), v_days_in_month) = v_dom
+      when 'custom_interval' then
+        (v_today - v_series.start_date) % greatest(coalesce((v_series.recurrence_rule ->> 'interval_days')::int, 1), 1) = 0
+      else false
+    end;
+
+    if not v_is_due then
+      continue;
+    end if;
+
+    v_due_at := (v_today + greatest(v_series.due_offset_days, 0)) + time '23:59:59';
+    v_new_occurrence_id := null;
+
+    begin
+      insert into public.task_occurrences (
+        group_id, series_id, title, description, category, priority, scheduled_start, due_at, status, created_by
+      ) values (
+        v_series.group_id, v_series.id, v_series.title, v_series.description, v_series.category,
+        v_series.priority, now(), v_due_at, 'active', v_series.created_by
+      )
+      on conflict (series_id, due_at) where series_id is not null do nothing
+      returning id into v_new_occurrence_id;
+
+      if v_new_occurrence_id is null then
+        out_series_id := v_series.id; out_occurrence_id := null; out_outcome := 'already_generated'; out_detail := null;
+        return next;
+        continue;
+      end if;
+
+      insert into public.task_conversations (type, occurrence_id) values ('occurrence', v_new_occurrence_id);
+
+      for v_member in
+        select user_id from public.task_group_members where group_id = v_series.group_id and active
+      loop
+        v_new_task_id := null;
+        insert into public.tasks (
+          title, description, assignee_id, created_by_id, range_id, status, priority, category,
+          due_date, completion_percentage, group_id, series_id, occurrence_id
+        ) values (
+          v_series.title, v_series.description, v_member.user_id, v_series.created_by, v_series.range_id,
+          'NotStarted', v_series.priority, v_series.category, v_due_at::date, 0,
+          v_series.group_id, v_series.id, v_new_occurrence_id
+        )
+        on conflict (occurrence_id, assignee_id) where occurrence_id is not null do nothing
+        returning id into v_new_task_id;
+
+        if v_new_task_id is not null then
+          insert into public.notifications (user_id, type, title, message, task_id)
+          values (
+            v_member.user_id, 'group_task_assigned', 'New group assignment: ' || v_series.title,
+            'Recurring assignment "' || v_series.title || '" — due ' || to_char(v_due_at, 'DD Mon'),
+            v_new_task_id
+          );
+        end if;
+      end loop;
+
+      out_series_id := v_series.id; out_occurrence_id := v_new_occurrence_id; out_outcome := 'created'; out_detail := null;
+      return next;
+    exception when others then
+      insert into public.audit_log (task_id, task_title, range_id, actor_id, action, detail, series_id)
+      values (null, v_series.title, v_series.range_id, v_series.created_by, 'series_generation_failed', SQLERRM, v_series.id);
+      out_series_id := v_series.id; out_occurrence_id := null; out_outcome := 'failed'; out_detail := SQLERRM;
+      return next;
+    end;
+  end loop;
+  return;
+end;
+$$;
+
+-- ─────────────────────────────────────────────
+-- Message pinning (moderation) — director always; officer/coordinator
+-- only within their own authority (their range's group, or a group they
+-- coordinate). An RPC rather than a raw UPDATE grant so the authority
+-- check doesn't need column-level RLS (Postgres RLS is row-level only,
+-- and task_messages_update_own's sender-or-director check is deliberately
+-- broader than who should be allowed to pin).
+-- ─────────────────────────────────────────────
+create or replace function set_message_pinned(p_message_id uuid, p_pinned boolean)
+returns void language plpgsql security definer
+set search_path = '' as $$
+declare
+  v_actor uuid := auth.uid();
+  v_role public.user_role := (select role from public.profiles where id = v_actor);
+  v_conv record;
+  v_authorized boolean := false;
+begin
+  if v_actor is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  select c.id, c.type, c.group_id, c.occurrence_id into v_conv
+  from public.task_messages m
+  join public.task_conversations c on c.id = m.conversation_id
+  where m.id = p_message_id;
+
+  if v_conv.id is null then
+    raise exception 'Message not found';
+  end if;
+
+  if v_role = 'director' then
+    v_authorized := true;
+  elsif v_conv.type = 'group' then
+    v_authorized := public.can_officer_manage_group(v_conv.group_id) or public.is_group_coordinator(v_conv.group_id);
+  elsif v_conv.type = 'occurrence' then
+    v_authorized := public.can_officer_manage_occurrence(v_conv.occurrence_id);
+  end if;
+
+  if not v_authorized then
+    raise exception 'Not authorized to pin messages in this conversation';
+  end if;
+
+  update public.task_messages
+  set pinned_at = case when p_pinned then now() else null end,
+      pinned_by = case when p_pinned then v_actor else null end
+  where id = p_message_id;
+end;
+$$;
+
+revoke all on function set_message_pinned(uuid, boolean) from public, anon;
+grant execute on function set_message_pinned(uuid, boolean) to authenticated;
+
+-- ─────────────────────────────────────────────
+-- Escalation: repeated series-generation failures, and occurrences that
+-- passed their due date with open member tasks ("missed occurrence").
+-- Both are one-shot per trigger window, not a repeating alarm — a
+-- director already sees ongoing state (System audit for failures, the
+-- occurrence's own progress bar for overdue member tasks); this is a
+-- single heads-up, not a recurring nag.
+-- ─────────────────────────────────────────────
+create or replace function generate_series_escalations()
+returns table(out_kind text, out_target_id uuid, out_outcome text)
+language plpgsql security definer
+set search_path = '' as $$
+declare
+  v_series record;
+  v_occ record;
+  v_recent_failures int;
+  v_already_notified boolean;
+begin
+  for v_series in
+    select s.id, s.title, s.created_by
+    from public.task_series s
+    join public.task_groups g on g.id = s.group_id
+    where s.status = 'active' and g.status = 'active'
+  loop
+    select count(*) into v_recent_failures
+    from public.audit_log
+    where series_id = v_series.id
+      and action = 'series_generation_failed'
+      and created_at > now() - interval '48 hours';
+
+    if v_recent_failures < 2 then
+      continue;
+    end if;
+
+    select exists (
+      select 1 from public.notifications
+      where series_id = v_series.id and type = 'group_series_failing'
+        and created_at > now() - interval '48 hours'
+    ) into v_already_notified;
+
+    if v_already_notified then
+      continue;
+    end if;
+
+    insert into public.notifications (user_id, type, title, message, series_id)
+    values (
+      v_series.created_by, 'group_series_failing', 'Recurring series failing to generate',
+      '"' || v_series.title || '" has failed to generate ' || v_recent_failures || ' time(s) in the last 48 hours. Check System audit for details.',
+      v_series.id
+    );
+    out_kind := 'series'; out_target_id := v_series.id; out_outcome := 'notified';
+    return next;
+  end loop;
+
+  for v_occ in
+    select o.id, o.title, o.created_by
+    from public.task_occurrences o
+    where o.status = 'active'
+      and o.due_at < now()
+      and exists (select 1 from public.tasks t where t.occurrence_id = o.id and t.status <> 'Archived')
+      and not exists (
+        select 1 from public.notifications n where n.occurrence_id = o.id and n.type = 'group_occurrence_overdue'
+      )
+  loop
+    insert into public.notifications (user_id, type, title, message, occurrence_id)
+    values (
+      v_occ.created_by, 'group_occurrence_overdue', 'Assignment overdue: ' || v_occ.title,
+      '"' || v_occ.title || '" passed its due date with member tasks still open.',
+      v_occ.id
+    );
+    out_kind := 'occurrence'; out_target_id := v_occ.id; out_outcome := 'notified';
+    return next;
+  end loop;
+
+  return;
+end;
+$$;
+
+revoke all on function generate_series_escalations() from public, anon, authenticated;
+
+do $$ begin
+  create extension if not exists pg_cron;
+exception when others then
+  raise notice 'pg_cron unavailable; series escalations not scheduled';
+end $$;
+
+do $$ begin
+  perform cron.unschedule('task-group-escalations')
+    from cron.job where jobname = 'task-group-escalations';
+  perform cron.schedule('task-group-escalations', '0 * * * *',
+                         'select public.generate_series_escalations()');
+exception when others then
+  raise notice 'pg_cron unavailable; series escalations not scheduled';
+end $$;

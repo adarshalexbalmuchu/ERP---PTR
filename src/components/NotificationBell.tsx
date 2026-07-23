@@ -25,6 +25,8 @@ const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; cl
   inventory_stock_issued: { icon: Package, className: 'bg-ptr-green/10 text-ptr-green' },
   group_task_assigned: { icon: ClipboardList, className: 'bg-ptr-green/10 text-ptr-green' },
   group_announcement: { icon: Megaphone, className: 'bg-ptr-accent/10 text-ptr-accent' },
+  group_series_failing: { icon: AlertTriangle, className: 'bg-signal-red-bg text-signal-red' },
+  group_occurrence_overdue: { icon: AlertTriangle, className: 'bg-signal-red-bg text-signal-red' },
 };
 
 // Four groups, in display order — "requires action" surfaces first and is
@@ -47,6 +49,8 @@ const GROUP_OF: Record<Notification['type'], NotifGroup> = {
   inventory_stock_issued: 'assignments',
   group_task_assigned: 'assignments',
   group_announcement: 'system',
+  group_series_failing: 'action',
+  group_occurrence_overdue: 'action',
 };
 const GROUP_LABEL: Record<NotifGroup, string> = {
   action: 'Requires action',

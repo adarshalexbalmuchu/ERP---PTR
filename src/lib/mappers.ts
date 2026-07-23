@@ -117,6 +117,8 @@ export function mapNotification(row: NotificationRow): Notification {
     taskId: row.task_id ?? undefined,
     incidentId: row.incident_id ?? undefined,
     inventoryRequestId: row.inventory_request_id ?? undefined,
+    seriesId: row.series_id ?? undefined,
+    occurrenceId: row.occurrence_id ?? undefined,
     read: row.read,
     createdAt: row.created_at,
   };
@@ -461,7 +463,7 @@ export function mapTaskSeries(row: TaskSeriesRow): TaskSeries {
   };
 }
 
-export function mapGroupMessage(row: TaskMessageRow): GroupMessage {
+export function mapGroupMessage(row: TaskMessageRow & { read_count?: number }): GroupMessage {
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -476,5 +478,8 @@ export function mapGroupMessage(row: TaskMessageRow): GroupMessage {
     createdAt: row.created_at,
     editedAt: row.edited_at ?? undefined,
     redactedAt: row.redacted_at ?? undefined,
+    pinnedAt: row.pinned_at ?? undefined,
+    pinnedBy: row.pinned_by ?? undefined,
+    readCount: row.read_count,
   };
 }

@@ -4,7 +4,7 @@ export type UserRole = 'director' | 'range_officer' | 'guard' | 'range_office' |
 export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
-export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported' | 'inventory_request_submitted' | 'inventory_request_approved' | 'inventory_request_rejected' | 'inventory_stock_issued' | 'group_task_assigned' | 'group_announcement';
+export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported' | 'inventory_request_submitted' | 'inventory_request_approved' | 'inventory_request_rejected' | 'inventory_stock_issued' | 'group_task_assigned' | 'group_announcement' | 'group_series_failing' | 'group_occurrence_overdue';
 export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'conflict_other' | 'poaching_sign' | 'road_kill' | 'animal_injury' | 'tree_felling' | 'other' | 'wildlife_sighting' | 'sighting_other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 export type IncidentStatus = 'Open' | 'Resolved';
@@ -297,6 +297,8 @@ export interface Database {
           task_id: string | null;
           incident_id: string | null;
           inventory_request_id: string | null;
+          series_id: string | null;
+          occurrence_id: string | null;
           read: boolean;
           created_at: string;
         };
@@ -309,6 +311,8 @@ export interface Database {
           task_id?: string | null;
           incident_id?: string | null;
           inventory_request_id?: string | null;
+          series_id?: string | null;
+          occurrence_id?: string | null;
           read?: boolean;
         };
         Update: {
@@ -976,6 +980,8 @@ export interface Database {
           edited_at: string | null;
           redacted_at: string | null;
           redacted_by: string | null;
+          pinned_at: string | null;
+          pinned_by: string | null;
         };
         Insert: {
           id?: string;
