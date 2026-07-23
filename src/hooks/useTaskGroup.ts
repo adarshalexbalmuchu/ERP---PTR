@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { mapTaskGroup, mapTaskGroupMember, mapTaskOccurrence, mapTaskSeries, recurrenceRuleToDb } from '../lib/mappers';
 import { createGroupOccurrence } from '../lib/taskGroupsRpc';
 import useStore from '../store/useStore';
-import type { TaskCategory, TaskPriority, TaskSeriesRecurrence, TaskSeriesStatus, RecurrenceRule, TaskStatus } from '../types';
+import type { TaskCategory, TaskPriority, TaskSeriesRecurrence, TaskSeriesStatus, RecurrenceRule, TaskStatus, TaskGroupStatus } from '../types';
 
 /** Recurring performance analytics — a per-series rollup of every task
     that series has ever generated. Computed client-side from the same
@@ -248,6 +248,39 @@ export function useTaskGroup(id: string | undefined) {
     onSuccess: invalidateSeries,
   });
 
+  const invalidateGroup = () => {
+    void queryClient.invalidateQueries({ queryKey: ['task-group', id] });
+    void queryClient.invalidateQueries({ queryKey: ['task-groups'] });
+  };
+
+  const setGroupStatus = useMutation({
+    mutationFn: async (status: TaskGroupStatus) => {
+      if (!id) throw new Error('No group id');
+      const patch: { status: TaskGroupStatus; archived_at?: string | null } = { status };
+      patch.archived_at = status === 'archived' ? new Date().toISOString() : null;
+      const { error } = await supabase.from('task_groups').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateGroup,
+  });
+
+  // Hard delete — director-only by UI convention (RLS itself would also
+  // allow an in-range officer, via task_groups_officer's "for all"; the
+  // narrower UI gate is deliberate: destroying a group's history is a
+  // bigger call than pausing/archiving it). Cascades to members/series/
+  // occurrences/conversations/messages (all FK'd ON DELETE CASCADE); the
+  // tasks a group ever fanned out are NOT deleted — tasks.group_id/
+  // series_id/occurrence_id are ON DELETE SET NULL, so they survive as
+  // ordinary standalone tasks, just unlinked from any group.
+  const deleteGroup = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('No group id');
+      const { error } = await supabase.from('task_groups').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['task-groups'] }),
+  });
+
   return {
     group,
     members,
@@ -262,5 +295,7 @@ export function useTaskGroup(id: string | undefined) {
     createOneTimeAssignment,
     createSeries,
     setSeriesStatus,
+    setGroupStatus,
+    deleteGroup,
   };
 }

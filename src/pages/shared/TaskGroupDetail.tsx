@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, X, ChevronRight, Shield, Repeat, Pause, Play, Square } from 'lucide-react';
+import { Plus, X, ChevronRight, Shield, Repeat, Pause, Play, Square, MoreHorizontal, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTaskGroup } from '../../hooks/useTaskGroup';
 import { useGroupMessages } from '../../hooks/useGroupMessages';
@@ -12,6 +12,7 @@ import { isFieldRole } from '../../types';
 import Select from '../../components/Select';
 import EmptyState from '../../components/EmptyState';
 import Tabs from '../../components/ui/Tabs';
+import { Menu, MenuItem, MenuDivider } from '../../components/ui/Menu';
 import MessageThread from '../../components/MessageThread';
 import { Page, PageHeading } from '../../components/layout/Page';
 import { getErrorMessage } from '../../lib/errors';
@@ -266,7 +267,10 @@ export default function TaskGroupDetail() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const currentUser = useStore((s) => s.currentUser);
-  const { group, members, occurrences, series, seriesStats, conversationId, isLoading, addMember, removeMember, setCoordinator, setSeriesStatus } = useTaskGroup(id);
+  const {
+    group, members, occurrences, series, seriesStats, conversationId, isLoading,
+    addMember, removeMember, setCoordinator, setSeriesStatus, setGroupStatus, deleteGroup,
+  } = useTaskGroup(id);
   const { messages, postMessage, setPinned, redactMessage } = useGroupMessages(conversationId);
   const { users } = useUsers();
   const { ranges } = useRanges();
@@ -296,6 +300,39 @@ export default function TaskGroupDetail() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <button onClick={() => { setSeriesFormOpen((o) => !o); setAssignmentFormOpen(false); }} className="btn-subtle"><Repeat className="w-4 h-4" />New recurring task</button>
             <button onClick={() => { setAssignmentFormOpen((o) => !o); setSeriesFormOpen(false); }} className="btn-primary"><Plus className="w-4 h-4" />New assignment</button>
+            <Menu ariaLabel="Group actions" align="right" buttonClassName="btn-subtle !px-2" button={<MoreHorizontal className="w-4 h-4" />}>
+              {group.status === 'active' && (
+                <MenuItem icon={<Pause className="w-4 h-4" />} label="Pause group" onClick={() => setGroupStatus.mutate('paused')} />
+              )}
+              {group.status === 'paused' && (
+                <MenuItem icon={<Play className="w-4 h-4" />} label="Resume group" onClick={() => setGroupStatus.mutate('active')} />
+              )}
+              {group.status !== 'archived' ? (
+                <MenuItem
+                  icon={<Archive className="w-4 h-4" />}
+                  label="Archive group"
+                  onClick={() => { if (confirm(`Archive "${group.name}"? No new assignments can be created until it's unarchived — existing tasks, messages, and history stay exactly as they are.`)) setGroupStatus.mutate('archived'); }}
+                />
+              ) : (
+                <MenuItem icon={<ArchiveRestore className="w-4 h-4" />} label="Unarchive group" onClick={() => setGroupStatus.mutate('active')} />
+              )}
+              {currentUser?.role === 'director' && (
+                <>
+                  <MenuDivider />
+                  <MenuItem
+                    icon={<Trash2 className="w-4 h-4" />}
+                    label="Delete permanently"
+                    danger
+                    onClick={() => {
+                      if (confirm(`Permanently delete "${group.name}"? Its members, series, assignments, and discussions will all be deleted. Tasks it already created will NOT be deleted — they'll just no longer be linked to a group. This cannot be undone.`)) {
+                        const groupsListPath = window.location.pathname.split('/groups')[0] + '/groups';
+                        deleteGroup.mutate(undefined, { onSuccess: () => navigate(groupsListPath) });
+                      }
+                    }}
+                  />
+                </>
+              )}
+            </Menu>
           </div>
         )}
       </div>

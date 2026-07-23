@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, X, ChevronRight, Shield, Repeat, Play, Pause, Square } from 'lucide-react';
+import { Plus, X, ChevronRight, Shield, Repeat, Play, Pause, Square, MoreVertical, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTaskGroup } from '../../hooks/useTaskGroup';
 import { useGroupMessages } from '../../hooks/useGroupMessages';
@@ -223,13 +223,17 @@ export default function MobileTaskGroupDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const { group, members, occurrences, series, seriesStats, conversationId, isLoading, addMember, removeMember, setCoordinator, setSeriesStatus } = useTaskGroup(id);
+  const {
+    group, members, occurrences, series, seriesStats, conversationId, isLoading,
+    addMember, removeMember, setCoordinator, setSeriesStatus, setGroupStatus, deleteGroup,
+  } = useTaskGroup(id);
   const { messages, postMessage, setPinned, redactMessage } = useGroupMessages(conversationId);
   const { users } = useUsers();
   const [tab, setTab] = useState('overview');
   const [assignmentSheetOpen, setAssignmentSheetOpen] = useState(false);
   const [seriesSheetOpen, setSeriesSheetOpen] = useState(false);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [groupActionsOpen, setGroupActionsOpen] = useState(false);
   const [addMemberId, setAddMemberId] = useState('');
 
   const canManage = canManageTaskGroups(currentUser?.role);
@@ -256,6 +260,9 @@ export default function MobileTaskGroupDetail() {
             </button>
             <button onClick={() => setAssignmentSheetOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full bg-ptr-green text-white" aria-label="New assignment">
               <Plus className="w-5 h-5" />
+            </button>
+            <button onClick={() => setGroupActionsOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full text-n-70" aria-label="Group actions">
+              <MoreVertical className="w-5 h-5" />
             </button>
           </div>
         )}
@@ -424,6 +431,64 @@ export default function MobileTaskGroupDetail() {
           >
             Add to group
           </button>
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={groupActionsOpen} onClose={() => setGroupActionsOpen(false)} title="Group actions">
+        <div className="p-2 space-y-1">
+          {group.status === 'active' && (
+            <button
+              onClick={() => { setGroupActionsOpen(false); setGroupStatus.mutate('paused'); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-14 text-n-90 active:bg-n-10"
+            >
+              <Pause className="w-4.5 h-4.5 text-n-70" /> Pause group
+            </button>
+          )}
+          {group.status === 'paused' && (
+            <button
+              onClick={() => { setGroupActionsOpen(false); setGroupStatus.mutate('active'); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-14 text-n-90 active:bg-n-10"
+            >
+              <Play className="w-4.5 h-4.5 text-n-70" /> Resume group
+            </button>
+          )}
+          {group.status !== 'archived' ? (
+            <button
+              onClick={() => {
+                setGroupActionsOpen(false);
+                if (confirm(`Archive "${group.name}"? No new assignments can be created until it's unarchived — existing tasks, messages, and history stay exactly as they are.`)) {
+                  setGroupStatus.mutate('archived');
+                }
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-14 text-n-90 active:bg-n-10"
+            >
+              <Archive className="w-4.5 h-4.5 text-n-70" /> Archive group
+            </button>
+          ) : (
+            <button
+              onClick={() => { setGroupActionsOpen(false); setGroupStatus.mutate('active'); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-14 text-n-90 active:bg-n-10"
+            >
+              <ArchiveRestore className="w-4.5 h-4.5 text-n-70" /> Unarchive group
+            </button>
+          )}
+          {currentUser?.role === 'director' && (
+            <>
+              <div className="h-px bg-n-30 my-1" />
+              <button
+                onClick={() => {
+                  setGroupActionsOpen(false);
+                  if (confirm(`Permanently delete "${group.name}"? Its members, series, assignments, and discussions will all be deleted. Tasks it already created will NOT be deleted — they'll just no longer be linked to a group. This cannot be undone.`)) {
+                    const groupsListPath = window.location.pathname.split('/groups')[0] + '/groups';
+                    deleteGroup.mutate(undefined, { onSuccess: () => navigate(groupsListPath) });
+                  }
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-14 text-red-600 active:bg-red-50"
+              >
+                <Trash2 className="w-4.5 h-4.5" /> Delete permanently
+              </button>
+            </>
+          )}
         </div>
       </BottomSheet>
     </div>
