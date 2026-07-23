@@ -125,36 +125,8 @@ export default function TaskDetailPage() {
     );
   }
 
-  if (isMobile) {
-    return (
-      <MobileTaskDetail
-        task={task}
-        currentUser={currentUser}
-        users={users}
-        ranges={ranges}
-        areas={areas}
-        startTask={startTask}
-        completeTask={completeTask}
-        archiveTask={archiveTask}
-        reopenTask={reopenTask}
-        requestChanges={requestChanges}
-        addComment={addComment}
-        addTaskUpdate={addTaskUpdate}
-        uploadAttachment={uploadAttachment}
-      />
-    );
-  }
-
-  const assignee = users.find((u) => u.id === task.assigneeId);
-  const coAssignees = task.coAssigneeIds.map((id) => users.find((u) => u.id === id)).filter((u): u is (typeof users)[number] => !!u);
-  const range = ranges.find((r) => r.id === task.rangeId);
-  const area = areas.find((a) => a.id === task.areaId);
-  const overdue = isOverdue(task);
-  const isAssignee = currentUser?.id === task.assigneeId || task.coAssigneeIds.includes(currentUser?.id ?? '');
   const canManage = canManageTasks(role);
-
   const assignableUsers = users.filter((u) => isFieldRole(u.role));
-
   const backPath =
     role === 'director'
       ? '/director/tasks'
@@ -167,6 +139,58 @@ export default function TaskDetailPage() {
       onSuccess: () => navigate(backPath),
     });
   };
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileTaskDetail
+          task={task}
+          currentUser={currentUser}
+          users={users}
+          ranges={ranges}
+          areas={areas}
+          startTask={startTask}
+          completeTask={completeTask}
+          archiveTask={archiveTask}
+          reopenTask={reopenTask}
+          requestChanges={requestChanges}
+          addComment={addComment}
+          addTaskUpdate={addTaskUpdate}
+          uploadAttachment={uploadAttachment}
+          onEdit={() => setEditOpen(true)}
+          onDelete={() => setDeleteOpen(true)}
+        />
+        {editOpen && currentUser && (
+          <TaskForm
+            isOpen={editOpen}
+            onClose={() => setEditOpen(false)}
+            onSave={(data) => { updateTask.mutate(data); setEditOpen(false); }}
+            assignableUsers={assignableUsers}
+            initialData={task}
+            currentUserId={currentUser.id}
+            onUploadAttachment={(file) => uploadAttachment.mutate(file)}
+            onRemoveAttachment={(attId) => removeAttachment.mutate(attId)}
+          />
+        )}
+        <ConfirmDialog
+          isOpen={deleteOpen}
+          title="Delete Task"
+          message={`Delete "${task.title}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteOpen(false)}
+        />
+      </>
+    );
+  }
+
+  const assignee = users.find((u) => u.id === task.assigneeId);
+  const coAssignees = task.coAssigneeIds.map((id) => users.find((u) => u.id === id)).filter((u): u is (typeof users)[number] => !!u);
+  const range = ranges.find((r) => r.id === task.rangeId);
+  const area = areas.find((a) => a.id === task.areaId);
+  const overdue = isOverdue(task);
+  const isAssignee = currentUser?.id === task.assigneeId || task.coAssigneeIds.includes(currentUser?.id ?? '');
 
   const handleUpload = (files: FileList) => {
     Array.from(files).forEach((file) => {

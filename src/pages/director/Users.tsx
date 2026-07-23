@@ -276,23 +276,23 @@ export default function DirectorUsers() {
 
   return (
     <>
-      <CommandBar>
-        <button onClick={() => { setEditing(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />Add user</button>
-      </CommandBar>
-
-      <ContextPanel>
-        <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Role</div>
-        <div className="space-y-0.5">
-          {ROLE_FILTERS.map((o) => {
-            const active = o.value === filterRole;
-            return (
-              <button key={o.value || 'all'} onClick={() => setFilterRole(o.value)} className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'}`}>{o.label}</button>
-            );
-          })}
-        </div>
-      </ContextPanel>
-
       <Page className="space-y-4">
+        <CommandBar>
+          <button onClick={() => { setEditing(null); setFormOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />Add user</button>
+        </CommandBar>
+
+        <ContextPanel>
+          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-n-70">Role</div>
+          <div className="space-y-0.5">
+            {ROLE_FILTERS.map((o) => {
+              const active = o.value === filterRole;
+              return (
+                <button key={o.value || 'all'} onClick={() => setFilterRole(o.value)} className={`w-full text-left px-2.5 h-8 rounded text-13 flex items-center transition-colors ${active ? 'bg-ptr-green/10 text-ptr-green font-semibold' : 'text-n-90 hover:bg-n-20'}`}>{o.label}</button>
+              );
+            })}
+          </div>
+        </ContextPanel>
+
         <PageHeading title="Personnel" meta={`${filtered.length} of ${users.length} staff`} />
 
         <div className="card divide-y divide-n-20 overflow-hidden">

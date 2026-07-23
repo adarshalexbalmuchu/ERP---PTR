@@ -1,3 +1,4 @@
+import { CheckCircle2, Circle } from 'lucide-react';
 import StatusBadge from '../StatusBadge';
 import PriorityBadge from '../PriorityBadge';
 import { formatDate, formatDueRelative } from '../../utils/formatters';
@@ -9,12 +10,19 @@ export default function MobileTaskCard({
   locationLabel,
   assigneeName,
   onClick,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
 }: {
   task: Task;
   /** "Betla Range · Beat 4" style line — range name, plus area/beat when known. */
   locationLabel: string;
   assigneeName?: string;
   onClick: () => void;
+  /** When true, the card enters bulk-select mode: tapping toggles selection instead of opening the task. */
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const done = task.status === 'Completed' || task.status === 'Archived';
   const due = formatDueRelative(task.dueDate, done);
@@ -28,17 +36,24 @@ export default function MobileTaskCard({
   // shared PriorityBadge already reserves bold/red for Critical only.
   return (
     <button
-      onClick={onClick}
-      className={`w-full text-left px-4 py-2.5 border-b border-n-20 last:border-0 active:bg-n-10 transition-colors ${overdue ? 'bg-signal-red-bg/40' : 'bg-white'}`}
+      onClick={selectionMode ? onToggleSelect : onClick}
+      className={`w-full text-left px-4 py-2.5 border-b border-n-20 last:border-0 active:bg-n-10 transition-colors flex items-start gap-3 ${overdue ? 'bg-signal-red-bg/40' : 'bg-white'} ${selected ? 'bg-ptr-green/5' : ''}`}
     >
-      <div className="text-[15px] font-semibold text-n-100 leading-snug">{task.title}</div>
-      <div className="text-13 text-n-80 mt-0.5 truncate">{locationLabel}{assigneeName ? ` · ${assigneeName}` : ''}</div>
-      <div className="flex items-center justify-between gap-2 mt-1.5">
-        <span className="flex items-center gap-2 min-w-0">
-          <StatusBadge status={task.status} size="sm" />
-          <PriorityBadge priority={task.priority} size="sm" />
-        </span>
-        <span className={`text-13 flex-shrink-0 ${dueClass}`}>{due.text || (done ? formatDate(task.dueDate) : `Due ${formatDate(task.dueDate)}`)}</span>
+      {selectionMode && (
+        selected
+          ? <CheckCircle2 className="w-5 h-5 text-ptr-green flex-shrink-0 mt-0.5" />
+          : <Circle className="w-5 h-5 text-n-40 flex-shrink-0 mt-0.5" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-semibold text-n-100 leading-snug">{task.title}</div>
+        <div className="text-13 text-n-80 mt-0.5 truncate">{locationLabel}{assigneeName ? ` · ${assigneeName}` : ''}</div>
+        <div className="flex items-center justify-between gap-2 mt-1.5">
+          <span className="flex items-center gap-2 min-w-0">
+            <StatusBadge status={task.status} size="sm" />
+            <PriorityBadge priority={task.priority} size="sm" />
+          </span>
+          <span className={`text-13 flex-shrink-0 ${dueClass}`}>{due.text || (done ? formatDate(task.dueDate) : `Due ${formatDate(task.dueDate)}`)}</span>
+        </div>
       </div>
     </button>
   );

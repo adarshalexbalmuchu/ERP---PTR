@@ -142,6 +142,14 @@ export default function OfficerTaskList() {
           onOpen={(t) => navigate(`/officer/tasks/${t.id}`)}
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
           onNewTask={() => setMobileFormOpen(true)}
+          bulk={{
+            assignableUsers: myGuards,
+            onAssign: (ids, userId) => void runBulkUpdate(ids, { assigneeId: userId }),
+            onStatus: (ids, s) => void runBulkUpdate(ids, { status: s }),
+            onDue: (ids, dateInputValue) => void runBulkUpdate(ids, { dueDate: new Date(dateInputValue + 'T00:00:00').toISOString() }),
+            onExportSelected: (rows) => exportCsv(`ptr-tasks-selected-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(rows)),
+            onExportAll: (rows) => exportCsv(`ptr-tasks-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(rows)),
+          }}
         />
         {mobileFormOpen && currentUser && (
           <TaskForm

@@ -2,10 +2,11 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Plus, MapPin, RefreshCw, WifiOff, AlertCircle, MoreHorizontal,
-  UserCog, CircleDashed, CheckCircle2, RotateCcw, Image as ImageIcon,
-  ChevronLeft, ChevronRight, X,
+  UserCog, CircleDashed, CheckCircle2, Circle, RotateCcw, Image as ImageIcon,
+  ChevronLeft, ChevronRight, X, ClipboardPlus, Trash2, ListChecks, Download,
 } from 'lucide-react';
 import PriorityBadge from '../../components/PriorityBadge';
+import TaskForm from '../../components/TaskForm';
 import FilterChips from '../../components/mobile/FilterChips';
 import PullToRefresh from '../../components/mobile/PullToRefresh';
 import IncidentWizard from '../../components/mobile/IncidentWizard';
@@ -13,16 +14,19 @@ import BottomSheet from '../../components/mobile/BottomSheet';
 import { useIncidents } from '../../hooks/useIncidents';
 import { useRanges } from '../../hooks/useRanges';
 import { useUsers } from '../../hooks/useUsers';
+import { useTasks } from '../../hooks/useTasks';
 import { useIncidentQueue } from '../../hooks/useIncidentQueue';
 import { useMobileOverlay } from '../../contexts/MobileOverlayContext';
 import useStore from '../../store/useStore';
 import { canManageIncidents } from '../../lib/permissions';
 import { describeBulkOutcome } from '../../lib/mutationVerification';
 import { getErrorMessage } from '../../lib/errors';
-import { formatDateTime, formatRelative } from '../../utils/formatters';
+import { uploadTaskAttachment } from '../../lib/attachments';
+import { exportCsv } from '../../utils/exportCsv';
+import { formatDate, formatDateTime, formatRelative } from '../../utils/formatters';
 import { formatIncidentType, isHighSeverity } from '../../lib/incidentTypes';
 import { isFieldRole } from '../../types';
-import type { Incident, IncidentSeverity } from '../../types';
+import type { Incident, IncidentSeverity, TaskPriority } from '../../types';
 
 type Chip = 'all' | 'unassigned' | 'open' | 'resolved' | 'mine' | 'high' | 'critical';
 
@@ -37,6 +41,9 @@ const EMPTY_STATE_COPY: Record<Chip, { title: string; hint: string }> = {
 };
 
 const SEVERITIES: IncidentSeverity[] = ['Low', 'Medium', 'High', 'Critical'];
+const SEVERITY_TO_PRIORITY: Record<IncidentSeverity, TaskPriority> = {
+  Low: 'Low', Medium: 'Medium', High: 'High', Critical: 'Critical',
+};
 
 function statusLine(incident: Incident): string {
   if (incident.status === 'Resolved') {
@@ -60,7 +67,8 @@ export default function MobileIncidentList({
 }) {
   const currentUser = useStore((s) => s.currentUser);
   const queryClient = useQueryClient();
-  const { incidents, isLoading, assignIncidents, changeSeverity, setStatus } = useIncidents();
+  const { incidents, isLoading, deleteIncident, removePhoto, assignIncidents, changeSeverity, setStatus } = useIncidents();
+  const { createTask } = useTasks();
   const { ranges, areas } = useRanges();
   const { users } = useUsers();
   const { queued, retry } = useIncidentQueue();
@@ -71,10 +79,18 @@ export default function MobileIncidentList({
   const [assignPickerOpen, setAssignPickerOpen] = useState(false);
   const [severityPickerOpen, setSeverityPickerOpen] = useState(false);
   const [photoViewer, setPhotoViewer] = useState<{ incident: Incident; index: number } | null>(null);
+  const [followUpFor, setFollowUpFor] = useState<Incident | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkSheet, setBulkSheet] = useState<'assign' | 'severity' | null>(null);
   const actionsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const canManage = canManageIncidents(currentUser?.role, currentUser?.id);
+  const canCreateTask = currentUser?.role === 'director' || currentUser?.role === 'range_officer';
   const responders = users.filter((u) => isFieldRole(u.role));
+  const followUpAssignees = responders.filter((u) => !followUpFor || u.rangeId === followUpFor.rangeId);
+  const exitSelection = () => { setSelectionMode(false); setSelectedIds([]); setBulkSheet(null); };
+  const toggleSelect = (id: string) => setSelectedIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   const filtered = incidents.filter((i) => {
     if (chip === 'mine') return i.reportedBy === currentUserId;
@@ -86,6 +102,8 @@ export default function MobileIncidentList({
     return true;
   });
   const emptyCopy = EMPTY_STATE_COPY[chip];
+  const selectedIncidents = filtered.filter((i) => selectedIds.includes(i.id));
+  const allSelectedResolved = selectedIncidents.length > 0 && selectedIncidents.every((i) => i.status === 'Resolved');
 
   const openActions = (incident: Incident, trigger: HTMLButtonElement) => {
     actionsTriggerRef.current = trigger;
@@ -145,19 +163,108 @@ export default function MobileIncidentList({
       alert(getErrorMessage(err, `Failed to ${verb} this incident.`));
     }
   };
+  const startFollowUp = (incident: Incident) => {
+    closeActions();
+    setFollowUpFor(incident);
+  };
+  const runDelete = async () => {
+    if (!actionsFor || !confirm(`Delete "${formatIncidentType(actionsFor)}"? This cannot be undone.`)) return;
+    const id = actionsFor.id;
+    closeActions();
+    try {
+      await deleteIncident.mutateAsync(id);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to delete this incident.'));
+    }
+  };
+  const runRemovePhoto = async () => {
+    if (!photoViewer || !confirm('Remove this photo? This cannot be undone.')) return;
+    const photoId = photoViewer.incident.photos[photoViewer.index].id;
+    closePhoto();
+    try {
+      await removePhoto.mutateAsync(photoId);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to remove this photo.'));
+    }
+  };
+
+  const toExportRows = (rows: Incident[]) => rows.map((i) => ({
+    Type: formatIncidentType(i),
+    Severity: i.severity,
+    Status: i.status,
+    Range: ranges.find((r) => r.id === i.rangeId)?.name ?? '',
+    'Reported by': i.reporterName ?? '',
+    'Assigned to': users.find((u) => u.id === i.assignedTo)?.name ?? '',
+    Date: formatDate(i.incidentDate),
+    Description: i.description,
+  }));
+  const runBulkAssign = async (userId: string) => {
+    const ids = selectedIds;
+    exitSelection();
+    try {
+      const result = await assignIncidents.mutateAsync({ ids, userId });
+      alert(describeBulkOutcome(result, ids.length, 'incidents'));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to assign the selected incidents.'));
+    }
+  };
+  const runBulkSeverity = async (severity: IncidentSeverity) => {
+    const ids = selectedIds;
+    exitSelection();
+    try {
+      const result = await changeSeverity.mutateAsync({ ids, severity });
+      alert(describeBulkOutcome(result, ids.length, 'incidents'));
+    } catch (err) {
+      alert(getErrorMessage(err, 'Failed to update severity for the selected incidents.'));
+    }
+  };
+  const runBulkToggleResolved = async () => {
+    const ids = selectedIds;
+    const nextStatus = allSelectedResolved ? 'Open' : 'Resolved';
+    const verb = nextStatus === 'Resolved' ? 'resolve' : 'reopen';
+    if (!confirm(`Mark ${ids.length} selected incident${ids.length > 1 ? 's' : ''} as ${nextStatus.toLowerCase()}?`)) return;
+    exitSelection();
+    try {
+      const result = await setStatus.mutateAsync({ ids, status: nextStatus });
+      alert(describeBulkOutcome(result, ids.length, 'incidents'));
+    } catch (err) {
+      alert(getErrorMessage(err, `Failed to ${verb} the selected incidents.`));
+    }
+  };
+  const runBulkDelete = () => {
+    if (!confirm(`Delete ${selectedIncidents.length} selected incident${selectedIncidents.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    selectedIncidents.forEach((i) => deleteIncident.mutate(i.id));
+    exitSelection();
+  };
 
   return (
     <div>
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-n-100">Incidents</h1>
-          <p className="text-13 text-n-70 mt-0.5">Human–wildlife conflict &amp; field observations</p>
-        </div>
-        {/* Same green as Task Registry's "New task" FAB — red reads as a
-            destructive/danger action, which reporting an incident isn't. */}
-        <button onClick={() => setWizardOpen(true)} className="w-12 h-12 flex items-center justify-center rounded-full bg-ptr-green text-white flex-shrink-0 active:bg-ptr-green-dark" aria-label="Report incident">
-          <Plus className="w-5 h-5" />
-        </button>
+        {selectionMode ? (
+          <>
+            <span className="text-[15px] font-semibold text-n-100">{selectedIds.length} selected</span>
+            <button onClick={exitSelection} className="flex items-center gap-1 text-13 font-medium text-n-80"><X className="w-4 h-4" />Cancel</button>
+          </>
+        ) : (
+          <>
+            <div>
+              <h1 className="text-xl font-semibold text-n-100">Incidents</h1>
+              <p className="text-13 text-n-70 mt-0.5">Human–wildlife conflict &amp; field observations</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {canManage && (
+                <button onClick={() => setSelectionMode(true)} className="w-10 h-10 flex items-center justify-center rounded-full border border-n-40 text-n-80" aria-label="Select incidents">
+                  <ListChecks className="w-4.5 h-4.5" />
+                </button>
+              )}
+              {/* Same green as Task Registry's "New task" FAB — red reads as a
+                  destructive/danger action, which reporting an incident isn't. */}
+              <button onClick={() => setWizardOpen(true)} className="w-12 h-12 flex items-center justify-center rounded-full bg-ptr-green text-white flex-shrink-0 active:bg-ptr-green-dark" aria-label="Report incident">
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {queued.length > 0 && (
@@ -214,8 +321,20 @@ export default function MobileIncidentList({
               const range = ranges.find((r) => r.id === incident.rangeId);
               const area = areas.find((a) => a.id === incident.areaId);
               const extraPhotos = incident.photos.length - 2;
+              const selected = selectedIds.includes(incident.id);
               return (
-                <div key={incident.id} className="px-4 py-3 border-b border-n-20">
+                <div key={incident.id} className={`px-4 py-3 border-b border-n-20 flex items-start gap-3 ${selected ? 'bg-ptr-green/5' : ''}`}>
+                  {selectionMode && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelect(incident.id)}
+                      className="flex-shrink-0 mt-0.5"
+                      aria-label={selected ? 'Deselect incident' : 'Select incident'}
+                    >
+                      {selected ? <CheckCircle2 className="w-5 h-5 text-ptr-green" /> : <Circle className="w-5 h-5 text-n-40" />}
+                    </button>
+                  )}
+                  <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -226,7 +345,7 @@ export default function MobileIncidentList({
                         {statusLine(incident)}
                       </div>
                     </div>
-                    {canManage && (
+                    {canManage && !selectionMode && (
                       <button
                         onClick={(e) => openActions(incident, e.currentTarget)}
                         className="w-9 h-9 flex items-center justify-center rounded-full text-n-70 active:bg-n-10 flex-shrink-0"
@@ -276,10 +395,11 @@ export default function MobileIncidentList({
                       <MapPin className="w-3.5 h-3.5" />View on map
                     </a>
                   )}
+                  </div>
                 </div>
               );
             })}
-            <div className="h-4" />
+            <div className={selectionMode ? 'h-20' : 'h-4'} />
           </div>
         )}
       </PullToRefresh>
@@ -290,9 +410,16 @@ export default function MobileIncidentList({
             <span className="pl-2 text-13 font-medium">
               {photoViewer.index + 1} of {photoViewer.incident.photos.length}
             </span>
-            <button type="button" onClick={closePhoto} className="w-11 h-11 flex items-center justify-center rounded-full active:bg-white/15" aria-label="Close photo viewer">
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center">
+              {canManage && (
+                <button type="button" onClick={() => void runRemovePhoto()} className="w-11 h-11 flex items-center justify-center rounded-full text-red-300 active:bg-white/15" aria-label="Remove photo">
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
+              <button type="button" onClick={closePhoto} className="w-11 h-11 flex items-center justify-center rounded-full active:bg-white/15" aria-label="Close photo viewer">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
           <div className="relative flex-1 min-h-0 flex items-center justify-center px-3 pb-3">
             <img
@@ -321,6 +448,11 @@ export default function MobileIncidentList({
       >
         {actionsFor && (
           <div className="py-1 pb-3">
+            {canCreateTask && (
+              <button onClick={() => startFollowUp(actionsFor)} className="w-full flex items-center gap-3 px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10">
+                <ClipboardPlus className="w-5 h-5 text-n-70" />Create follow-up task
+              </button>
+            )}
             <button onClick={() => setAssignPickerOpen(true)} className="w-full flex items-center gap-3 px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10">
               <UserCog className="w-5 h-5 text-n-70" />Assign response
             </button>
@@ -330,6 +462,9 @@ export default function MobileIncidentList({
             <button onClick={() => void runToggleResolved()} className="w-full flex items-center gap-3 px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10">
               {actionsFor.status === 'Resolved' ? <RotateCcw className="w-5 h-5 text-n-70" /> : <CheckCircle2 className="w-5 h-5 text-n-70" />}
               {actionsFor.status === 'Resolved' ? 'Reopen' : 'Mark resolved'}
+            </button>
+            <button onClick={() => void runDelete()} className="w-full flex items-center gap-3 px-4 min-h-[48px] text-[15px] text-signal-red active:bg-signal-red-bg">
+              <Trash2 className="w-5 h-5" />Delete incident
             </button>
           </div>
         )}
@@ -355,6 +490,51 @@ export default function MobileIncidentList({
         </div>
       </BottomSheet>
 
+      {canManage && selectionMode && (
+        <div
+          className="fixed left-0 right-0 z-20 bg-white border-t border-n-30 flex items-center gap-1 px-3 overflow-x-auto"
+          style={{ bottom: 'calc(var(--ptr-bottom-nav-h) + env(safe-area-inset-bottom))', height: '56px' }}
+        >
+          {selectedIds.length === 0 ? (
+            <>
+              <button onClick={() => setSelectedIds(filtered.map((i) => i.id))} className="btn-subtle flex-shrink-0">Select all ({filtered.length})</button>
+              <button onClick={() => { exportCsv(`ptr-incidents-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(filtered)); exitSelection(); }} className="btn-subtle flex-shrink-0"><Download className="w-4 h-4" />Export all</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setBulkSheet('assign')} className="btn-subtle flex-shrink-0"><UserCog className="w-4 h-4" />Assign</button>
+              <button onClick={() => setBulkSheet('severity')} className="btn-subtle flex-shrink-0"><CircleDashed className="w-4 h-4" />Severity</button>
+              <button onClick={() => void runBulkToggleResolved()} className="btn-subtle flex-shrink-0">
+                {allSelectedResolved ? <RotateCcw className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                {allSelectedResolved ? 'Reopen' : 'Resolve'}
+              </button>
+              <button onClick={() => { exportCsv(`ptr-incidents-selected-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(selectedIncidents)); exitSelection(); }} className="btn-subtle flex-shrink-0"><Download className="w-4 h-4" />Export</button>
+              <button onClick={runBulkDelete} className="btn-subtle flex-shrink-0 !text-signal-red"><Trash2 className="w-4 h-4" />Delete</button>
+            </>
+          )}
+        </div>
+      )}
+
+      <BottomSheet open={bulkSheet === 'assign'} onClose={() => setBulkSheet(null)} title={`Assign ${selectedIds.length} incident${selectedIds.length > 1 ? 's' : ''} to`}>
+        <div className="py-1 pb-3 max-h-[60dvh] overflow-y-auto">
+          {responders.map((u) => (
+            <button key={u.id} onClick={() => void runBulkAssign(u.id)} className="w-full flex items-center px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10 text-left">
+              {u.name}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={bulkSheet === 'severity'} onClose={() => setBulkSheet(null)} title="Set severity">
+        <div className="py-1 pb-3">
+          {SEVERITIES.map((s) => (
+            <button key={s} onClick={() => void runBulkSeverity(s)} className="w-full flex items-center px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10 text-left">
+              {s}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+
       <IncidentWizard
         isOpen={wizardOpen}
         onClose={() => setWizardOpen(false)}
@@ -362,6 +542,32 @@ export default function MobileIncidentList({
         lockRange={lockRange}
         allowedRangeIds={allowedRangeIds}
       />
+
+      {followUpFor && currentUser && (
+        <TaskForm
+          isOpen={!!followUpFor}
+          onClose={() => setFollowUpFor(null)}
+          onSave={async (data, files) => {
+            const rows = await createTask.mutateAsync(data);
+            for (const row of rows) {
+              for (const file of files) {
+                try { await uploadTaskAttachment(row.id, currentUser.id, file); }
+                catch (err) { alert(getErrorMessage(err, `Failed to upload "${file.name}"`)); }
+              }
+            }
+            setFollowUpFor(null);
+          }}
+          assignableUsers={followUpAssignees}
+          initialData={null}
+          currentUserId={currentUser.id}
+          defaultRangeId={followUpFor.rangeId}
+          prefill={{
+            title: `Follow-up: ${formatIncidentType(followUpFor)}`,
+            description: `Linked to incident reported ${formatDateTime(followUpFor.incidentDate)}:\n${followUpFor.description}`,
+            priority: SEVERITY_TO_PRIORITY[followUpFor.severity],
+          }}
+        />
+      )}
     </div>
   );
 }

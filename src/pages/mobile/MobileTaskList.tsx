@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import { Search, SlidersHorizontal, Plus, WifiOff } from 'lucide-react';
+import {
+  Search, SlidersHorizontal, Plus, WifiOff, ListChecks, X,
+  UserCog, CircleDashed, CalendarClock, Trash2, Download,
+} from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
 import { useMobileOverlay } from '../../contexts/MobileOverlayContext';
@@ -7,13 +10,36 @@ import MobileTaskCard from '../../components/mobile/MobileTaskCard';
 import FilterChips from '../../components/mobile/FilterChips';
 import TaskFilterSheet, { EMPTY_TASK_FILTERS, type MobileTaskFilters } from '../../components/mobile/TaskFilterSheet';
 import PullToRefresh from '../../components/mobile/PullToRefresh';
+import BottomSheet from '../../components/mobile/BottomSheet';
 import { isOverdue } from '../../utils/overdue';
 import { PRIORITY_ORDER } from '../../components/PriorityBadge';
 import { matchesTaskSearch } from '../../utils/taskSearch';
-import type { Task, User, Range, Area } from '../../types';
+import type { Task, User, Range, Area, TaskStatus } from '../../types';
 
 const PAGE_SIZE = 20;
 type Chip = 'all' | 'mine' | 'today' | 'overdue' | 'review';
+
+const STATUS_SET: { value: TaskStatus; label: string }[] = [
+  { value: 'NotStarted', label: 'Not started' },
+  { value: 'InProgress', label: 'In progress' },
+  { value: 'Completed', label: 'Completed (awaiting review)' },
+  { value: 'Archived', label: 'Approved & closed' },
+];
+
+/** Bulk actions for the task registry — mirrors the desktop selected-rows
+    command bar (director/range_officer only; passed by the caller). Kept
+    optional so plain field-role usages (guard's "My tasks") don't grow a
+    selection UI they have no permission to use. */
+export interface MobileTaskBulkActions {
+  assignableUsers: User[];
+  onAssign: (ids: string[], userId: string) => void;
+  onStatus: (ids: string[], status: TaskStatus) => void;
+  onDue: (ids: string[], dueDateInputValue: string) => void;
+  /** Omit to hide delete — desktop only grants this to directors, not range_officer. */
+  onDelete?: (ids: string[]) => void;
+  onExportSelected: (tasks: Task[]) => void;
+  onExportAll: (tasks: Task[]) => void;
+}
 
 function isDueToday(iso: string): boolean {
   const d = new Date(iso);
@@ -33,6 +59,7 @@ export default function MobileTaskList({
   showAssignee = true,
   showRangeFilter = true,
   loading = false,
+  bulk,
 }: {
   title: string;
   tasks: Task[];
@@ -45,6 +72,7 @@ export default function MobileTaskList({
   showAssignee?: boolean;
   showRangeFilter?: boolean;
   loading?: boolean;
+  bulk?: MobileTaskBulkActions;
 }) {
   const currentUser = useStore((s) => s.currentUser);
   const { isOnline } = useSyncStatus();
@@ -58,6 +86,13 @@ export default function MobileTaskList({
   const openFilters = () => (overlay ? overlay.open('filters', filterButtonRef.current) : setFilterOpenFallback(true));
   const closeFilters = () => (overlay ? overlay.close('filters') : setFilterOpenFallback(false));
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkSheet, setBulkSheet] = useState<'assign' | 'status' | 'due' | null>(null);
+  const [dueDraft, setDueDraft] = useState('');
+  const exitSelection = () => { setSelectionMode(false); setSelectedIds([]); setBulkSheet(null); setDueDraft(''); };
+  const toggleSelect = (id: string) => setSelectedIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? '—';
   const locationOf = (t: Task) => {
@@ -96,20 +131,47 @@ export default function MobileTaskList({
   });
   const visible = sorted.slice(0, visibleCount);
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const selectedTasks = tasks.filter((t) => selectedIds.includes(t.id));
 
   const resetPaging = () => setVisibleCount(PAGE_SIZE);
+
+  const runBulkDue = () => {
+    if (!dueDraft) return;
+    bulk?.onDue(selectedIds, dueDraft);
+    exitSelection();
+  };
+  const runBulkDelete = () => {
+    if (!bulk?.onDelete) return;
+    if (!confirm(`Delete ${selectedTasks.length} selected task${selectedTasks.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    bulk.onDelete(selectedIds);
+    exitSelection();
+  };
 
   return (
     <div>
       <div className="px-4 pt-3 pb-1">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold text-n-100">{title}</h1>
-          {onNewTask && (
-            <button onClick={onNewTask} className="w-10 h-10 flex items-center justify-center rounded-full bg-ptr-green text-white flex-shrink-0" aria-label="New task">
-              <Plus className="w-5 h-5" />
-            </button>
-          )}
-        </div>
+        {selectionMode ? (
+          <div className="flex items-center justify-between gap-2 h-10">
+            <span className="text-[15px] font-semibold text-n-100">{selectedIds.length} selected</span>
+            <button onClick={exitSelection} className="flex items-center gap-1 text-13 font-medium text-n-80"><X className="w-4 h-4" />Cancel</button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-xl font-semibold text-n-100">{title}</h1>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {bulk && (
+                <button onClick={() => setSelectionMode(true)} className="w-10 h-10 flex items-center justify-center rounded-full border border-n-40 text-n-80" aria-label="Select tasks">
+                  <ListChecks className="w-4.5 h-4.5" />
+                </button>
+              )}
+              {onNewTask && (
+                <button onClick={onNewTask} className="w-10 h-10 flex items-center justify-center rounded-full bg-ptr-green text-white flex-shrink-0" aria-label="New task">
+                  <Plus className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {!isOnline && (
           <div className="mt-1.5 flex items-center gap-1.5 text-13 text-signal-amber">
             <WifiOff className="w-3.5 h-3.5" />Offline — showing last synced data
@@ -181,6 +243,9 @@ export default function MobileTaskList({
                 locationLabel={locationOf(t)}
                 assigneeName={showAssignee ? nameOf(t.assigneeId) : undefined}
                 onClick={() => onOpen(t)}
+                selectionMode={selectionMode}
+                selected={selectedIds.includes(t.id)}
+                onToggleSelect={() => toggleSelect(t.id)}
               />
             ))}
             {sorted.length > visible.length && (
@@ -188,7 +253,7 @@ export default function MobileTaskList({
                 Load more ({sorted.length - visible.length} remaining)
               </button>
             )}
-            <div className="h-4" />
+            <div className={selectionMode ? 'h-20' : 'h-4'} />
           </>
         )}
       </PullToRefresh>
@@ -203,6 +268,57 @@ export default function MobileTaskList({
         users={users}
         showRange={showRangeFilter}
       />
+
+      {bulk && selectionMode && (
+        <div
+          className="fixed left-0 right-0 z-20 bg-white border-t border-n-30 flex items-center gap-1 px-3 overflow-x-auto"
+          style={{ bottom: 'calc(var(--ptr-bottom-nav-h) + env(safe-area-inset-bottom))', height: '56px' }}
+        >
+          {selectedIds.length === 0 ? (
+            <>
+              <button onClick={() => setSelectedIds(sorted.map((t) => t.id))} className="btn-subtle flex-shrink-0">Select all ({sorted.length})</button>
+              <button onClick={() => { bulk.onExportAll(sorted); exitSelection(); }} className="btn-subtle flex-shrink-0"><Download className="w-4 h-4" />Export all</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setBulkSheet('assign')} className="btn-subtle flex-shrink-0"><UserCog className="w-4 h-4" />Assign</button>
+              <button onClick={() => setBulkSheet('status')} className="btn-subtle flex-shrink-0"><CircleDashed className="w-4 h-4" />Status</button>
+              <button onClick={() => setBulkSheet('due')} className="btn-subtle flex-shrink-0"><CalendarClock className="w-4 h-4" />Due date</button>
+              <button onClick={() => { bulk.onExportSelected(selectedTasks); exitSelection(); }} className="btn-subtle flex-shrink-0"><Download className="w-4 h-4" />Export</button>
+              {bulk.onDelete && (
+                <button onClick={runBulkDelete} className="btn-subtle flex-shrink-0 !text-signal-red"><Trash2 className="w-4 h-4" />Delete</button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <BottomSheet open={bulkSheet === 'assign'} onClose={() => setBulkSheet(null)} title={`Reassign ${selectedIds.length} task${selectedIds.length > 1 ? 's' : ''} to`}>
+        <div className="py-1 pb-3 max-h-[60dvh] overflow-y-auto">
+          {bulk?.assignableUsers.map((u) => (
+            <button key={u.id} onClick={() => { bulk.onAssign(selectedIds, u.id); exitSelection(); }} className="w-full flex items-center px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10 text-left">
+              {u.name}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={bulkSheet === 'status'} onClose={() => setBulkSheet(null)} title="Set status">
+        <div className="py-1 pb-3">
+          {STATUS_SET.map((s) => (
+            <button key={s.value} onClick={() => { bulk?.onStatus(selectedIds, s.value); exitSelection(); }} className="w-full flex items-center px-4 min-h-[48px] text-[15px] text-n-90 active:bg-n-10 text-left">
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={bulkSheet === 'due'} onClose={() => setBulkSheet(null)} title={`New due date for ${selectedIds.length} task${selectedIds.length > 1 ? 's' : ''}`}>
+        <div className="p-4 space-y-3">
+          <input type="date" value={dueDraft} onChange={(e) => setDueDraft(e.target.value)} className="input-field" style={{ fontSize: '16px' }} />
+          <button onClick={runBulkDue} disabled={!dueDraft} className="btn-primary w-full">Apply</button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Calendar, User, Tag, Navigation, Send, CheckCircle2,
   RotateCcw, Archive, AlertCircle, Paperclip, Check, RefreshCw, X, Copy,
+  Edit2, Trash2,
 } from 'lucide-react';
 import type { useTask } from '../../hooks/useTask';
 import StatusBadge from '../../components/StatusBadge';
@@ -50,12 +51,15 @@ interface Props {
   addComment: UseTaskResult['addComment'];
   addTaskUpdate: UseTaskResult['addTaskUpdate'];
   uploadAttachment: UseTaskResult['uploadAttachment'];
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
 export default function MobileTaskDetail({
   task, currentUser, users, ranges, areas,
   startTask, completeTask, archiveTask, reopenTask, requestChanges,
   addComment, addTaskUpdate, uploadAttachment,
+  onEdit, onDelete,
 }: Props) {
   const navigate = useNavigate();
 
@@ -158,6 +162,16 @@ export default function MobileTaskDetail({
             <Copy className="w-3.5 h-3.5" />
           </button>
         </div>
+        {canManage && (
+          <div className="flex items-center flex-shrink-0">
+            <button onClick={onEdit} className="w-10 h-10 flex items-center justify-center rounded-full text-n-80 active:bg-n-20" aria-label="Edit task">
+              <Edit2 className="w-4.5 h-4.5" />
+            </button>
+            <button onClick={onDelete} className="w-10 h-10 flex items-center justify-center rounded-full text-signal-red active:bg-signal-red-bg" aria-label="Delete task">
+              <Trash2 className="w-4.5 h-4.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="pb-4">

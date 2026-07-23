@@ -7,6 +7,7 @@ import { useRanges } from '../../hooks/useRanges';
 import { useIncidents } from '../../hooks/useIncidents';
 import { useOfficerRanges } from '../../hooks/useOfficerRanges';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
+import Select from '../../components/Select';
 import StatusBadge from '../../components/StatusBadge';
 import { isOverdue } from '../../utils/overdue';
 import { formatIncidentType } from '../../lib/incidentTypes';
@@ -46,7 +47,7 @@ export default function OfficerHome() {
   const { users } = useUsers();
   const { ranges } = useRanges();
   const { incidents } = useIncidents();
-  const { activeRangeId } = useOfficerRanges();
+  const { activeRangeId, rangeIds, setActiveRangeId, isMultiRange } = useOfficerRanges();
   const { state: syncState } = useSyncStatus();
 
   const myRange = ranges.find((r) => r.id === activeRangeId);
@@ -67,9 +68,24 @@ export default function OfficerHome() {
     <div className="pb-4">
       <div className="px-4 pt-4 pb-3">
         <h1 className="text-xl font-semibold text-n-100">{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
-        <p className="text-13 text-n-70 mt-0.5">
-          {myRange?.name ?? 'Your range'} · {myGuards.length} staff · {syncState === 'offline' ? 'Offline' : syncState === 'syncing' ? 'Syncing…' : 'Up to date'}
-        </p>
+        <div className="flex items-center gap-1.5 text-13 text-n-70 mt-0.5">
+          {isMultiRange ? (
+            <Select
+              value={activeRangeId}
+              onChange={(e) => setActiveRangeId(e.target.value)}
+              className="input-field select-field !h-7 !min-h-0 !py-0 !w-auto text-13 !text-n-70"
+              aria-label="Switch range"
+            >
+              {rangeIds.map((id) => {
+                const r = ranges.find((rr) => rr.id === id);
+                return <option key={id} value={id}>{r?.name ?? 'Range'}</option>;
+              })}
+            </Select>
+          ) : (
+            <span>{myRange?.name ?? 'Your range'}</span>
+          )}
+          <span>· {myGuards.length} staff · {syncState === 'offline' ? 'Offline' : syncState === 'syncing' ? 'Syncing…' : 'Up to date'}</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 px-4 mb-5">

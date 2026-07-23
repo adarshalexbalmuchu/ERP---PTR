@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 // The Fluent shell exposes two fixed regions that page content fills:
 //   • the command bar (contextual actions, top-right of the workspace)
@@ -55,6 +56,14 @@ export function ContextPanelSlot({ className }: { className?: string }) {
 /** Page-side: portal action buttons into the workspace command bar. */
 export function CommandBar({ children }: { children: ReactNode }) {
   const ctx = useSlots();
+  // The mobile shell has no command bar to portal into (it has its own top
+  // bar/bottom nav) — render the same actions inline above the page content
+  // instead of silently dropping them. Pages with a dedicated mobile branch
+  // (e.g. MobileTaskList) never reach this: they return before rendering
+  // <CommandBar>, so this only fires for pages that fall through to the
+  // shared desktop body on a narrow viewport.
+  const isMobile = useIsMobile();
+  if (isMobile) return <div className="flex flex-wrap items-center gap-2 mb-4">{children}</div>;
   if (!ctx?.commandEl) return null;
   return createPortal(children, ctx.commandEl);
 }
@@ -62,6 +71,8 @@ export function CommandBar({ children }: { children: ReactNode }) {
 /** Page-side: portal views/filters into the contextual navigation panel. */
 export function ContextPanel({ children }: { children: ReactNode }) {
   const ctx = useSlots();
+  const isMobile = useIsMobile();
+  if (isMobile) return <div className="mb-4">{children}</div>;
   if (!ctx?.panelEl) return null;
   return createPortal(children, ctx.panelEl);
 }

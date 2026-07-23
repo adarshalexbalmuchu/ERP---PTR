@@ -148,6 +148,15 @@ export default function DirectorTaskList() {
           onOpen={(t) => navigate(`/director/tasks/${t.id}`)}
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
           onNewTask={() => setMobileFormOpen(true)}
+          bulk={{
+            assignableUsers,
+            onAssign: (ids, userId) => void runBulkUpdate(ids, { assigneeId: userId }),
+            onStatus: (ids, s) => void runBulkUpdate(ids, { status: s }),
+            onDue: (ids, dateInputValue) => void runBulkUpdate(ids, { dueDate: new Date(dateInputValue + 'T00:00:00').toISOString() }),
+            onDelete: (ids) => ids.forEach((id) => deleteTask.mutate(id)),
+            onExportSelected: (rows) => exportCsv(`ptr-tasks-selected-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(rows)),
+            onExportAll: (rows) => exportCsv(`ptr-tasks-${new Date().toISOString().slice(0, 10)}.csv`, toExportRows(rows)),
+          }}
         />
         {mobileFormOpen && currentUser && (
           <TaskForm
