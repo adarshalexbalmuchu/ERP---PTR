@@ -18,6 +18,9 @@ const R = {
   betla: '10000000-0000-0000-0000-000000000001',
   kechki: '10000000-0000-0000-0000-000000000002',
 };
+const G = {
+  betlaPatrol: 'c0000000-0000-0000-0000-000000000001',
+};
 
 let pass = 0, fail = 0;
 const results = [];
@@ -243,6 +246,224 @@ async function run() {
   await asAnon(async (c) => {
     const { rows } = await c.query('select id from tasks');
     check('anon reads zero tasks', rows.length === 0, `got ${rows.length} rows — tasks may be PUBLICLY READABLE`);
+  });
+
+  // ── Task Groups (Phase 1) ──────────────────────────────────────────
+  // Seed: G.betlaPatrol is a Betla-range group created by officerBetla,
+  // with guardBetla as its only active member. guardKechki and
+  // officerKechki have no relationship to it at all.
+
+  // 19. Director sees the group regardless of range.
+  await asUser(U.director, async (c) => {
+    const { rows } = await c.query('select id from task_groups where id = $1', [G.betlaPatrol]);
+    check('director sees the Betla group', rows.length === 1);
+  });
+
+  // 20. Officer in the group's own range manages it; the other range's
+  // officer can't see it at all (not just "can't write" — zero rows).
+  await asUser(U.officerBetla, async (c) => {
+    const { rows } = await c.query('select id from task_groups where id = $1', [G.betlaPatrol]);
+    check('officer(Betla) sees their own range\'s group', rows.length === 1);
+  });
+  await asUser(U.officerKechki, async (c) => {
+    const { rows } = await c.query('select id from task_groups where id = $1', [G.betlaPatrol]);
+    check('officer(Kechki) cannot see Betla\'s group', rows.length === 0);
+  });
+
+  // 21. The member guard can read the group and its own membership row;
+  // a non-member guard sees neither.
+  await asUser(U.guardBetla, async (c) => {
+    const g = await c.query('select id from task_groups where id = $1', [G.betlaPatrol]);
+    const m = await c.query('select id from task_group_members where group_id = $1', [G.betlaPatrol]);
+    check('member guard(Betla) sees the group and its roster', g.rows.length === 1 && m.rows.length === 1);
+  });
+  await asUser(U.guardKechki, async (c) => {
+    const g = await c.query('select id from task_groups where id = $1', [G.betlaPatrol]);
+    check('non-member guard(Kechki) cannot see the Betla group', g.rows.length === 0);
+  });
+
+  // 22. A guard (ordinary member, not director/officer) cannot manage
+  // membership — RLS grants guards SELECT only on task_group_members.
+  await asUser(U.guardBetla, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into task_group_members (group_id, user_id, added_by) values ($1, $2, $3)`,
+        [G.betlaPatrol, U.guardKechki, U.guardBetla],
+      ),
+    );
+    check('member guard cannot add a new member to their own group', err !== null, err ?? 'no error raised');
+  });
+
+  // 23. Officer of a DIFFERENT range cannot add a member to this group
+  // (their can_officer_manage_group() check fails — range mismatch).
+  await asUser(U.officerKechki, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into task_group_members (group_id, user_id, added_by) values ($1, $2, $3)`,
+        [G.betlaPatrol, U.guardKechki, U.officerKechki],
+      ),
+    );
+    check('officer(Kechki) cannot add a member to Betla\'s group', err !== null, err ?? 'no error raised');
+  });
+
+  // 23b. officerBetla legitimately manages the Betla group (group-range
+  // check passes) but tries to add guardKechki, who is posted in a
+  // DIFFERENT range — must still be rejected (member-range check).
+  await asUser(U.officerBetla, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into task_group_members (group_id, user_id, added_by) values ($1, $2, $3)`,
+        [G.betlaPatrol, U.guardKechki, U.officerBetla],
+      ),
+    );
+    check('officer(Betla) cannot add an out-of-range member (guardKechki) to their own group', err !== null, err ?? 'no error raised');
+  });
+
+  // 24. Duplicate ACTIVE membership is rejected at the database level
+  // (task_group_members_active_uq), independent of any application check —
+  // guardBetla is already an active member from the seed.
+  await asUser(U.officerBetla, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `insert into task_group_members (group_id, user_id, added_by) values ($1, $2, $3)`,
+        [G.betlaPatrol, U.guardBetla, U.officerBetla],
+      ),
+    );
+    check('duplicate active membership is rejected', err !== null, err ?? 'no error raised');
+  });
+
+  // 25. Wrong-range officer is rejected by create_group_occurrence's own
+  // authorization check (independent of, and in addition to, RLS).
+  await asUser(U.officerKechki, async (c) => {
+    const err = await expectError(() =>
+      c.query(
+        `select create_group_occurrence($1, 'Cross-range attempt', '', 'Patrol', 'Medium', now() + interval '1 day', $2)`,
+        [G.betlaPatrol, R.kechki],
+      ),
+    );
+    check('officer(Kechki) cannot create an assignment for Betla\'s group', err !== null, err ?? 'no error raised');
+  });
+
+  // 26–31. Everything from here on shares state (the occurrence
+  // create_group_occurrence produces) across several different acting
+  // users, which asUser()'s per-call BEGIN/ROLLBACK can't do — each call
+  // is its own transaction, so anything written in one is gone by the
+  // next. Run the whole sequence as manual role-switches inside ONE
+  // transaction instead, rolling back only at the very end.
+  {
+    const client = new Client(CONN);
+    await client.connect();
+    const setUser = (uid) => client.query(`SET LOCAL ROLE authenticated; SET LOCAL app.uid = '${uid}'`);
+    // A failed statement aborts the rest of the transaction until rolled
+    // back — expectError() (used elsewhere, each in its own throwaway
+    // transaction) doesn't need this, but this block reuses one
+    // transaction across many statements, so an intentionally-failing
+    // insert must roll back to a savepoint, not the whole transaction.
+    let spCounter = 0;
+    const expectErrorSp = async (fn) => {
+      const sp = `sp_${spCounter++}`;
+      await client.query(`SAVEPOINT ${sp}`);
+      try {
+        await fn();
+        await client.query(`RELEASE SAVEPOINT ${sp}`);
+        return null;
+      } catch (e) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+        return e.message;
+      }
+    };
+    try {
+      await client.query('BEGIN');
+
+      await setUser(U.director);
+      const created = await client.query(
+        `select create_group_occurrence($1, 'Weekly fire-line inspection', 'Check the whole line', 'Patrol', 'High', now() + interval '2 days', $2) as id`,
+        [G.betlaPatrol, R.betla],
+      );
+      const occId = created.rows[0]?.id ?? null;
+      check('director creates a one-time group occurrence', occId !== null);
+
+      const tasksForOcc = await client.query('select id, assignee_id from tasks where occurrence_id = $1', [occId]);
+      check(
+        'occurrence fans out exactly one task, for the one active member',
+        tasksForOcc.rows.length === 1 && tasksForOcc.rows[0].assignee_id === U.guardBetla,
+        JSON.stringify(tasksForOcc.rows),
+      );
+      const fannedOutTaskId = tasksForOcc.rows[0]?.id;
+
+      const conv = await client.query(`select id from task_conversations where occurrence_id = $1 and type = 'occurrence'`, [occId]);
+      check('occurrence gets its own discussion conversation', conv.rows.length === 1);
+      const occConvId = conv.rows[0]?.id;
+
+      // notifications has no director bypass (confirmed by check #11
+      // above — even the director can't read someone else's notification
+      // row), so this has to be read as guardBetla themselves.
+      await setUser(U.guardBetla);
+      const notif = await client.query(
+        `select id from notifications where user_id = $1 and type = 'group_task_assigned' and task_id = $2`,
+        [U.guardBetla, fannedOutTaskId],
+      );
+      check('the assigned member gets exactly one group_task_assigned notification', notif.rows.length === 1);
+      await setUser(U.director);
+
+      // 27. The idempotency key (occurrence_id, assignee_id) rejects a
+      // second task for the same member under the same occurrence —
+      // exactly what a retried scheduler/RPC call would hit.
+      const dupErr = await expectErrorSp(() =>
+        client.query(
+          `insert into tasks (title, assignee_id, created_by_id, range_id, status, priority, due_date, occurrence_id)
+           values ('duplicate fan-out attempt', $1, $2, $3, 'NotStarted', 'High', current_date + 2, $4)`,
+          [U.guardBetla, U.director, R.betla, occId],
+        ),
+      );
+      check('a second task for the same member under the same occurrence is rejected (idempotency key)', dupErr !== null, dupErr ?? 'no error raised');
+
+      // 28. Assigned member reads the occurrence and can post to its
+      // discussion; a non-member guard can do neither.
+      await setUser(U.guardBetla);
+      const occAsMember = await client.query('select id from task_occurrences where id = $1', [occId]);
+      check('assigned member reads the occurrence', occAsMember.rows.length === 1);
+      const postErr = await expectErrorSp(() =>
+        client.query(`insert into task_messages (conversation_id, sender_id, body) values ($1, $2, 'On my way')`, [occConvId, U.guardBetla]),
+      );
+      check('assigned member can post to the occurrence discussion', postErr === null, postErr ?? '');
+
+      await setUser(U.guardKechki);
+      const occAsOutsider = await client.query('select id from task_occurrences where id = $1', [occId]);
+      check('non-member guard cannot see the occurrence', occAsOutsider.rows.length === 0);
+
+      // 29. Group announcement posting respects members_can_reply=false:
+      // an ordinary member is blocked, but a coordinator can still post.
+      await setUser(U.director);
+      await client.query(`update task_groups set members_can_reply = false where id = $1`, [G.betlaPatrol]);
+      const groupConv = await client.query(`insert into task_conversations (type, group_id) values ('group', $1) returning id`, [G.betlaPatrol]);
+      const groupConvId = groupConv.rows[0].id;
+
+      await setUser(U.guardBetla);
+      const blockedErr = await expectErrorSp(() =>
+        client.query(`insert into task_messages (conversation_id, sender_id, body) values ($1, $2, 'hello')`, [groupConvId, U.guardBetla]),
+      );
+      check('ordinary member blocked from posting when members_can_reply=false', blockedErr !== null, blockedErr ?? 'no error raised');
+
+      await setUser(U.officerBetla);
+      await client.query(`update task_group_members set membership_role = 'coordinator' where group_id = $1 and user_id = $2`, [G.betlaPatrol, U.guardBetla]);
+
+      await setUser(U.guardBetla);
+      const coordErr = await expectError(() =>
+        client.query(`insert into task_messages (conversation_id, sender_id, body) values ($1, $2, 'coordinator update')`, [groupConvId, U.guardBetla]),
+      );
+      check('coordinator CAN post even when members_can_reply=false', coordErr === null, coordErr ?? '');
+
+      await client.query('ROLLBACK');
+    } finally {
+      await client.end();
+    }
+  }
+
+  // 30. Anon cannot read task_groups at all.
+  await asAnon(async (c) => {
+    const { rows } = await c.query('select id from task_groups');
+    check('anon reads zero task groups', rows.length === 0, `got ${rows.length} rows`);
   });
 
   console.log(results.join('\n'));

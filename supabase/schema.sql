@@ -2396,3 +2396,541 @@ insert into inventory_categories (name) values
   ('Safety equipment'), ('Other')
 on conflict (name) do nothing;
 
+-- ═════════════════════════════════════════════
+-- Task Groups & Recurring Assignments — Phase 1
+-- ═════════════════════════════════════════════
+-- Persistent group layer on top of the existing tasks table. Additive
+-- only: no existing table is dropped/rewritten, no existing column
+-- changes type or nullability, no existing row is touched, batch_id is
+-- unaffected. See the architecture note at the top of this section for
+-- how this differs from batch_id (batch_id: frozen at creation, no
+-- membership/recurrence/discussion; a Task Group: persistent roster,
+-- reusable across many assignments, backs task_series, has its own
+-- discussion, computes live progress).
+--
+-- Design decisions, so a future edit doesn't accidentally re-litigate
+-- them without noticing they were deliberate:
+--  - "Private task discussion" is NOT a task_conversations row — it's the
+--    EXISTING `comments` table + CommentThread.tsx, unchanged. That
+--    already is exactly a per-task discussion, already correctly RLS-
+--    scoped, already has realtime. task_conversation_type therefore only
+--    has 'group' and 'occurrence', not 'task_private'.
+--  - An occurrence's member snapshot is NOT a separate table. The `tasks`
+--    rows fanned out for it (occurrence_id + assignee_id, values copied
+--    at creation time) ARE the snapshot — nothing about a past occurrence
+--    is ever re-derived from the (possibly since-edited) group/series.
+--  - A "coordinator" is a task_group_members.membership_role value, not a
+--    separate table/column — a group can have zero or several.
+--  - Range officer group authority requires task_groups.range_id to be
+--    non-null AND in the officer's range set — a null-range group (e.g. a
+--    reserve-wide Tiger Cell group) is director-only.
+--  - task_series/task_occurrences exist as tables in Phase 1 so
+--    tasks.series_id/occurrence_id have somewhere to point, but Phase 1
+--    ships no recurrence UI and creates no series rows — see Phase 2.
+
+do $$ begin
+  create type task_group_type as enum ('permanent', 'temporary');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_group_status as enum ('active', 'paused', 'archived');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type group_membership_role as enum ('member', 'coordinator');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_series_status as enum ('draft', 'active', 'paused', 'ended', 'archived');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_series_recurrence as enum ('daily', 'weekly', 'weekdays', 'monthly', 'custom_interval');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_occurrence_status as enum ('scheduled', 'active', 'completed', 'cancelled');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type task_conversation_type as enum ('group', 'occurrence');
+exception when duplicate_object then null; end $$;
+
+alter type notification_type add value if not exists 'group_task_assigned';
+alter type notification_type add value if not exists 'group_announcement';
+commit;
+
+-- ─────────────────────────────────────────────
+-- Tables
+-- ─────────────────────────────────────────────
+create table if not exists task_groups (
+  id               uuid primary key default uuid_generate_v4(),
+  name             text not null,
+  description      text not null default '',
+  group_type       task_group_type not null,
+  range_id         uuid references ranges(id) on delete set null,
+  created_by       uuid not null references profiles(id) on delete restrict,
+  status           task_group_status not null default 'active',
+  auto_archive     boolean not null default false,
+  archive_after_date date,
+  members_can_reply boolean not null default true,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  archived_at      timestamptz
+);
+
+create table if not exists task_group_members (
+  id             uuid primary key default uuid_generate_v4(),
+  group_id       uuid not null references task_groups(id) on delete cascade,
+  user_id        uuid not null references profiles(id) on delete restrict,
+  membership_role group_membership_role not null default 'member',
+  active         boolean not null default true,
+  joined_at      timestamptz not null default now(),
+  removed_at     timestamptz,
+  added_by       uuid not null references profiles(id) on delete restrict
+);
+
+create unique index if not exists task_group_members_active_uq
+  on task_group_members(group_id, user_id) where active;
+
+create table if not exists task_series (
+  id                   uuid primary key default uuid_generate_v4(),
+  group_id             uuid not null references task_groups(id) on delete cascade,
+  title                text not null,
+  description          text not null default '',
+  category             task_category not null default 'Patrol',
+  priority             task_priority not null default 'Medium',
+  evidence_requirements text not null default '',
+  recurrence_type      task_series_recurrence not null,
+  recurrence_rule      jsonb not null default '{}'::jsonb,
+  start_date           date not null,
+  end_date             date,
+  creation_time        time not null default '06:00',
+  due_offset_days      int not null default 1,
+  status               task_series_status not null default 'draft',
+  created_by           uuid not null references profiles(id) on delete restrict,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+
+create table if not exists task_occurrences (
+  id              uuid primary key default uuid_generate_v4(),
+  group_id        uuid not null references task_groups(id) on delete cascade,
+  series_id       uuid references task_series(id) on delete set null,
+  title           text not null,
+  description     text not null default '',
+  category        task_category not null default 'Patrol',
+  priority        task_priority not null default 'Medium',
+  scheduled_start timestamptz not null default now(),
+  due_at          timestamptz not null,
+  status          task_occurrence_status not null default 'scheduled',
+  created_by      uuid not null references profiles(id) on delete restrict,
+  created_at      timestamptz not null default now(),
+  cancelled_at    timestamptz,
+  completed_at    timestamptz
+);
+
+create unique index if not exists task_occurrences_series_due_uq
+  on task_occurrences(series_id, due_at) where series_id is not null;
+
+create table if not exists task_conversations (
+  id             uuid primary key default uuid_generate_v4(),
+  type           task_conversation_type not null,
+  group_id       uuid references task_groups(id) on delete cascade,
+  occurrence_id  uuid references task_occurrences(id) on delete cascade,
+  created_at     timestamptz not null default now(),
+  constraint task_conversations_target_chk check (
+    (type = 'group' and group_id is not null and occurrence_id is null) or
+    (type = 'occurrence' and occurrence_id is not null)
+  )
+);
+create unique index if not exists task_conversations_group_uq
+  on task_conversations(group_id) where type = 'group';
+create unique index if not exists task_conversations_occurrence_uq
+  on task_conversations(occurrence_id) where type = 'occurrence';
+
+create table if not exists task_messages (
+  id              uuid primary key default uuid_generate_v4(),
+  conversation_id uuid not null references task_conversations(id) on delete cascade,
+  sender_id       uuid not null references profiles(id) on delete restrict,
+  body            text not null,
+  attachment_path text,
+  reply_to_id     uuid references task_messages(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  edited_at       timestamptz,
+  redacted_at     timestamptz,
+  redacted_by     uuid references profiles(id) on delete set null
+);
+
+create table if not exists task_message_reads (
+  message_id uuid not null references task_messages(id) on delete cascade,
+  user_id    uuid not null references profiles(id) on delete cascade,
+  read_at    timestamptz not null default now(),
+  primary key (message_id, user_id)
+);
+
+-- Existing tasks table — additive only.
+alter table tasks add column if not exists group_id      uuid references task_groups(id) on delete set null;
+alter table tasks add column if not exists series_id     uuid references task_series(id) on delete set null;
+alter table tasks add column if not exists occurrence_id uuid references task_occurrences(id) on delete set null;
+
+create unique index if not exists tasks_occurrence_assignee_uq
+  on tasks(occurrence_id, assignee_id) where occurrence_id is not null;
+
+-- ─────────────────────────────────────────────
+-- Indexes
+-- ─────────────────────────────────────────────
+create index if not exists task_groups_range_id_idx on task_groups(range_id);
+create index if not exists task_groups_status_idx on task_groups(status);
+create index if not exists task_group_members_group_id_idx on task_group_members(group_id);
+create index if not exists task_group_members_user_id_idx on task_group_members(user_id) where active;
+create index if not exists task_series_group_id_idx on task_series(group_id);
+create index if not exists task_occurrences_group_id_idx on task_occurrences(group_id);
+create index if not exists task_occurrences_status_idx on task_occurrences(status);
+create index if not exists task_conversations_group_id_idx on task_conversations(group_id);
+create index if not exists task_conversations_occurrence_id_idx on task_conversations(occurrence_id);
+create index if not exists task_messages_conversation_id_idx on task_messages(conversation_id, created_at);
+create index if not exists tasks_group_id_idx on tasks(group_id);
+create index if not exists tasks_occurrence_id_idx on tasks(occurrence_id);
+
+-- ─────────────────────────────────────────────
+-- Length limits
+-- ─────────────────────────────────────────────
+do $$ begin
+  alter table task_groups add constraint task_groups_name_len check (char_length(name) <= 200);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table task_groups add constraint task_groups_description_len check (char_length(description) <= 3000);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table task_occurrences add constraint task_occurrences_title_len check (char_length(title) <= 300);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table task_messages add constraint task_messages_body_len check (char_length(body) <= 4000);
+exception when duplicate_object then null; end $$;
+
+-- ─────────────────────────────────────────────
+-- RLS helper functions (same profile as get_my_range_ids()/is_task_assignee()
+-- above: SECURITY DEFINER, stable, search_path pinned empty). EXECUTE is
+-- revoked from BOTH public and anon explicitly — a bare "revoke from
+-- public" alone does not remove anon's own direct default-privileges
+-- grant in this project (see the note above get_my_inventory_location_ids()).
+-- ─────────────────────────────────────────────
+create or replace function is_group_member(g_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select exists (
+    select 1 from public.task_group_members
+    where group_id = g_id and user_id = auth.uid() and active
+  );
+$$;
+
+create or replace function is_group_coordinator(g_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select exists (
+    select 1 from public.task_group_members
+    where group_id = g_id and user_id = auth.uid() and active and membership_role = 'coordinator'
+  );
+$$;
+
+create or replace function get_my_group_ids()
+returns uuid[] language sql security definer stable
+set search_path = '' as $$
+  select coalesce(array_agg(group_id), '{}'::uuid[])
+  from public.task_group_members where user_id = auth.uid() and active;
+$$;
+
+-- A field-role user "participates" in an occurrence iff they (or their
+-- co-assignee entry) hold one of the fanned-out member tasks under it.
+create or replace function is_occurrence_participant(occ_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select exists (
+    select 1 from public.tasks
+    where occurrence_id = occ_id
+      and (assignee_id = auth.uid() or public.is_task_assignee(id))
+  );
+$$;
+
+create or replace function can_officer_manage_group(g_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select (select public.get_my_role()) = 'range_officer' and exists (
+    select 1 from public.task_groups
+    where id = g_id and range_id is not null and range_id = any((select public.get_my_range_ids())::uuid[])
+  );
+$$;
+
+create or replace function can_officer_manage_occurrence(occ_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select exists (
+    select 1 from public.task_occurrences o
+    where o.id = occ_id and public.can_officer_manage_group(o.group_id)
+  );
+$$;
+
+create or replace function can_view_conversation(conv_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select
+    (select public.get_my_role()) = 'director'
+    or exists (
+      select 1 from public.task_conversations c
+      where c.id = conv_id and (
+        (c.type = 'group' and (public.can_officer_manage_group(c.group_id) or public.is_group_member(c.group_id)))
+        or
+        (c.type = 'occurrence' and (public.can_officer_manage_occurrence(c.occurrence_id) or public.is_occurrence_participant(c.occurrence_id)))
+      )
+    );
+$$;
+
+create or replace function can_post_to_conversation(conv_id uuid)
+returns boolean language sql security definer stable
+set search_path = '' as $$
+  select
+    (select public.get_my_role()) = 'director'
+    or exists (
+      select 1 from public.task_conversations c
+      where c.id = conv_id and (
+        (c.type = 'group' and (
+          public.can_officer_manage_group(c.group_id)
+          or public.is_group_coordinator(c.group_id)
+          or (public.is_group_member(c.group_id) and (select members_can_reply from public.task_groups where id = c.group_id))
+        ))
+        or
+        (c.type = 'occurrence' and (public.can_officer_manage_occurrence(c.occurrence_id) or public.is_occurrence_participant(c.occurrence_id)))
+      )
+    );
+$$;
+
+revoke all on function is_group_member(uuid) from public, anon;
+revoke all on function is_group_coordinator(uuid) from public, anon;
+revoke all on function get_my_group_ids() from public, anon;
+revoke all on function is_occurrence_participant(uuid) from public, anon;
+revoke all on function can_officer_manage_group(uuid) from public, anon;
+revoke all on function can_officer_manage_occurrence(uuid) from public, anon;
+revoke all on function can_view_conversation(uuid) from public, anon;
+revoke all on function can_post_to_conversation(uuid) from public, anon;
+grant execute on function is_group_member(uuid) to authenticated;
+grant execute on function is_group_coordinator(uuid) to authenticated;
+grant execute on function get_my_group_ids() to authenticated;
+grant execute on function is_occurrence_participant(uuid) to authenticated;
+grant execute on function can_officer_manage_group(uuid) to authenticated;
+grant execute on function can_officer_manage_occurrence(uuid) to authenticated;
+grant execute on function can_view_conversation(uuid) to authenticated;
+grant execute on function can_post_to_conversation(uuid) to authenticated;
+
+-- ─────────────────────────────────────────────
+-- RLS policies
+-- ─────────────────────────────────────────────
+alter table task_groups         enable row level security;
+alter table task_group_members  enable row level security;
+alter table task_series         enable row level security;
+alter table task_occurrences    enable row level security;
+alter table task_conversations  enable row level security;
+alter table task_messages       enable row level security;
+alter table task_message_reads  enable row level security;
+
+create policy "task_groups_director" on task_groups
+  for all using ((select get_my_role()) = 'director');
+create policy "task_groups_officer" on task_groups
+  for all using (
+    (select get_my_role()) = 'range_officer'
+    and range_id is not null
+    and range_id = any ((select get_my_range_ids())::uuid[])
+  );
+create policy "task_groups_member_read" on task_groups
+  for select using ((select is_group_member(id)));
+
+create policy "task_group_members_director" on task_group_members
+  for all using ((select get_my_role()) = 'director');
+-- USING covers managing existing rows in groups within the officer's
+-- range (e.g. removing a member). WITH CHECK is stricter for INSERT: the
+-- group being in-range is not enough on its own — the member being added
+-- must also be one of the officer's own people ("add members only from
+-- permitted ranges"), otherwise an officer could staff their group with
+-- anyone regardless of where that person is actually posted.
+create policy "task_group_members_officer" on task_group_members
+  for all using ((select can_officer_manage_group(group_id)))
+  with check (
+    (select can_officer_manage_group(group_id))
+    and exists (
+      select 1 from profiles p
+      where p.id = user_id
+        and p.range_id is not null
+        and p.range_id = any ((select get_my_range_ids())::uuid[])
+    )
+  );
+create policy "task_group_members_member_read" on task_group_members
+  for select using ((select is_group_member(group_id)));
+
+create policy "task_series_director" on task_series
+  for all using ((select get_my_role()) = 'director');
+create policy "task_series_officer" on task_series
+  for all using ((select can_officer_manage_group(group_id)));
+create policy "task_series_member_read" on task_series
+  for select using ((select is_group_member(group_id)));
+
+create policy "task_occurrences_director" on task_occurrences
+  for all using ((select get_my_role()) = 'director');
+create policy "task_occurrences_officer" on task_occurrences
+  for all using ((select can_officer_manage_group(group_id)));
+create policy "task_occurrences_participant_read" on task_occurrences
+  for select using ((select is_occurrence_participant(id)));
+
+create policy "task_conversations_director" on task_conversations
+  for all using ((select get_my_role()) = 'director');
+create policy "task_conversations_officer" on task_conversations
+  for all using (
+    (type = 'group' and (select can_officer_manage_group(group_id)))
+    or (type = 'occurrence' and (select can_officer_manage_occurrence(occurrence_id)))
+  );
+create policy "task_conversations_participant_read" on task_conversations
+  for select using (
+    (type = 'group' and (select is_group_member(group_id)))
+    or (type = 'occurrence' and (select is_occurrence_participant(occurrence_id)))
+  );
+
+create policy "task_messages_read" on task_messages
+  for select using ((select can_view_conversation(conversation_id)));
+create policy "task_messages_insert" on task_messages
+  for insert with check (
+    sender_id = (select auth.uid())
+    and (select can_post_to_conversation(conversation_id))
+  );
+create policy "task_messages_update_own" on task_messages
+  for update using (
+    sender_id = (select auth.uid()) or (select get_my_role()) = 'director'
+  );
+
+create policy "task_message_reads_own" on task_message_reads
+  for all using (user_id = (select auth.uid()))
+  with check (
+    user_id = (select auth.uid())
+    and exists (select 1 from task_messages m where m.id = message_id and (select can_view_conversation(m.conversation_id)))
+  );
+
+-- ─────────────────────────────────────────────
+-- create_group_occurrence — one-time group assignment RPC. Creates the
+-- occurrence, its discussion, one task per active member (idempotent via
+-- tasks_occurrence_assignee_uq), and one notification per newly-created
+-- member task, as a single server-side transaction.
+-- ─────────────────────────────────────────────
+create or replace function create_group_occurrence(
+  p_group_id uuid,
+  p_title text,
+  p_description text,
+  p_category task_category,
+  p_priority task_priority,
+  p_due_at timestamptz,
+  p_range_id uuid
+) returns uuid
+language plpgsql security definer
+set search_path = '' as $$
+declare
+  v_actor uuid := auth.uid();
+  v_role public.user_role := (select role from public.profiles where id = v_actor);
+  v_group public.task_groups%rowtype;
+  v_occurrence_id uuid;
+  v_task_id uuid;
+  v_member record;
+  v_actor_name text;
+begin
+  if v_actor is null then
+    raise exception 'Not authenticated';
+  end if;
+  if p_range_id is null then
+    raise exception 'A range is required to create this assignment';
+  end if;
+  if p_title is null or length(trim(p_title)) = 0 then
+    raise exception 'A title is required';
+  end if;
+
+  select * into v_group from public.task_groups where id = p_group_id;
+  if v_group.id is null then
+    raise exception 'Task group not found';
+  end if;
+  if v_group.status <> 'active' then
+    raise exception 'Cannot create an assignment for a % group', v_group.status;
+  end if;
+
+  if v_role = 'director' then
+    null;
+  elsif v_role = 'range_officer'
+    and v_group.range_id is not null
+    and v_group.range_id = any((select public.get_my_range_ids())::uuid[]) then
+    null;
+  else
+    raise exception 'Not authorized to create an assignment for this group';
+  end if;
+
+  select name into v_actor_name from public.profiles where id = v_actor;
+
+  insert into public.task_occurrences (
+    group_id, series_id, title, description, category, priority, scheduled_start, due_at, status, created_by
+  ) values (
+    p_group_id, null, p_title, coalesce(p_description, ''), p_category, p_priority, now(), p_due_at, 'active', v_actor
+  ) returning id into v_occurrence_id;
+
+  insert into public.task_conversations (type, occurrence_id) values ('occurrence', v_occurrence_id);
+
+  for v_member in
+    select user_id from public.task_group_members where group_id = p_group_id and active
+  loop
+    v_task_id := null;
+    insert into public.tasks (
+      title, description, assignee_id, created_by_id, range_id, status, priority, category,
+      due_date, completion_percentage, group_id, occurrence_id
+    ) values (
+      p_title, coalesce(p_description, ''), v_member.user_id, v_actor, p_range_id,
+      'NotStarted', p_priority, p_category, p_due_at::date, 0, p_group_id, v_occurrence_id
+    )
+    on conflict (occurrence_id, assignee_id) where occurrence_id is not null do nothing
+    returning id into v_task_id;
+
+    if v_task_id is not null and v_member.user_id <> v_actor then
+      insert into public.notifications (user_id, type, title, message, task_id)
+      values (
+        v_member.user_id, 'group_task_assigned', 'New group assignment: ' || p_title,
+        coalesce(v_actor_name, 'Someone') || ' assigned you "' || p_title || '" via ' || v_group.name,
+        v_task_id
+      );
+    end if;
+  end loop;
+
+  return v_occurrence_id;
+end;
+$$;
+
+revoke all on function create_group_occurrence(uuid, text, text, task_category, task_priority, timestamptz, uuid) from public, anon;
+grant execute on function create_group_occurrence(uuid, text, text, task_category, task_priority, timestamptz, uuid) to authenticated;
+
+-- ─────────────────────────────────────────────
+-- Storage: message attachments reuse the existing task-attachments bucket
+-- and its "<entity-id>/<file>" folder convention — objects for a message
+-- live under "<conversation-id>/<uuid>-<filename>".
+-- ─────────────────────────────────────────────
+create policy "task_conversation_attachments_upload" on storage.objects
+  for insert with check (
+    bucket_id = 'task-attachments'
+    and (select auth.uid()) is not null
+    and exists (
+      select 1 from public.task_conversations c
+      where c.id::text = (storage.foldername(name))[1]
+        and (select public.can_post_to_conversation(c.id))
+    )
+  );
+
+create policy "task_conversation_attachments_download" on storage.objects
+  for select using (
+    bucket_id = 'task-attachments'
+    and (select auth.uid()) is not null
+    and exists (
+      select 1 from public.task_conversations c
+      where c.id::text = (storage.foldername(name))[1]
+        and (select public.can_view_conversation(c.id))
+    )
+  );
+

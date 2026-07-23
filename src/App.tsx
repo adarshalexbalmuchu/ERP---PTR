@@ -26,6 +26,15 @@ const Profile = lazy(() => import('./pages/shared/Profile'));
 const GuardMyTasks = lazy(() => import('./pages/guard/MyTasks'));
 const GuardTaskList = lazy(() => import('./pages/guard/TaskList'));
 
+// Task Groups & Recurring Assignments (Phase 1) — a persistent group layer
+// shared across all three role trees. Every route below is the same
+// component; RLS (not this routing) is what actually scopes a director to
+// every group, an officer to their range's groups, and a field-role user
+// to only the groups they belong to.
+const TaskGroupsList = lazy(() => import('./pages/shared/TaskGroupsList'));
+const TaskGroupDetail = lazy(() => import('./pages/shared/TaskGroupDetail'));
+const OccurrenceDetail = lazy(() => import('./pages/shared/OccurrenceDetail'));
+
 // Hospitality Inventory Management (Phase 1) — a domain module shared by
 // the director's nested area and (for an assigned guard) a nested area
 // under /guard. Not a separate role/shell — see ProtectedInventoryAccess.
@@ -184,6 +193,10 @@ export default function App() {
               <Route path="audit" element={<AuditLog />} />
               <Route path="profile" element={<Profile />} />
 
+              <Route path="groups" element={<TaskGroupsList />} />
+              <Route path="groups/:id" element={<TaskGroupDetail />} />
+              <Route path="groups/:id/occurrences/:occId" element={<OccurrenceDetail />} />
+
               {/* Hospitality Inventory Management — nested area with its own
                   internal pages; opens from the icon rail / mobile More sheet.
                   Director always has full access, so no extra capability
@@ -216,6 +229,10 @@ export default function App() {
               <Route path="map" element={<MapView />} />
               <Route path="audit" element={<AuditLog />} />
               <Route path="profile" element={<Profile />} />
+
+              <Route path="groups" element={<TaskGroupsList />} />
+              <Route path="groups/:id" element={<TaskGroupDetail />} />
+              <Route path="groups/:id/occurrences/:occId" element={<OccurrenceDetail />} />
             </Route>
 
             {/* Guard — Inventory is an additional capability for guards with
@@ -237,6 +254,15 @@ export default function App() {
               <Route path="incidents" element={<IncidentLog />} />
               <Route path="map" element={<MapView />} />
               <Route path="profile" element={<Profile />} />
+
+              {/* Read-only for a field-role user unless they're a Task
+                  Group coordinator/member with post rights — RLS scopes
+                  visibility to groups/occurrences they actually belong to;
+                  canManageTaskGroups (director/officer only) hides the
+                  create/manage controls here, it doesn't grant them. */}
+              <Route path="groups" element={<TaskGroupsList />} />
+              <Route path="groups/:id" element={<TaskGroupDetail />} />
+              <Route path="groups/:id/occurrences/:occId" element={<OccurrenceDetail />} />
 
               <Route path="inventory" element={<ProtectedInventoryAccess><Outlet /></ProtectedInventoryAccess>}>
                 <Route index element={<InventoryDashboard />} />

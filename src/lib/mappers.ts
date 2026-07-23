@@ -2,7 +2,7 @@ import type { Database } from './database.types';
 import type {
   User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry, LiveLocation,
   InventoryLocation, InventoryCategory, InventoryUnit, InventoryItem, InventoryStock, InventoryTransaction,
-  InventoryRequest, InventoryRequestItem,
+  InventoryRequest, InventoryRequestItem, TaskGroup, TaskGroupMember, TaskOccurrence, GroupMessage,
 } from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -14,6 +14,10 @@ type NotificationRow = Database['public']['Tables']['notifications']['Row'];
 type IncidentRow = Database['public']['Tables']['incidents']['Row'];
 type IncidentPhotoRow = Database['public']['Tables']['incident_photos']['Row'];
 type AuditLogRow = Database['public']['Tables']['audit_log']['Row'];
+type TaskGroupRow = Database['public']['Tables']['task_groups']['Row'];
+type TaskGroupMemberRow = Database['public']['Tables']['task_group_members']['Row'];
+type TaskOccurrenceRow = Database['public']['Tables']['task_occurrences']['Row'];
+type TaskMessageRow = Database['public']['Tables']['task_messages']['Row'];
 
 export function mapProfile(row: ProfileRow): User {
   return {
@@ -91,6 +95,9 @@ export function mapTask(
     completedAt: row.completed_at ?? undefined,
     archivedAt: row.archived_at ?? undefined,
     batchId: row.batch_id ?? undefined,
+    groupId: row.group_id ?? undefined,
+    seriesId: row.series_id ?? undefined,
+    occurrenceId: row.occurrence_id ?? undefined,
     createdAt: row.created_at,
     taskUpdates: (row.task_updates ?? []).map(mapTaskUpdate),
     comments: (row.comments ?? []).map(mapComment),
@@ -350,5 +357,81 @@ export function mapInventoryRequest(
     items: (row.inventory_request_items ?? []).map(mapInventoryRequestItem),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+// ─────────────────────────────────────────────
+// Task Groups & Recurring Assignments (Phase 1)
+// ─────────────────────────────────────────────
+
+export function mapTaskGroup(
+  row: TaskGroupRow & { member_count?: number; active_occurrence_count?: number },
+): TaskGroup {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    groupType: row.group_type,
+    rangeId: row.range_id ?? undefined,
+    createdBy: row.created_by,
+    status: row.status,
+    autoArchive: row.auto_archive,
+    archiveAfterDate: row.archive_after_date ?? undefined,
+    membersCanReply: row.members_can_reply,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    archivedAt: row.archived_at ?? undefined,
+    memberCount: row.member_count,
+    activeOccurrenceCount: row.active_occurrence_count,
+  };
+}
+
+export function mapTaskGroupMember(row: TaskGroupMemberRow): TaskGroupMember {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    userId: row.user_id,
+    membershipRole: row.membership_role,
+    active: row.active,
+    joinedAt: row.joined_at,
+    removedAt: row.removed_at ?? undefined,
+    addedBy: row.added_by,
+  };
+}
+
+export function mapTaskOccurrence(row: TaskOccurrenceRow): TaskOccurrence {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    seriesId: row.series_id ?? undefined,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    priority: row.priority,
+    scheduledStart: row.scheduled_start,
+    dueAt: row.due_at,
+    status: row.status,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    cancelledAt: row.cancelled_at ?? undefined,
+    completedAt: row.completed_at ?? undefined,
+  };
+}
+
+export function mapGroupMessage(row: TaskMessageRow): GroupMessage {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderId: row.sender_id,
+    // A redacted message's body is not exposed to the UI even though the
+    // row itself is kept for audit — the client never actually needs the
+    // original text since redaction always clears it server-side, but this
+    // is a defensive belt-and-braces in case that ever changes.
+    body: row.redacted_at ? '' : row.body,
+    attachmentPath: row.attachment_path ?? undefined,
+    replyToId: row.reply_to_id ?? undefined,
+    createdAt: row.created_at,
+    editedAt: row.edited_at ?? undefined,
+    redactedAt: row.redacted_at ?? undefined,
   };
 }

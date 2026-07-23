@@ -4,7 +4,7 @@ export type UserRole = 'director' | 'range_officer' | 'guard' | 'range_office' |
 export type TaskStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Archived';
 export type TaskPriority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type TaskCategory = 'Patrol' | 'Camera Trap' | 'Survey' | 'Maintenance' | 'Admin' | 'Other';
-export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported' | 'inventory_request_submitted' | 'inventory_request_approved' | 'inventory_request_rejected' | 'inventory_stock_issued';
+export type NotificationType = 'task_assigned' | 'task_updated' | 'task_completed' | 'changes_requested' | 'task_archived' | 'task_due_soon' | 'task_due_today' | 'task_overdue' | 'incident_reported' | 'inventory_request_submitted' | 'inventory_request_approved' | 'inventory_request_rejected' | 'inventory_stock_issued' | 'group_task_assigned' | 'group_announcement';
 export type IncidentType = 'human_attack' | 'livestock_attack' | 'crop_damage' | 'property_damage' | 'conflict_other' | 'poaching_sign' | 'road_kill' | 'animal_injury' | 'tree_felling' | 'other' | 'wildlife_sighting' | 'sighting_other';
 export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 export type IncidentStatus = 'Open' | 'Resolved';
@@ -12,6 +12,11 @@ export type InventoryLocationType = 'central_warehouse' | 'range_store' | 'fores
 export type InventoryItemKind = 'consumable' | 'reusable';
 export type InventoryTransactionType = 'opening_balance' | 'issued';
 export type InventoryRequestStatus = 'Draft' | 'Submitted' | 'Approved' | 'PartiallyApproved' | 'Rejected' | 'PartiallyFulfilled' | 'Fulfilled' | 'Cancelled';
+export type TaskGroupType = 'permanent' | 'temporary';
+export type TaskGroupStatus = 'active' | 'paused' | 'archived';
+export type GroupMembershipRole = 'member' | 'coordinator';
+export type TaskOccurrenceStatus = 'scheduled' | 'active' | 'completed' | 'cancelled';
+export type TaskConversationType = 'group' | 'occurrence';
 
 type Relationships = {
   foreignKeyName: string;
@@ -90,6 +95,9 @@ export interface Database {
           completed_at: string | null;
           archived_at: string | null;
           batch_id: string | null;
+          group_id: string | null;
+          series_id: string | null;
+          occurrence_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -111,6 +119,9 @@ export interface Database {
           completed_at?: string | null;
           archived_at?: string | null;
           batch_id?: string | null;
+          group_id?: string | null;
+          series_id?: string | null;
+          occurrence_id?: string | null;
         };
         Update: {
           id?: string;
@@ -130,6 +141,9 @@ export interface Database {
           completed_at?: string | null;
           archived_at?: string | null;
           batch_id?: string | null;
+          group_id?: string | null;
+          series_id?: string | null;
+          occurrence_id?: string | null;
         };
         Relationships: Relationships;
       };
@@ -760,6 +774,181 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      task_groups: {
+        Row: {
+          id: string;
+          name: string;
+          description: string;
+          group_type: TaskGroupType;
+          range_id: string | null;
+          created_by: string;
+          status: TaskGroupStatus;
+          auto_archive: boolean;
+          archive_after_date: string | null;
+          members_can_reply: boolean;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string;
+          group_type: TaskGroupType;
+          range_id?: string | null;
+          created_by: string;
+          status?: TaskGroupStatus;
+          auto_archive?: boolean;
+          archive_after_date?: string | null;
+          members_can_reply?: boolean;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string;
+          group_type?: TaskGroupType;
+          range_id?: string | null;
+          status?: TaskGroupStatus;
+          auto_archive?: boolean;
+          archive_after_date?: string | null;
+          members_can_reply?: boolean;
+          archived_at?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      task_group_members: {
+        Row: {
+          id: string;
+          group_id: string;
+          user_id: string;
+          membership_role: GroupMembershipRole;
+          active: boolean;
+          joined_at: string;
+          removed_at: string | null;
+          added_by: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          user_id: string;
+          membership_role?: GroupMembershipRole;
+          active?: boolean;
+          removed_at?: string | null;
+          added_by: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          user_id?: string;
+          membership_role?: GroupMembershipRole;
+          active?: boolean;
+          removed_at?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      task_occurrences: {
+        Row: {
+          id: string;
+          group_id: string;
+          series_id: string | null;
+          title: string;
+          description: string;
+          category: TaskCategory;
+          priority: TaskPriority;
+          scheduled_start: string;
+          due_at: string;
+          status: TaskOccurrenceStatus;
+          created_by: string;
+          created_at: string;
+          cancelled_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          series_id?: string | null;
+          title: string;
+          description?: string;
+          category?: TaskCategory;
+          priority?: TaskPriority;
+          scheduled_start?: string;
+          due_at: string;
+          status?: TaskOccurrenceStatus;
+          created_by: string;
+          cancelled_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          status?: TaskOccurrenceStatus;
+          cancelled_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      task_conversations: {
+        Row: {
+          id: string;
+          type: TaskConversationType;
+          group_id: string | null;
+          occurrence_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          type: TaskConversationType;
+          group_id?: string | null;
+          occurrence_id?: string | null;
+        };
+        Update: {
+          id?: string;
+        };
+        Relationships: Relationships;
+      };
+      task_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          attachment_path: string | null;
+          reply_to_id: string | null;
+          created_at: string;
+          edited_at: string | null;
+          redacted_at: string | null;
+          redacted_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          attachment_path?: string | null;
+          reply_to_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          body?: string;
+          edited_at?: string | null;
+          redacted_at?: string | null;
+          redacted_by?: string | null;
+        };
+        Relationships: Relationships;
+      };
+      task_message_reads: {
+        Row: {
+          message_id: string;
+          user_id: string;
+          read_at: string;
+        };
+        Insert: {
+          message_id: string;
+          user_id: string;
+        };
+        Update: Record<string, never>;
+        Relationships: Relationships;
+      };
     };
     Views: {
       task_dashboard_stats: {
@@ -802,6 +991,11 @@ export interface Database {
       inventory_item_kind: InventoryItemKind;
       inventory_transaction_type: InventoryTransactionType;
       inventory_request_status: InventoryRequestStatus;
+      task_group_type: TaskGroupType;
+      task_group_status: TaskGroupStatus;
+      group_membership_role: GroupMembershipRole;
+      task_occurrence_status: TaskOccurrenceStatus;
+      task_conversation_type: TaskConversationType;
     };
   };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canManageInventory, canManageTasks, canManageIncidents } from './permissions';
+import { canManageInventory, canManageTasks, canManageIncidents, canManageTaskGroups } from './permissions';
 import { isFieldRole, FIELD_ROLES } from '../types';
 import type { Role } from '../types';
 
@@ -71,5 +71,23 @@ describe('existing permission helpers are unaffected by Inventory access', () =>
 
   it('every known role is covered by exactly one of canManageInventory/canManageTasks/canManageIncidents assertions above (no role silently falls through untested)', () => {
     expect(ALL_ROLES).toHaveLength(6);
+  });
+});
+
+describe('canManageTaskGroups', () => {
+  it('director and range officer can create/manage Task Groups', () => {
+    expect(canManageTaskGroups('director')).toBe(true);
+    expect(canManageTaskGroups('range_officer')).toBe(true);
+  });
+
+  it('field-tier roles and the deprecated inventory_staff role cannot — RLS further restricts director/officer to their own range, not mirrored here', () => {
+    expect(canManageTaskGroups('guard')).toBe(false);
+    expect(canManageTaskGroups('range_office')).toBe(false);
+    expect(canManageTaskGroups('tiger_cell')).toBe(false);
+    expect(canManageTaskGroups('inventory_staff')).toBe(false);
+  });
+
+  it('undefined role is denied', () => {
+    expect(canManageTaskGroups(undefined)).toBe(false);
   });
 });

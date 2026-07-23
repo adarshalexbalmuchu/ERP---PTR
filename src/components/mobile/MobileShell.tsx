@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Home, ClipboardList, AlertTriangle, Map as MapIcon, MoreHorizontal, Search,
-  UserCircle, Users, History, HelpCircle, LogOut, X, Wifi, WifiOff, RefreshCw, AlertCircle, Check, Boxes,
+  UserCircle, Users, History, HelpCircle, LogOut, X, Wifi, WifiOff, RefreshCw, AlertCircle, Check, Boxes, UsersRound,
 } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useAuth } from '../../contexts/AuthContext';
@@ -171,6 +171,14 @@ function ShellContent({ base, role }: { base: string; role: string }) {
 
   const moreItems: MoreItem[] = [
     { label: 'My profile', icon: <UserCircle className="w-5 h-5" />, to: `${base}/profile` },
+    // Task Groups: standing teams / campaign groups. Visible to everyone —
+    // RLS already scopes what a given user actually sees inside it
+    // (director: all, officer: their range, field role: only groups they
+    // belong to), so there's no separate capability check needed here the
+    // way Inventory needs hasInventoryAccess (Inventory is opt-in per
+    // location; Task Groups membership is just "am I in one or not",
+    // which the page itself already handles with an empty state).
+    { label: 'Task Groups', icon: <UsersRound className="w-5 h-5" />, to: `${base}/groups` },
     // Inventory opens as a full module with its own internal navigation —
     // not a sixth bottom-nav destination, per the module spec. Director
     // always qualifies; anyone else needs at least one active Inventory

@@ -23,3 +23,11 @@ insert into profiles (id, name, role, email, avatar_initials, designation, range
 insert into tasks (id, title, assignee_id, created_by_id, range_id, area_id, status, priority, due_date) values
   ('b0000000-0000-0000-0000-000000000001', 'Betla task (guard1)', 'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'InProgress', 'High', current_date + 3),
   ('b0000000-0000-0000-0000-000000000002', 'Kechki task (guard2)', 'a0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', null, 'NotStarted', 'Medium', current_date + 5);
+
+-- Task Groups seed: one Betla-range permanent group with guard1 as its
+-- only active member, created by Officer Betla.
+insert into task_groups (id, name, group_type, range_id, created_by, status) values
+  ('c0000000-0000-0000-0000-000000000001', 'Betla Weekly Patrol Team', 'permanent', '10000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'active');
+
+insert into task_group_members (id, group_id, user_id, membership_role, active, added_by) values
+  ('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'member', true, 'a0000000-0000-0000-0000-000000000002');

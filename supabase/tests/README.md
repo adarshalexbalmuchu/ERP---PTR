@@ -49,9 +49,13 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/ptr_test node rls.tes
 
 Checks director/officer/guard read scoping, cross-range write blocking, the
 guard column/status-update guard trigger, self-role-escalation blocking,
-notification visibility (including the task-visibility gate on inserts), and
-task-scoped storage object access. All 19 checks should pass — if one fails
-after a schema change, that's a real RLS regression.
+notification visibility (including the task-visibility gate on inserts),
+task-scoped storage object access, and (Task Groups, Phase 1) group/member
+visibility scoping, duplicate-active-membership prevention, the
+create_group_occurrence RPC's authorization/fan-out/idempotency, and
+group/occurrence conversation read/post permissions including the
+members_can_reply toggle and coordinator override. All 40 checks should
+pass — if one fails after a schema change, that's a real RLS regression.
 
 ## Run the load/scale test
 

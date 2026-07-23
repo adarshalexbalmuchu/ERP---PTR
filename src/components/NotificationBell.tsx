@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, AlertTriangle, Clock, RefreshCw, Package } from 'lucide-react';
+import { Bell, Check, BellRing, X, ClipboardList, CheckCircle2, Archive, AlertCircle, AlertTriangle, Clock, RefreshCw, Package, Megaphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -23,6 +23,8 @@ const NOTIF_STYLE: Record<Notification['type'], { icon: typeof ClipboardList; cl
   inventory_request_approved: { icon: Package, className: 'bg-ptr-green/10 text-ptr-green' },
   inventory_request_rejected: { icon: Package, className: 'bg-signal-red-bg text-signal-red' },
   inventory_stock_issued: { icon: Package, className: 'bg-ptr-green/10 text-ptr-green' },
+  group_task_assigned: { icon: ClipboardList, className: 'bg-ptr-green/10 text-ptr-green' },
+  group_announcement: { icon: Megaphone, className: 'bg-ptr-accent/10 text-ptr-accent' },
 };
 
 // Four groups, in display order — "requires action" surfaces first and is
@@ -43,6 +45,8 @@ const GROUP_OF: Record<Notification['type'], NotifGroup> = {
   inventory_request_approved: 'assignments',
   inventory_request_rejected: 'action',
   inventory_stock_issued: 'assignments',
+  group_task_assigned: 'assignments',
+  group_announcement: 'system',
 };
 const GROUP_LABEL: Record<NotifGroup, string> = {
   action: 'Requires action',

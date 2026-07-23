@@ -5,9 +5,11 @@
 import type {
   UserRole, TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType,
   InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus,
+  TaskGroupType, TaskGroupStatus, GroupMembershipRole, TaskOccurrenceStatus, TaskConversationType,
 } from '../lib/database.types';
 export type { TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType };
 export type { InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus };
+export type { TaskGroupType, TaskGroupStatus, GroupMembershipRole, TaskOccurrenceStatus, TaskConversationType };
 export type Role = UserRole;
 
 // inventory_staff is DEPRECATED — Inventory access is no longer a separate
@@ -106,6 +108,10 @@ export interface Task {
   archivedAt?: string;
   /** Shared by every task spawned from the same "assign to several people" submission; undefined for a single-assignee task. Lets the UI group them into one card. */
   batchId?: string;
+  /** Set only when this task was fanned out from a Task Group assignment — see the Task Groups section below. Undefined for every ordinary/batch_id task. */
+  groupId?: string;
+  seriesId?: string;
+  occurrenceId?: string;
   createdAt: string;
   comments: Comment[];
   attachments: Attachment[];
@@ -311,6 +317,76 @@ export interface InventoryRequest {
   items: InventoryRequestItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ─────────────────────────────────────────────
+// Task Groups & Recurring Assignments (Phase 1)
+// ─────────────────────────────────────────────
+// A persistent, reusable team — distinct from batch_id (which only ever
+// links the task rows from one single creation). See the schema-doc note
+// above the "Task Groups" section in supabase/schema.sql for the full
+// architecture. Phase 1 ships groups + one-time assignments only; no
+// recurrence UI yet (task_series exists in the schema but has no rows).
+
+export interface TaskGroup {
+  id: string;
+  name: string;
+  description: string;
+  groupType: TaskGroupType;
+  rangeId?: string;
+  createdBy: string;
+  status: TaskGroupStatus;
+  autoArchive: boolean;
+  archiveAfterDate?: string;
+  /** Whether an ordinary member (not director/officer/coordinator) may post to the group announcement channel. */
+  membersCanReply: boolean;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  /** Joined aggregate, present only where the query computes it (list views). */
+  memberCount?: number;
+  activeOccurrenceCount?: number;
+}
+
+export interface TaskGroupMember {
+  id: string;
+  groupId: string;
+  userId: string;
+  membershipRole: GroupMembershipRole;
+  active: boolean;
+  joinedAt: string;
+  removedAt?: string;
+  addedBy: string;
+}
+
+export interface TaskOccurrence {
+  id: string;
+  groupId: string;
+  seriesId?: string;
+  title: string;
+  description: string;
+  category: TaskCategory;
+  priority: TaskPriority;
+  scheduledStart: string;
+  dueAt: string;
+  status: TaskOccurrenceStatus;
+  createdBy: string;
+  createdAt: string;
+  cancelledAt?: string;
+  completedAt?: string;
+}
+
+export interface GroupMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  attachmentPath?: string;
+  attachmentUrl?: string;
+  replyToId?: string;
+  createdAt: string;
+  editedAt?: string;
+  redactedAt?: string;
 }
 
 export interface AppState {

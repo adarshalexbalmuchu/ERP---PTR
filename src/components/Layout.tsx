@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Boxes,
+  UsersRound,
 } from 'lucide-react';
 import useStore from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,6 +43,7 @@ function directorSections(): Section[] {
     { key: 'tasks', to: '/director/tasks', label: 'Task registry', icon: <ClipboardList className={iconCls} /> },
     { key: 'incidents', to: '/director/incidents', label: 'Incident reports', icon: <AlertTriangle className={iconCls} /> },
     { key: 'map', to: '/director/map', label: 'Range map', icon: <MapIcon className={iconCls} /> },
+    { key: 'groups', to: '/director/groups', label: 'Task Groups', icon: <UsersRound className={iconCls} /> },
     { key: 'inventory', to: '/director/inventory', label: 'Inventory', icon: <Boxes className={iconCls} /> },
     { key: 'users', to: '/director/users', label: 'Personnel', icon: <Users className={iconCls} /> },
     { key: 'audit', to: '/director/audit', label: 'System audit', icon: <History className={iconCls} /> },
@@ -54,6 +56,7 @@ function officerSections(): Section[] {
     { key: 'tasks', to: '/officer/tasks', label: 'Task registry', icon: <ClipboardList className={iconCls} /> },
     { key: 'incidents', to: '/officer/incidents', label: 'Incident reports', icon: <AlertTriangle className={iconCls} /> },
     { key: 'map', to: '/officer/map', label: 'Range map', icon: <MapIcon className={iconCls} /> },
+    { key: 'groups', to: '/officer/groups', label: 'Task Groups', icon: <UsersRound className={iconCls} /> },
     { key: 'audit', to: '/officer/audit', label: 'System audit', icon: <History className={iconCls} /> },
   ];
 }
@@ -63,6 +66,7 @@ const SECTION_TITLES: Record<string, string> = {
   tasks: 'Task registry',
   incidents: 'Incident reports',
   map: 'Range map',
+  groups: 'Task Groups',
   inventory: 'Inventory',
   users: 'Personnel',
   audit: 'System audit',
