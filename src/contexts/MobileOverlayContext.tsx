@@ -7,7 +7,7 @@ import { lockBodyScroll } from '../utils/scrollLock';
 // stacked sheets/popups with no shared notion of "what's on top".
 export type MobileOverlayId =
   | 'more' | 'help' | 'filters' | 'nearby-expanded' | 'marker-popup'
-  | 'incident-preview' | 'sync-details' | 'evidence';
+  | 'incident-preview' | 'incident-photo' | 'sync-details' | 'evidence';
 
 interface MobileOverlayContextValue {
   active: MobileOverlayId | null;

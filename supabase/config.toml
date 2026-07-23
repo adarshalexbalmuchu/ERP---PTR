@@ -11,3 +11,6 @@ verify_jwt = false
 # supabase/functions/sync-subscription/index.ts.
 [functions.sync-subscription]
 verify_jwt = false
+
+[analytics]
+enabled = false

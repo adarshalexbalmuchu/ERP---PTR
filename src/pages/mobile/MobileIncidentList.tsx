@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Plus, MapPin, RefreshCw, WifiOff, AlertCircle, MoreHorizontal,
   UserCog, CircleDashed, CheckCircle2, RotateCcw, Image as ImageIcon,
+  ChevronLeft, ChevronRight, X,
 } from 'lucide-react';
 import PriorityBadge from '../../components/PriorityBadge';
 import FilterChips from '../../components/mobile/FilterChips';
@@ -69,6 +70,7 @@ export default function MobileIncidentList({
   const [actionsFor, setActionsFor] = useState<Incident | null>(null);
   const [assignPickerOpen, setAssignPickerOpen] = useState(false);
   const [severityPickerOpen, setSeverityPickerOpen] = useState(false);
+  const [photoViewer, setPhotoViewer] = useState<{ incident: Incident; index: number } | null>(null);
   const actionsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const canManage = canManageIncidents(currentUser?.role, currentUser?.id);
@@ -91,6 +93,21 @@ export default function MobileIncidentList({
     overlay?.open('incident-preview', trigger);
   };
   const closeActions = () => { setActionsFor(null); setAssignPickerOpen(false); setSeverityPickerOpen(false); overlay?.close('incident-preview'); };
+  const openPhoto = (incident: Incident, index: number, trigger: HTMLButtonElement) => {
+    setPhotoViewer({ incident, index });
+    overlay?.open('incident-photo', trigger);
+  };
+  const closePhoto = () => {
+    setPhotoViewer(null);
+    overlay?.close('incident-photo');
+  };
+  const showAdjacentPhoto = (direction: -1 | 1) => {
+    setPhotoViewer((current) => {
+      if (!current) return null;
+      const count = current.incident.photos.length;
+      return { ...current, index: (current.index + direction + count) % count };
+    });
+  };
 
   const runAssign = async (userId: string) => {
     if (!actionsFor) return;
@@ -228,14 +245,20 @@ export default function MobileIncidentList({
                   {incident.photos.length > 0 && (
                     <div className="flex gap-2 mt-2">
                       {incident.photos.slice(0, 2).map((p, idx) => (
-                        <div key={p.id} className="relative w-14 h-14 flex-shrink-0">
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={(event) => openPhoto(incident, idx, event.currentTarget)}
+                          className="relative w-14 h-14 flex-shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ptr-green focus-visible:ring-offset-2"
+                          aria-label={`Open incident photo ${idx + 1} of ${incident.photos.length}`}
+                        >
                           <img src={p.url} alt="" className="w-full h-full rounded object-cover border border-n-30" />
                           {idx === 1 && extraPhotos > 0 && (
-                            <div className="absolute inset-0 rounded bg-black/50 flex items-center justify-center text-white text-13 font-semibold">
+                            <span className="pointer-events-none absolute inset-0 rounded bg-black/50 flex items-center justify-center text-white text-13 font-semibold">
                               +{extraPhotos}
-                            </div>
+                            </span>
                           )}
-                        </div>
+                        </button>
                       ))}
                       {incident.photos.length === 1 && (
                         <span className="flex items-center gap-1 text-xs text-n-70"><ImageIcon className="w-3.5 h-3.5" />1 photo</span>
@@ -260,6 +283,36 @@ export default function MobileIncidentList({
           </div>
         )}
       </PullToRefresh>
+
+      {photoViewer && (!overlay || overlay.isOpen('incident-photo')) && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col" role="dialog" aria-modal="true" aria-label="Incident photos">
+          <div className="flex-shrink-0 flex items-center justify-between h-14 px-2 text-white" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+            <span className="pl-2 text-13 font-medium">
+              {photoViewer.index + 1} of {photoViewer.incident.photos.length}
+            </span>
+            <button type="button" onClick={closePhoto} className="w-11 h-11 flex items-center justify-center rounded-full active:bg-white/15" aria-label="Close photo viewer">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="relative flex-1 min-h-0 flex items-center justify-center px-3 pb-3">
+            <img
+              src={photoViewer.incident.photos[photoViewer.index].url}
+              alt={`Incident photo ${photoViewer.index + 1} of ${photoViewer.incident.photos.length}`}
+              className="max-w-full max-h-full object-contain"
+            />
+            {photoViewer.incident.photos.length > 1 && (
+              <>
+                <button type="button" onClick={() => showAdjacentPhoto(-1)} className="absolute left-2 w-11 h-11 flex items-center justify-center rounded-full bg-black/60 text-white active:bg-black/80" aria-label="Previous photo">
+                  <ChevronLeft className="w-7 h-7" />
+                </button>
+                <button type="button" onClick={() => showAdjacentPhoto(1)} className="absolute right-2 w-11 h-11 flex items-center justify-center rounded-full bg-black/60 text-white active:bg-black/80" aria-label="Next photo">
+                  <ChevronRight className="w-7 h-7" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <BottomSheet
         open={!!actionsFor && !assignPickerOpen && !severityPickerOpen}
