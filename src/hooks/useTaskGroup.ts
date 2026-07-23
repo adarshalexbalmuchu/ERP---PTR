@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { mapTaskGroup, mapTaskGroupMember, mapTaskOccurrence } from '../lib/mappers';
+import { mapTaskGroup, mapTaskGroupMember, mapTaskOccurrence, mapTaskSeries, recurrenceRuleToDb } from '../lib/mappers';
 import { createGroupOccurrence } from '../lib/taskGroupsRpc';
 import useStore from '../store/useStore';
-import type { TaskCategory, TaskPriority } from '../types';
+import type { TaskCategory, TaskPriority, TaskSeriesRecurrence, TaskSeriesStatus, RecurrenceRule } from '../types';
 
 /** One Task Group's full detail surface: the group itself, its active
     roster, and its occurrences (past and current) — everything the
@@ -56,6 +56,21 @@ export function useTaskGroup(id: string | undefined) {
     enabled: !!id,
   });
 
+  const { data: series = [], isLoading: seriesLoading } = useQuery({
+    queryKey: ['task-group-series', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from('task_series')
+        .select('*')
+        .eq('group_id', id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map(mapTaskSeries);
+    },
+    enabled: !!id,
+  });
+
   const { data: conversationId } = useQuery({
     queryKey: ['task-group-conversation', id],
     queryFn: async () => {
@@ -85,6 +100,9 @@ export function useTaskGroup(id: string | undefined) {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_occurrences', filter: `group_id=eq.${id}` }, () => {
         void queryClient.invalidateQueries({ queryKey: ['task-group-occurrences', id] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_series', filter: `group_id=eq.${id}` }, () => {
+        void queryClient.invalidateQueries({ queryKey: ['task-group-series', id] });
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
@@ -139,15 +157,62 @@ export function useTaskGroup(id: string | undefined) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['task-group-occurrences', id] }),
   });
 
+  const invalidateSeries = () => void queryClient.invalidateQueries({ queryKey: ['task-group-series', id] });
+
+  // Created as 'draft' — the caller activates it as a separate, explicit
+  // step (matches the spec's "review members, THEN activate" workflow;
+  // also gives a director a chance to fix a mistake before the scheduler
+  // ever sees it, since generate_due_task_occurrences() only looks at
+  // status='active' series).
+  const createSeries = useMutation({
+    mutationFn: async (data: {
+      title: string; description?: string; category: TaskCategory; priority: TaskPriority;
+      evidenceRequirements?: string; recurrenceType: TaskSeriesRecurrence; recurrenceRule: RecurrenceRule;
+      startDate: string; endDate?: string; creationTime: string; dueOffsetDays: number; rangeId: string;
+    }) => {
+      if (!id || !currentUser) throw new Error('No group id');
+      const { error } = await supabase.from('task_series').insert({
+        group_id: id,
+        title: data.title.trim(),
+        description: data.description?.trim() ?? '',
+        category: data.category,
+        priority: data.priority,
+        evidence_requirements: data.evidenceRequirements?.trim() ?? '',
+        recurrence_type: data.recurrenceType,
+        recurrence_rule: recurrenceRuleToDb(data.recurrenceRule),
+        start_date: data.startDate,
+        end_date: data.endDate ?? null,
+        creation_time: data.creationTime,
+        due_offset_days: data.dueOffsetDays,
+        status: 'draft',
+        created_by: currentUser.id,
+        range_id: data.rangeId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidateSeries,
+  });
+
+  const setSeriesStatus = useMutation({
+    mutationFn: async ({ seriesId, status }: { seriesId: string; status: TaskSeriesStatus }) => {
+      const { error } = await supabase.from('task_series').update({ status }).eq('id', seriesId);
+      if (error) throw error;
+    },
+    onSuccess: invalidateSeries,
+  });
+
   return {
     group,
     members,
     occurrences,
+    series,
     conversationId: conversationId ?? null,
-    isLoading: groupLoading || membersLoading || occurrencesLoading,
+    isLoading: groupLoading || membersLoading || occurrencesLoading || seriesLoading,
     addMember,
     removeMember,
     setCoordinator,
     createOneTimeAssignment,
+    createSeries,
+    setSeriesStatus,
   };
 }

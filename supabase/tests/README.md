@@ -54,8 +54,11 @@ task-scoped storage object access, and (Task Groups, Phase 1) group/member
 visibility scoping, duplicate-active-membership prevention, the
 create_group_occurrence RPC's authorization/fan-out/idempotency, and
 group/occurrence conversation read/post permissions including the
-members_can_reply toggle and coordinator override. All 40 checks should
-pass — if one fails after a schema change, that's a real RLS regression.
+members_can_reply toggle and coordinator override, plus (Task Groups,
+Phase 2) generate_due_task_occurrences()'s daily/weekly/monthly recurrence
+matching (including day-of-month clamping to a shorter month), paused-series
+skipping, and idempotent re-runs. All 48 checks should pass — if one fails
+after a schema change, that's a real RLS/scheduler regression.
 
 ## Run the load/scale test
 

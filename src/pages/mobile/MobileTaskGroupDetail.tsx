@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, X, ChevronRight, Shield } from 'lucide-react';
+import { Plus, X, ChevronRight, Shield, Repeat, Play, Pause, Square } from 'lucide-react';
 import useStore from '../../store/useStore';
 import { useTaskGroup } from '../../hooks/useTaskGroup';
 import { useGroupMessages } from '../../hooks/useGroupMessages';
@@ -14,11 +14,27 @@ import MessageThread from '../../components/MessageThread';
 import BottomSheet from '../../components/mobile/BottomSheet';
 import { getErrorMessage } from '../../lib/errors';
 import { formatDate } from '../../utils/formatters';
-import type { TaskCategory, TaskPriority } from '../../types';
+import type { TaskCategory, TaskPriority, TaskSeries, TaskSeriesRecurrence, TaskSeriesStatus } from '../../types';
 
 const CATEGORIES: TaskCategory[] = ['Patrol', 'Camera Trap', 'Survey', 'Maintenance', 'Admin', 'Other'];
 const PRIORITIES: TaskPriority[] = ['Critical', 'High', 'Medium', 'Low'];
 const OCCURRENCE_STATUS_LABEL: Record<string, string> = { scheduled: 'Scheduled', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' };
+const SERIES_STATUS_LABEL: Record<TaskSeriesStatus, string> = { draft: 'Draft', active: 'Active', paused: 'Paused', ended: 'Ended', archived: 'Archived' };
+const SERIES_STATUS_TONE: Record<TaskSeriesStatus, string> = {
+  draft: 'bg-n-20 text-n-70', active: 'bg-ptr-green/10 text-ptr-green', paused: 'bg-signal-amber/10 text-signal-amber',
+  ended: 'bg-n-20 text-n-70', archived: 'bg-n-20 text-n-70',
+};
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function RecurrenceSummary({ series }: { series: TaskSeries }) {
+  const { recurrenceType, recurrenceRule } = series;
+  if (recurrenceType === 'daily') return <>Every day</>;
+  if (recurrenceType === 'weekly' || recurrenceType === 'weekdays') {
+    return <>Every {(recurrenceRule.weekdays ?? []).map((d) => WEEKDAY_LABELS[d]).join(', ') || '—'}</>;
+  }
+  if (recurrenceType === 'monthly') return <>Day {recurrenceRule.dayOfMonth ?? 1} of every month</>;
+  return <>Every {recurrenceRule.intervalDays ?? 1}d</>;
+}
 
 function NewAssignmentSheet({ open, onClose, groupId, defaultRangeId }: { open: boolean; onClose: () => void; groupId: string; defaultRangeId?: string }) {
   const { ranges } = useRanges();
@@ -80,15 +96,139 @@ function NewAssignmentSheet({ open, onClose, groupId, defaultRangeId }: { open: 
   );
 }
 
+function NewRecurringSeriesSheet({ open, onClose, groupId, defaultRangeId }: { open: boolean; onClose: () => void; groupId: string; defaultRangeId?: string }) {
+  const { ranges } = useRanges();
+  const { createSeries } = useTaskGroup(groupId);
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState<TaskCategory>('Patrol');
+  const [priority, setPriority] = useState<TaskPriority>('Medium');
+  const [recurrenceType, setRecurrenceType] = useState<TaskSeriesRecurrence>('weekly');
+  const [weekdays, setWeekdays] = useState<number[]>([1]);
+  const [dayOfMonth, setDayOfMonth] = useState('1');
+  const [intervalDays, setIntervalDays] = useState('14');
+  const [startDate, setStartDate] = useState('');
+  const [creationTime, setCreationTime] = useState('06:00');
+  const [dueOffsetDays, setDueOffsetDays] = useState('1');
+  const [rangeId, setRangeId] = useState(defaultRangeId ?? '');
+  const [error, setError] = useState('');
+
+  const toggleWeekday = (d: number) => {
+    if (recurrenceType === 'weekly') { setWeekdays([d]); return; }
+    setWeekdays((ws) => (ws.includes(d) ? ws.filter((x) => x !== d) : [...ws, d].sort()));
+  };
+  const valid = title.trim() && startDate && rangeId
+    && ((recurrenceType !== 'weekly' && recurrenceType !== 'weekdays') || weekdays.length > 0);
+
+  const submit = async () => {
+    if (!valid) return;
+    try {
+      await createSeries.mutateAsync({
+        title: title.trim(), category, priority,
+        recurrenceType,
+        recurrenceRule:
+          recurrenceType === 'weekly' || recurrenceType === 'weekdays' ? { weekdays } :
+          recurrenceType === 'monthly' ? { dayOfMonth: Number(dayOfMonth) || 1 } :
+          recurrenceType === 'custom_interval' ? { intervalDays: Number(intervalDays) || 1 } : {},
+        startDate, creationTime, dueOffsetDays: Number(dueOffsetDays) || 0, rangeId,
+      });
+      setTitle(''); setStartDate('');
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to create the recurring series.'));
+    }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="New recurring task">
+      <div className="p-4 space-y-3">
+        {error && <p className="text-13 text-signal-red">{error}</p>}
+        <div>
+          <label className="block text-13 font-medium text-n-90 mb-1.5">Title</label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" style={{ fontSize: '16px' }} placeholder="Weekly fire-line inspection" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Category</label>
+            <Select value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="input-field select-field">
+              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Priority</label>
+            <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className="input-field select-field">
+              {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </Select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-13 font-medium text-n-90 mb-1.5">Recurrence</label>
+          <Select value={recurrenceType} onChange={(e) => { setRecurrenceType(e.target.value as TaskSeriesRecurrence); setWeekdays([1]); }} className="input-field select-field">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly — one day</option>
+            <option value="weekdays">Selected weekdays</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom_interval">Custom interval</option>
+          </Select>
+        </div>
+        {(recurrenceType === 'weekly' || recurrenceType === 'weekdays') && (
+          <div className="flex flex-wrap gap-1.5">
+            {WEEKDAY_LABELS.map((label, d) => (
+              <button key={d} type="button" onClick={() => toggleWeekday(d)} className={`w-10 h-9 rounded text-13 font-medium ${weekdays.includes(d) ? 'bg-ptr-green text-white' : 'bg-n-20 text-n-80'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {recurrenceType === 'monthly' && (
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Day of month</label>
+            <input type="number" min="1" max="31" value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} className="input-field" style={{ fontSize: '16px' }} />
+          </div>
+        )}
+        {recurrenceType === 'custom_interval' && (
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Repeat every N days</label>
+            <input type="number" min="1" value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)} className="input-field" style={{ fontSize: '16px' }} />
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Start date</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-field" style={{ fontSize: '16px' }} />
+          </div>
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Creates at (IST)</label>
+            <input type="time" value={creationTime} onChange={(e) => setCreationTime(e.target.value)} className="input-field" style={{ fontSize: '16px' }} />
+          </div>
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Due after (days)</label>
+            <input type="number" min="0" value={dueOffsetDays} onChange={(e) => setDueOffsetDays(e.target.value)} className="input-field" style={{ fontSize: '16px' }} />
+          </div>
+          <div>
+            <label className="block text-13 font-medium text-n-90 mb-1.5">Range</label>
+            <Select value={rangeId} onChange={(e) => setRangeId(e.target.value)} className="input-field select-field">
+              <option value="">Select range</option>
+              {ranges.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </Select>
+          </div>
+        </div>
+        <p className="text-13 text-n-70">Created as a draft — activate it from the Assignments tab once ready.</p>
+        <button onClick={() => void submit()} disabled={!valid} className="btn-primary w-full">Save as draft</button>
+      </div>
+    </BottomSheet>
+  );
+}
+
 export default function MobileTaskGroupDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const { group, members, occurrences, conversationId, isLoading, addMember, removeMember, setCoordinator } = useTaskGroup(id);
+  const { group, members, occurrences, series, conversationId, isLoading, addMember, removeMember, setCoordinator, setSeriesStatus } = useTaskGroup(id);
   const { messages, postMessage } = useGroupMessages(conversationId);
   const { users } = useUsers();
   const [tab, setTab] = useState('overview');
   const [assignmentSheetOpen, setAssignmentSheetOpen] = useState(false);
+  const [seriesSheetOpen, setSeriesSheetOpen] = useState(false);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [addMemberId, setAddMemberId] = useState('');
 
@@ -108,9 +248,14 @@ export default function MobileTaskGroupDetail() {
           <p className="text-13 text-n-70 mt-0.5">{group.groupType === 'permanent' ? 'Permanent' : 'Temporary'}</p>
         </div>
         {canManage && (
-          <button onClick={() => setAssignmentSheetOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full bg-ptr-green text-white flex-shrink-0" aria-label="New assignment">
-            <Plus className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => setSeriesSheetOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full border border-n-40 text-n-80" aria-label="New recurring task">
+              <Repeat className="w-4.5 h-4.5" />
+            </button>
+            <button onClick={() => setAssignmentSheetOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full bg-ptr-green text-white" aria-label="New assignment">
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -139,21 +284,56 @@ export default function MobileTaskGroupDetail() {
         )}
 
         {tab === 'assignments' && (
-          occurrences.length === 0 ? (
-            <p className="text-13 text-n-70 text-center py-6">No assignments yet.</p>
-          ) : (
-            <div className="bg-white divide-y divide-n-20 -mx-4">
-              {occurrences.map((o) => (
-                <button key={o.id} onClick={() => navigate(`occurrences/${o.id}`)} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left active:bg-n-10">
-                  <div className="min-w-0">
-                    <div className="text-[15px] font-medium text-n-100 truncate">{o.title}</div>
-                    <div className="text-13 text-n-70">Due {formatDate(o.dueAt)} · {OCCURRENCE_STATUS_LABEL[o.status]}</div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-n-50 flex-shrink-0" />
-                </button>
-              ))}
+          <div className="space-y-5">
+            <div>
+              <div className="text-13 font-semibold text-n-90 mb-2">Recurring series</div>
+              {series.length === 0 ? (
+                <p className="text-13 text-n-70">No recurring series yet.</p>
+              ) : (
+                <div className="bg-white divide-y divide-n-20 -mx-4">
+                  {series.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between gap-2 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-medium text-n-100 truncate">{s.title}</div>
+                        <div className="text-13 text-n-70"><RecurrenceSummary series={s} /></div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className={`text-xs font-medium px-2 h-6 rounded-full flex items-center ${SERIES_STATUS_TONE[s.status]}`}>{SERIES_STATUS_LABEL[s.status]}</span>
+                        {canManage && (s.status === 'draft' || s.status === 'paused') && (
+                          <button onClick={() => setSeriesStatus.mutate({ seriesId: s.id, status: 'active' })} className="w-8 h-8 flex items-center justify-center rounded-full text-n-70 active:bg-n-10" aria-label="Activate"><Play className="w-4 h-4" /></button>
+                        )}
+                        {canManage && s.status === 'active' && (
+                          <button onClick={() => setSeriesStatus.mutate({ seriesId: s.id, status: 'paused' })} className="w-8 h-8 flex items-center justify-center rounded-full text-n-70 active:bg-n-10" aria-label="Pause"><Pause className="w-4 h-4" /></button>
+                        )}
+                        {canManage && (s.status === 'active' || s.status === 'paused') && (
+                          <button onClick={() => { if (confirm(`End "${s.title}"?`)) setSeriesStatus.mutate({ seriesId: s.id, status: 'ended' }); }} className="w-8 h-8 flex items-center justify-center rounded-full text-n-70 active:bg-n-10" aria-label="End"><Square className="w-4 h-4" /></button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )
+
+            <div>
+              <div className="text-13 font-semibold text-n-90 mb-2">Assignments</div>
+              {occurrences.length === 0 ? (
+                <p className="text-13 text-n-70">No assignments yet.</p>
+              ) : (
+                <div className="bg-white divide-y divide-n-20 -mx-4">
+                  {occurrences.map((o) => (
+                    <button key={o.id} onClick={() => navigate(`occurrences/${o.id}`)} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left active:bg-n-10">
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-medium text-n-100 truncate">{o.title}</div>
+                        <div className="text-13 text-n-70">Due {formatDate(o.dueAt)} · {OCCURRENCE_STATUS_LABEL[o.status]}</div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-n-50 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {tab === 'members' && (
@@ -206,6 +386,7 @@ export default function MobileTaskGroupDetail() {
       </div>
 
       <NewAssignmentSheet open={assignmentSheetOpen} onClose={() => setAssignmentSheetOpen(false)} groupId={group.id} defaultRangeId={group.rangeId} />
+      <NewRecurringSeriesSheet open={seriesSheetOpen} onClose={() => setSeriesSheetOpen(false)} groupId={group.id} defaultRangeId={group.rangeId} />
 
       <BottomSheet open={addSheetOpen} onClose={() => setAddSheetOpen(false)} title="Add member">
         <div className="p-4 space-y-3">

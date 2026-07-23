@@ -17,6 +17,8 @@ export type TaskGroupStatus = 'active' | 'paused' | 'archived';
 export type GroupMembershipRole = 'member' | 'coordinator';
 export type TaskOccurrenceStatus = 'scheduled' | 'active' | 'completed' | 'cancelled';
 export type TaskConversationType = 'group' | 'occurrence';
+export type TaskSeriesStatus = 'draft' | 'active' | 'paused' | 'ended' | 'archived';
+export type TaskSeriesRecurrence = 'daily' | 'weekly' | 'weekdays' | 'monthly' | 'custom_interval';
 
 type Relationships = {
   foreignKeyName: string;
@@ -847,6 +849,62 @@ export interface Database {
         };
         Relationships: Relationships;
       };
+      task_series: {
+        Row: {
+          id: string;
+          group_id: string;
+          title: string;
+          description: string;
+          category: TaskCategory;
+          priority: TaskPriority;
+          evidence_requirements: string;
+          recurrence_type: TaskSeriesRecurrence;
+          recurrence_rule: Json;
+          start_date: string;
+          end_date: string | null;
+          creation_time: string;
+          due_offset_days: number;
+          status: TaskSeriesStatus;
+          created_by: string;
+          range_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          title: string;
+          description?: string;
+          category?: TaskCategory;
+          priority?: TaskPriority;
+          evidence_requirements?: string;
+          recurrence_type: TaskSeriesRecurrence;
+          recurrence_rule?: Json;
+          start_date: string;
+          end_date?: string | null;
+          creation_time?: string;
+          due_offset_days?: number;
+          status?: TaskSeriesStatus;
+          created_by: string;
+          range_id: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string;
+          category?: TaskCategory;
+          priority?: TaskPriority;
+          evidence_requirements?: string;
+          recurrence_type?: TaskSeriesRecurrence;
+          recurrence_rule?: Json;
+          start_date?: string;
+          end_date?: string | null;
+          creation_time?: string;
+          due_offset_days?: number;
+          status?: TaskSeriesStatus;
+        };
+        Relationships: Relationships;
+      };
       task_occurrences: {
         Row: {
           id: string;
@@ -996,6 +1054,8 @@ export interface Database {
       group_membership_role: GroupMembershipRole;
       task_occurrence_status: TaskOccurrenceStatus;
       task_conversation_type: TaskConversationType;
+      task_series_status: TaskSeriesStatus;
+      task_series_recurrence: TaskSeriesRecurrence;
     };
   };
 }

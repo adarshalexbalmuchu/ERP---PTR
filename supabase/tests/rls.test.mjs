@@ -466,6 +466,88 @@ async function run() {
     check('anon reads zero task groups', rows.length === 0, `got ${rows.length} rows`);
   });
 
+  // ── Recurring series generator (Phase 2) ───────────────────────────
+  // generate_due_task_occurrences() is revoked from public/anon/
+  // authenticated entirely — only pg_cron (running as the function owner
+  // via SECURITY DEFINER) ever calls it, so these run as the plain
+  // superuser connection, not an impersonated app role. All inserts use
+  // creation_time='00:00' so the hour-gate always passes regardless of
+  // when this suite runs, and weekday cases compute "today" dynamically
+  // (extract(dow from current_date)) so they pass on any day of the week.
+  {
+    const client = new Client(CONN);
+    await client.connect();
+    try {
+      await client.query('BEGIN');
+
+      const S = {
+        daily: 'e0000000-0000-0000-0000-000000000001',
+        wrongWeekday: 'e0000000-0000-0000-0000-000000000002',
+        todayWeekday: 'e0000000-0000-0000-0000-000000000003',
+        paused: 'e0000000-0000-0000-0000-000000000004',
+        monthlyClamped: 'e0000000-0000-0000-0000-000000000005',
+      };
+      const insertSeries = (id, recurrenceType, rule, startDaysAgo, status = 'active') =>
+        client.query(
+          `insert into task_series (id, group_id, title, category, priority, recurrence_type, recurrence_rule, start_date, creation_time, due_offset_days, status, created_by, range_id)
+           values ($1, $2, $3, 'Patrol', 'Medium', $4, $5, current_date - $6::int, '00:00', 1, $7, $8, $9)`,
+          [id, G.betlaPatrol, `Series ${id}`, recurrenceType, rule, startDaysAgo, status, U.officerBetla, R.betla],
+        );
+
+      await insertSeries(S.daily, 'daily', {}, 1);
+      const first = await client.query('select out_outcome from generate_due_task_occurrences() where out_series_id = $1', [S.daily]);
+      check('daily series due today: first run creates an occurrence', first.rows[0]?.out_outcome === 'created', JSON.stringify(first.rows));
+
+      const dailyTasks = await client.query('select assignee_id from tasks where series_id = $1', [S.daily]);
+      check('daily series fans out exactly one task, to the one active member', dailyTasks.rows.length === 1 && dailyTasks.rows[0].assignee_id === U.guardBetla, JSON.stringify(dailyTasks.rows));
+
+      const second = await client.query('select out_outcome from generate_due_task_occurrences() where out_series_id = $1', [S.daily]);
+      check('daily series: re-running the same cycle is idempotent (already_generated, no error)', second.rows[0]?.out_outcome === 'already_generated', JSON.stringify(second.rows));
+      const dailyTasksAfter = await client.query('select count(*) from tasks where series_id = $1', [S.daily]);
+      check('daily series: task count unchanged after the idempotent re-run', Number(dailyTasksAfter.rows[0].count) === 1);
+
+      // Ask Postgres for "today" the exact same way the function itself
+      // computes it (IST) rather than recomputing in JS (which would use
+      // the test runner's own timezone/UTC and could disagree with the
+      // function near a day boundary).
+      const { rows: [{ ist_dow }] } = await client.query(
+        `select extract(dow from (now() at time zone 'Asia/Kolkata')::date)::int as ist_dow`,
+      );
+      await insertSeries(S.wrongWeekday, 'weekly', { weekdays: [(ist_dow + 1) % 7] }, 1);
+      await insertSeries(S.todayWeekday, 'weekly', { weekdays: [ist_dow] }, 7);
+      await insertSeries(S.paused, 'daily', {}, 1, 'paused');
+      await insertSeries(S.monthlyClamped, 'monthly', { day_of_month: 31 }, 40);
+
+      const batch = await client.query(
+        'select out_series_id, out_outcome from generate_due_task_occurrences() where out_series_id = any($1)',
+        [[S.wrongWeekday, S.todayWeekday, S.paused, S.monthlyClamped]],
+      );
+      const outcomeOf = (id) => batch.rows.find((r) => r.out_series_id === id)?.out_outcome;
+      check('weekly series NOT scheduled for today never fires', outcomeOf(S.wrongWeekday) === undefined, JSON.stringify(batch.rows));
+      check('weekly series scheduled for today\'s actual weekday fires', outcomeOf(S.todayWeekday) === 'created', JSON.stringify(batch.rows));
+      check('paused series is skipped entirely, even though it would otherwise be due', outcomeOf(S.paused) === undefined, JSON.stringify(batch.rows));
+      // day_of_month=31 clamped to the real last day of the current month —
+      // only fires if today happens to BE that last day, which this test
+      // doesn't control, so it must simply not error and not appear unless
+      // today is genuinely the last day of the month. Computed via the
+      // same IST-based query the function itself uses, not JS Date.
+      const { rows: [{ is_last_dom }] } = await client.query(
+        `select extract(day from (now() at time zone 'Asia/Kolkata')::date) =
+                extract(day from (date_trunc('month', (now() at time zone 'Asia/Kolkata')::date) + interval '1 month - 1 day'))
+                as is_last_dom`,
+      );
+      check(
+        'monthly series with day_of_month=31 only fires when today is genuinely the last day of the month (clamped, not skipped/errored)',
+        is_last_dom ? outcomeOf(S.monthlyClamped) === 'created' : outcomeOf(S.monthlyClamped) === undefined,
+        JSON.stringify(batch.rows),
+      );
+
+      await client.query('ROLLBACK');
+    } finally {
+      await client.end();
+    }
+  }
+
   console.log(results.join('\n'));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);

@@ -6,10 +6,12 @@ import type {
   UserRole, TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType,
   InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus,
   TaskGroupType, TaskGroupStatus, GroupMembershipRole, TaskOccurrenceStatus, TaskConversationType,
+  TaskSeriesStatus, TaskSeriesRecurrence,
 } from '../lib/database.types';
 export type { TaskStatus, TaskPriority, TaskCategory, IncidentType, IncidentSeverity, IncidentStatus, NotificationType };
 export type { InventoryLocationType, InventoryItemKind, InventoryTransactionType, InventoryRequestStatus };
 export type { TaskGroupType, TaskGroupStatus, GroupMembershipRole, TaskOccurrenceStatus, TaskConversationType };
+export type { TaskSeriesStatus, TaskSeriesRecurrence };
 export type Role = UserRole;
 
 // inventory_staff is DEPRECATED — Inventory access is no longer a separate
@@ -374,6 +376,42 @@ export interface TaskOccurrence {
   createdAt: string;
   cancelledAt?: string;
   completedAt?: string;
+}
+
+// Shape of task_series.recurrence_rule (jsonb) — see the exhaustive comment
+// above generate_due_task_occurrences() in supabase/schema.sql for exactly
+// how each field is interpreted per recurrence type. Only the field(s)
+// relevant to a given recurrenceType are ever populated; the others are
+// simply absent, not null.
+export interface RecurrenceRule {
+  /** 'weekly' (exactly one entry) and 'weekdays' (one or more). 0=Sunday..6=Saturday. */
+  weekdays?: number[];
+  /** 'monthly'. 1-31; clamped server-side to the real last day of a shorter month. */
+  dayOfMonth?: number;
+  /** 'custom_interval'. Repeats every N days from startDate. */
+  intervalDays?: number;
+}
+
+export interface TaskSeries {
+  id: string;
+  groupId: string;
+  title: string;
+  description: string;
+  category: TaskCategory;
+  priority: TaskPriority;
+  evidenceRequirements: string;
+  recurrenceType: TaskSeriesRecurrence;
+  recurrenceRule: RecurrenceRule;
+  startDate: string;
+  endDate?: string;
+  /** 24h "HH:MM" — the server evaluates this in Asia/Kolkata, matching send_task_deadline_reminders' convention. */
+  creationTime: string;
+  dueOffsetDays: number;
+  status: TaskSeriesStatus;
+  createdBy: string;
+  rangeId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GroupMessage {

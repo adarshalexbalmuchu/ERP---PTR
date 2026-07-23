@@ -2513,6 +2513,17 @@ create table if not exists task_series (
   updated_at           timestamptz not null default now()
 );
 
+-- Added in Phase 2 (recurring series) — NOT NULL is safe as a direct add
+-- because this table shipped in Phase 1 with no UI to create rows in it,
+-- so it is guaranteed empty on every database this migration runs against.
+-- Required rather than defaulted from the group/member the way the
+-- one-time create_group_occurrence RPC's p_range_id is: the generator
+-- below runs unattended (no caller to prompt), so the range a recurring
+-- series' tasks belong to must be pinned at series-creation time, not
+-- guessed per member or left to the group's own (possibly null,
+-- reserve-wide) range_id.
+alter table task_series add column if not exists range_id uuid not null references ranges(id) on delete restrict;
+
 create table if not exists task_occurrences (
   id              uuid primary key default uuid_generate_v4(),
   group_id        uuid not null references task_groups(id) on delete cascade,
@@ -2933,4 +2944,167 @@ create policy "task_conversation_attachments_download" on storage.objects
         and (select public.can_view_conversation(c.id))
     )
   );
+
+-- ═════════════════════════════════════════════
+-- Task Groups & Recurring Assignments — Phase 2 (Recurring Series)
+-- ═════════════════════════════════════════════
+-- Do not generate all future tasks in advance. This function is called
+-- hourly (see the pg_cron block below, matching send_task_deadline_
+-- reminders' cadence/quiet-hours-free style) and creates only the ONE
+-- occurrence a series is due for right now, if any — never a backlog of
+-- future ones. recurrence_rule shapes, by recurrence_type:
+--   daily            — {} (no extra fields)
+--   weekly           — {"weekdays": [1]}            (exactly one, 0=Sun..6=Sat)
+--   weekdays         — {"weekdays": [1,3,5]}         (one or more)
+--   monthly          — {"day_of_month": 1}           (1-31; clamped to the
+--                                                      actual last day of a
+--                                                      shorter month)
+--   custom_interval  — {"interval_days": 14}          (every N days from start_date)
+--
+-- Idempotency: the SAME unique index used by create_group_occurrence's
+-- one-time path (tasks_occurrence_assignee_uq) also protects this
+-- generator's per-member fan-out, and task_occurrences_series_due_uq
+-- (already created in Phase 1, before this function ever existed) makes
+-- the occurrence insert itself idempotent per (series_id, due_at) — so
+-- running this function twice in the same hour, or twice for the same
+-- calendar cycle after a retry, creates nothing twice.
+--
+-- Failures are per-series (one series erroring must not stop the loop
+-- from generating every other due series) and are recorded to the
+-- existing audit_log — reused rather than a new table, since it already
+-- has a Director-facing UI (System audit) and a range_id/actor_id shape
+-- that fits. "Notify administrators when generation repeatedly fails"
+-- (spec §22) is intentionally NOT built here — that's escalation logic,
+-- explicitly Phase 3 in the original spec; a director can already see
+-- every failure by reading System audit for action = 'series_generation_failed'.
+-- OUT parameter names are deliberately prefixed (out_*) rather than named
+-- series_id/occurrence_id — plpgsql exposes OUT params as variables in
+-- scope for the WHOLE function body, and task_occurrences/tasks both have
+-- real columns literally named series_id/occurrence_id; without the
+-- prefix every INSERT/ON CONFLICT referencing those columns inside this
+-- function becomes ambiguous ("column reference is ambiguous") between
+-- the table column and the OUT variable of the same name. Caught by
+-- running this against a real local Postgres before it ever reached
+-- Supabase — see supabase/tests/rls.test.mjs.
+create or replace function generate_due_task_occurrences()
+returns table(out_series_id uuid, out_occurrence_id uuid, out_outcome text, out_detail text)
+language plpgsql security definer
+set search_path = '' as $$
+declare
+  v_series record;
+  v_today date := (now() at time zone 'Asia/Kolkata')::date;
+  v_hour int := extract(hour from now() at time zone 'Asia/Kolkata');
+  v_dow int := extract(dow from v_today)::int;
+  v_dom int := extract(day from v_today)::int;
+  v_days_in_month int := extract(day from (date_trunc('month', v_today) + interval '1 month - 1 day'))::int;
+  v_is_due boolean;
+  v_due_at timestamptz;
+  v_new_occurrence_id uuid;
+  v_new_task_id uuid;
+  v_member record;
+begin
+  for v_series in
+    select s.*
+    from public.task_series s
+    join public.task_groups g on g.id = s.group_id
+    where s.status = 'active'
+      and g.status = 'active'
+      and s.start_date <= v_today
+      and (s.end_date is null or s.end_date >= v_today)
+      and v_hour >= extract(hour from s.creation_time)
+  loop
+    v_is_due := case v_series.recurrence_type
+      when 'daily' then true
+      when 'weekly' then (v_series.recurrence_rule -> 'weekdays') @> to_jsonb(v_dow)
+      when 'weekdays' then (v_series.recurrence_rule -> 'weekdays') @> to_jsonb(v_dow)
+      when 'monthly' then least(coalesce((v_series.recurrence_rule ->> 'day_of_month')::int, 1), v_days_in_month) = v_dom
+      when 'custom_interval' then
+        (v_today - v_series.start_date) % greatest(coalesce((v_series.recurrence_rule ->> 'interval_days')::int, 1), 1) = 0
+      else false
+    end;
+
+    if not v_is_due then
+      continue;
+    end if;
+
+    v_due_at := (v_today + greatest(v_series.due_offset_days, 0)) + time '23:59:59';
+    v_new_occurrence_id := null;
+
+    begin
+      insert into public.task_occurrences (
+        group_id, series_id, title, description, category, priority, scheduled_start, due_at, status, created_by
+      ) values (
+        v_series.group_id, v_series.id, v_series.title, v_series.description, v_series.category,
+        v_series.priority, now(), v_due_at, 'active', v_series.created_by
+      )
+      on conflict (series_id, due_at) where series_id is not null do nothing
+      returning id into v_new_occurrence_id;
+
+      if v_new_occurrence_id is null then
+        -- Already generated for this cycle (idempotent re-run) — not a failure.
+        out_series_id := v_series.id; out_occurrence_id := null; out_outcome := 'already_generated'; out_detail := null;
+        return next;
+        continue;
+      end if;
+
+      insert into public.task_conversations (type, occurrence_id) values ('occurrence', v_new_occurrence_id);
+
+      for v_member in
+        select user_id from public.task_group_members where group_id = v_series.group_id and active
+      loop
+        v_new_task_id := null;
+        insert into public.tasks (
+          title, description, assignee_id, created_by_id, range_id, status, priority, category,
+          due_date, completion_percentage, group_id, series_id, occurrence_id
+        ) values (
+          v_series.title, v_series.description, v_member.user_id, v_series.created_by, v_series.range_id,
+          'NotStarted', v_series.priority, v_series.category, v_due_at::date, 0,
+          v_series.group_id, v_series.id, v_new_occurrence_id
+        )
+        on conflict (occurrence_id, assignee_id) where occurrence_id is not null do nothing
+        returning id into v_new_task_id;
+
+        if v_new_task_id is not null then
+          insert into public.notifications (user_id, type, title, message, task_id)
+          values (
+            v_member.user_id, 'group_task_assigned', 'New group assignment: ' || v_series.title,
+            'Recurring assignment "' || v_series.title || '" — due ' || to_char(v_due_at, 'DD Mon'),
+            v_new_task_id
+          );
+        end if;
+      end loop;
+
+      out_series_id := v_series.id; out_occurrence_id := v_new_occurrence_id; out_outcome := 'created'; out_detail := null;
+      return next;
+    exception when others then
+      insert into public.audit_log (task_id, task_title, range_id, actor_id, action, detail)
+      values (null, v_series.title, v_series.range_id, v_series.created_by, 'series_generation_failed', SQLERRM);
+      out_series_id := v_series.id; out_occurrence_id := null; out_outcome := 'failed'; out_detail := SQLERRM;
+      return next;
+    end;
+  end loop;
+  return;
+end;
+$$;
+
+revoke all on function generate_due_task_occurrences() from public, anon, authenticated;
+
+-- Hourly via pg_cron, same portability wrapper as task-deadline-reminders
+-- immediately above (this file must still apply where pg_cron isn't
+-- installable, e.g. the local test shim) — including the unschedule-first
+-- step so re-running this file against an already-scheduled job is safe.
+do $$ begin
+  create extension if not exists pg_cron;
+exception when others then
+  raise notice 'pg_cron unavailable; recurring series generation not scheduled';
+end $$;
+
+do $$ begin
+  perform cron.unschedule('task-group-series-generation')
+    from cron.job where jobname = 'task-group-series-generation';
+  perform cron.schedule('task-group-series-generation', '0 * * * *',
+                         'select public.generate_due_task_occurrences()');
+exception when others then
+  raise notice 'pg_cron unavailable; recurring series generation not scheduled';
+end $$;
 

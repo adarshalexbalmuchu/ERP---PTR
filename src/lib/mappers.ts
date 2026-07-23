@@ -1,8 +1,9 @@
-import type { Database } from './database.types';
+import type { Database, Json } from './database.types';
 import type {
   User, Task, TaskUpdate, Comment, Attachment, Notification, Incident, IncidentPhoto, AuditLogEntry, LiveLocation,
   InventoryLocation, InventoryCategory, InventoryUnit, InventoryItem, InventoryStock, InventoryTransaction,
   InventoryRequest, InventoryRequestItem, TaskGroup, TaskGroupMember, TaskOccurrence, GroupMessage,
+  TaskSeries, RecurrenceRule,
 } from '../types';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -18,6 +19,7 @@ type TaskGroupRow = Database['public']['Tables']['task_groups']['Row'];
 type TaskGroupMemberRow = Database['public']['Tables']['task_group_members']['Row'];
 type TaskOccurrenceRow = Database['public']['Tables']['task_occurrences']['Row'];
 type TaskMessageRow = Database['public']['Tables']['task_messages']['Row'];
+type TaskSeriesRow = Database['public']['Tables']['task_series']['Row'];
 
 export function mapProfile(row: ProfileRow): User {
   return {
@@ -415,6 +417,47 @@ export function mapTaskOccurrence(row: TaskOccurrenceRow): TaskOccurrence {
     createdAt: row.created_at,
     cancelledAt: row.cancelled_at ?? undefined,
     completedAt: row.completed_at ?? undefined,
+  };
+}
+
+function mapRecurrenceRule(raw: unknown): RecurrenceRule {
+  const r = (raw ?? {}) as { weekdays?: number[]; day_of_month?: number; interval_days?: number };
+  return {
+    weekdays: r.weekdays ?? undefined,
+    dayOfMonth: r.day_of_month ?? undefined,
+    intervalDays: r.interval_days ?? undefined,
+  };
+}
+
+/** Inverse of mapRecurrenceRule — for building the jsonb payload on create/update. */
+export function recurrenceRuleToDb(rule: RecurrenceRule): Json {
+  const out: { [key: string]: Json } = {};
+  if (rule.weekdays !== undefined) out.weekdays = rule.weekdays;
+  if (rule.dayOfMonth !== undefined) out.day_of_month = rule.dayOfMonth;
+  if (rule.intervalDays !== undefined) out.interval_days = rule.intervalDays;
+  return out;
+}
+
+export function mapTaskSeries(row: TaskSeriesRow): TaskSeries {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    priority: row.priority,
+    evidenceRequirements: row.evidence_requirements,
+    recurrenceType: row.recurrence_type,
+    recurrenceRule: mapRecurrenceRule(row.recurrence_rule),
+    startDate: row.start_date,
+    endDate: row.end_date ?? undefined,
+    creationTime: row.creation_time,
+    dueOffsetDays: row.due_offset_days,
+    status: row.status,
+    createdBy: row.created_by,
+    rangeId: row.range_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
